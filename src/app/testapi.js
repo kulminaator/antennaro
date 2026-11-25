@@ -112,6 +112,10 @@ export function installTestApi(options) {
         partialCells: stats.fresnelPartialCells,
         cutCells: stats.fresnelCutCells,
         evaluatedCells: stats.evaluatedCells,
+        /** Ground the ray was actually walked: what the three buckets partition. */
+        walkedCells: stats.walkedCells,
+        /** What the clear percentage is a share of - the linked set, by design. */
+        denominatorCells: stats.fresnelDenominatorCells,
         clearPct: stats.fresnelClearPct,
         linkedCells: stats.linkedCells,
         obstructedLinkedCells: stats.fresnelObstructedLinkedCells,

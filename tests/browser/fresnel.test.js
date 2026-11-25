@@ -12,6 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { withApp } from '../harness/app.js';
+import { WORLD } from '../../src/config.js';
 
 test('browser: the zone report agrees with the coverage grid it is drawn from', async () => {
   await withApp(async (session) => {
@@ -24,7 +25,14 @@ test('browser: the zone report agrees with the coverage grid it is drawn from', 
     assert.equal(fresnel.rxHeightM, state.zoneRxHeightM, 'the report states the assumption actually in use');
 
     const buckets = fresnel.clearCells + fresnel.partialCells + fresnel.cutCells;
-    assert.equal(buckets, fresnel.evaluatedCells, 'cut, partial and clear partition the study area');
+    // The buckets partition the ground the sweep *asked*, not everything it looked at:
+    // a point the budget dismissed before the ray was ever walked carries no zone verdict.
+    assert.equal(buckets, coverage.walkedCells, 'cut, partial and clear partition the walked ground');
+    assert.equal(fresnel.walkedCells, coverage.walkedCells, 'the report names the same walked set as the grid');
+    assert.equal(fresnel.denominatorCells, coverage.linkedCells,
+      'the clear percentage is stated over the links, not over ground that cannot receive');
+    assert.ok(coverage.budgetExcludedCells > 0, 'some of the map should be dismissed as unreachable');
+    assert.ok(buckets < coverage.evaluatedCells, 'unasked ground must not carry a zone verdict');
     assert.equal(fresnel.clearCells, coverage.fresnelClearCells, 'the zone view and the grid agree');
     assert.ok(fresnel.obstructedLinkedCells <= fresnel.linkedCells, 'the cut-but-linked set is a subset of the links');
     assert.ok(fresnel.obstructedLinkedCells > 0, 'a real map has links that make the budget with the zone cut');
@@ -36,32 +44,48 @@ test('browser: the zone report agrees with the coverage grid it is drawn from', 
 
 test('browser: the zone is cut where the ground says it should be cut', async () => {
   await withApp(async (session) => {
+    // A receiver so sensitive that the link budget is not what these probes are about:
+    // here we read the ground, and no probe may be a point the sweep refused to walk.
+    await session.patch({ rxSensitivityDbm: -124, heightM: 10 });
     await session.settle();
-    const ray = async (x, z) => {
+
+    const half = WORLD.worldSize / 2;
+    const ray = async (eastFraction, southFraction) => {
+      const x = eastFraction * half;
+      const z = southFraction * half;
       const cell = await session.sim('rssiAt', x, z);
-      assert.ok(cell, `no cell at ${x}, ${z} to measure`);
+      assert.ok(cell, `no cell at ${x.toFixed(0)}, ${z.toFixed(0)} to measure`);
+      assert.equal(cell.budgetExcluded, false, 'this probe has to be ground the sweep actually walked');
       return cell;
     };
 
-    // East is the flat field, north is the mountain, west is the bumps.
-    const eastNear = await ray(400, 0);
-    const northFar = await ray(0, -700);
-    const westNear = await ray(-400, 0);
-    assert.ok(eastNear.fresnelClear, 'over the flat field the zone stays clear');
-    assert.ok(!northFar.fresnelClear, 'into the mountain it does not');
-    assert.ok(!westNear.fresnelClear, 'and the western bumps cut it well before they block the ray');
-    assert.ok(
-      eastNear.fresnelClearanceRatio - northFar.fresnelClearanceRatio > 5,
-      `east kept ${eastNear.fresnelClearanceRatio.toFixed(2)} r1, north ${northFar.fresnelClearanceRatio.toFixed(2)}`,
-    );
+    // Fractions of the map, because the landforms scale with it. East is the flat field,
+    // north the flank above the ridge, west the wall of the bump field.
+    const eastFlat = await ray(0.08, 0);
+    const northFlank = await ray(0, -0.27);
+    const westWall = await ray(-0.15, 0);
 
-    // The two measures are not the same measure: the diffraction loss is charged for
-    // the ray that ends on the cell's own ground over the whole path, the zone for the
-    // ray that ends at a terminal above it, judged outside the end guards. So a cell
-    // can be badly diffracted by ground right next to it and still keep its zone.
-    const northNear = await ray(0, -400);
-    assert.ok(northNear.obstructionDb > 6, 'the northern ridge costs decibels');
-    assert.ok(Number.isFinite(northNear.fresnelClearanceRatio));
+    // Flat ground is not forgiving ground. A terminal a few metres above a field that
+    // runs on to the horizon has its first zone in the dirt even on the strongest path on
+    // the map - which is exactly why the zone is reported beside the decibels.
+    assert.ok(eastFlat.rssiDbm > -80, `east should be a strong path, measured ${eastFlat.rssiDbm.toFixed(1)} dBm`);
+    assert.equal(eastFlat.fresnelClear, false, 'a grazing path over a flat field has its zone cut');
+    assert.ok(northFlank.fresnelClear,
+      `a terminal high above the surrounding ground keeps its zone open, saw ${northFlank.fresnelClearanceRatio.toFixed(2)} r1`);
+    assert.ok(northFlank.fresnelClearanceRatio - eastFlat.fresnelClearanceRatio > 4,
+      `the flank kept ${northFlank.fresnelClearanceRatio.toFixed(2)} r1 against the field's ${eastFlat.fresnelClearanceRatio.toFixed(2)}`);
+    assert.equal(westWall.fresnelClear, false, 'behind the western wall nothing is clear');
+    assert.ok(westWall.fresnelClearanceRatio < -1,
+      `and the wall buries the ray: ${westWall.fresnelClearanceRatio.toFixed(2)} r1`);
+    assert.ok(westWall.obstructionDb > 20, `the wall costs ${westWall.obstructionDb.toFixed(1)} dB as well`);
+
+    // The two measures are not the same measure: the diffraction loss is charged for the
+    // ray that ends on the cell's own ground over the whole path, the zone for the ray
+    // that ends at a terminal above it, judged outside the end guards. So a cell can be
+    // badly diffracted by ground right next to it and still keep its zone.
+    const northNear = await ray(0, -0.15);
+    assert.ok(northNear.obstructionDb > 6, `the northern ridge costs only ${northNear.obstructionDb.toFixed(1)} dB`);
+    assert.equal(northNear.fresnelClear, true, 'while the zone up to a terminal above that ground stays open');
     assert.deepEqual(session.errors(), []);
   });
 });

@@ -14,6 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { withApp } from '../harness/app.js';
+import { ANTENNA } from '../../src/config.js';
 
 const YAGI_PARAMS = Object.freeze({ directors: 10, spacingLambda: 0.28, beamTiltDeg: 0 });
 const sector = (stats, label) => stats.sectors.find((entry) => entry.label === label);
@@ -82,8 +83,16 @@ test('browser: azimuth reaches the model, the coverage grid and the pixels', asy
   await withApp(async (session) => {
     // Shadowing off first: that isolates the antenna pattern, so the east and
     // west samples are a clean read of "where is the beam".
+    //
+    // The mast goes east of centre on purpose. From the map centre the western ground
+    // rises into the bump field as a wall, and no cell in the west sector can link at any
+    // aim or mast height - a test there can only ever compare zeros. On the flat field
+    // east of centre both compass directions have ground to serve, which is what this
+    // test is actually about.
+    const siteX = ANTENNA.siteLimitsM.max * 0.6;
     await session.patch({
       designId: 'yagi', params: YAGI_PARAMS, aim: { azimuthDeg: 90, tiltDeg: 0 }, useDiffraction: false,
+      site: { x: siteX, z: 0 },
     });
     await session.settle();
 
@@ -91,25 +100,25 @@ test('browser: azimuth reaches the model, the coverage grid and the pixels', asy
     assert.equal(model.boresightDeg.azimuthDeg, 90, 'the model did not follow the requested azimuth');
     assert.equal(model.boresightDeg.elevationDeg, 0, 'level tilt should mean level boresight');
 
-    const eastPoint = await session.sim('rssiAt', 700, 0);
-    const westPoint = await session.sim('rssiAt', -700, 0);
+    // Sample points the same distance from the mast on either side, so the only
+    // difference between them is which way the beam is pointing.
+    const eastPoint = await session.sim('rssiAt', siteX + 700, 0);
+    const westPoint = await session.sim('rssiAt', siteX - 700, 0);
     assert.ok(eastPoint && westPoint, 'coverage samples missing on the east-west axis');
     assert.ok(eastPoint.rssiDbm > westPoint.rssiDbm + 10,
       `aimed east: east ${eastPoint.rssiDbm} dBm vs west ${westPoint.rssiDbm} dBm`);
 
     await session.patch({ aim: { azimuthDeg: 270 } });
     await session.settle();
-    const eastPointNow = await session.sim('rssiAt', 700, 0);
-    const westPointNow = await session.sim('rssiAt', -700, 0);
+    const eastPointNow = await session.sim('rssiAt', siteX + 700, 0);
+    const westPointNow = await session.sim('rssiAt', siteX - 700, 0);
     assert.ok(westPointNow.rssiDbm > eastPointNow.rssiDbm + 10,
       `aimed west: west ${westPointNow.rssiDbm} dBm vs east ${eastPointNow.rssiDbm} dBm`);
     assert.ok(westPointNow.rssiDbm > westPoint.rssiDbm + 10, 'the west sample did not hear the swing');
     assert.ok(eastPoint.rssiDbm > eastPointNow.rssiDbm + 10, 'the east sample did not hear the swing');
 
-    // With shadowing back on, sector counts must not be read as an absolute
-    // race: the flat east field out-links the shadowed western bumps even when
-    // the beam points west. What must hold is that swinging the beam changes
-    // each sector relative to itself.
+    // With shadowing back on, sector counts must not be read as an absolute race: what
+    // must hold is that swinging the beam changes each sector relative to itself.
     await session.patch({ useDiffraction: true });
     await session.settle();
     const aimedWest = await session.sim('coverage');
@@ -154,8 +163,19 @@ test('browser: a taller mast buys clearance, not just a bigger number', async ()
     assert.ok(high.linkedCells > low.linkedCells,
       `30 m mast linked ${high.linkedCells} cells, 2 m linked ${low.linkedCells}`);
     assert.ok(high.blockedCells < low.blockedCells, 'more height should un-shadow cells');
-    assert.ok(sector(high, 'W').maxRangeM > sector(low, 'W').maxRangeM,
-      'reach over the western bumps should grow with height');
+    // The three westerly directions together: on this map due west is a wall of ground
+    // that no mast in the model reaches over, so the sector that gains reach with height
+    // is south-west and north-west. Summing the westerly directions keeps the claim - the
+    // bumps stop being the limit as the mast grows - without pinning it to one compass
+    // point that the terrain happens to make hopeless.
+    const westward = (stats) => ['W', 'SW', 'NW'].reduce((sum, label) => sum + sector(stats, label).maxRangeM, 0);
+    assert.ok(westward(high) > westward(low),
+      `reach towards the bumps was ${westward(low).toFixed(0)} m at 2 m and ${westward(high).toFixed(0)} m at 30 m`);
+    for (const label of ['W', 'SW', 'NW']) {
+      assert.ok(sector(high, label).maxRangeM >= sector(low, label).maxRangeM - 1e-9,
+        `${label} lost reach when the mast grew: ${sector(low, label).maxRangeM} m to ${sector(high, label).maxRangeM} m`);
+    }
+    assert.deepEqual(session.errors(), []);
   });
 });
 
