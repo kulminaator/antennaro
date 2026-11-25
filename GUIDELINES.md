@@ -46,8 +46,9 @@ src/             application source, layered (see §3)
   core/          eventbus, frame loop
   terrain/       height field, generators, terrain mesh
   antenna/       catalogue, pattern maths, aim frames, model, meshes
-  propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, coverage,
-                 coverage mesh, Fresnel zone mesh
+  propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, one path's
+                 two questions (`pathtrace`), coverage sweep, coverage bookkeeping
+                 (`coveragestats`), coverage mesh, Fresnel zone mesh
   app/           state reducer, presets, controller, reports (coverage + summaries),
                  actions, viewport, camera, pointer
                  picking, site dragging, test API
@@ -168,19 +169,36 @@ job. Split on a seam, not at a line count: `reports.js` is the code that answers
 ## 4. Configuration centrality
 
 Every tunable that describes the **world or the radio** lives in `src/config.js`:
-world size, terrain amplitudes and blend band, RF constants (including
+world size and its limits (`WORLD.minWorldSize` / `maxWorldSize`, `minGridSize` /
+`maxGridSize` - the reducer clamps requests with them, so a test can quote them instead
+of a literal), terrain amplitudes and blend band, RF constants (including
 `RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, where the
 mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
-`siteStepM`, shared by the sliders and the drag), the Fresnel criterion
+`siteStepM`, shared by the sliders and the drag), the shape of the sweep
+(`RF.coverageStride` - the coverage grid is a decimation of the terrain grid - and
+`RF.defaultMaxRangeM` / `RF.maxRangeLimitsM`, which are a *work area*, not a prediction),
+how a failed link is painted (`RF.noLinkAlpha`, with `COLOURS.rangeLimit` for the ring
+that names the work area), the Fresnel criterion
 (`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
 is stated for - and `RF.fresnelEndpointGuard`), the `FRESNEL` block (mesh density,
-opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`) and the
-`COLOURS.fresnel*` stops of the zone ramp, camera
+opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`), the
+`COLOURS.fresnel*` stops of the zone ramp, the study-range ring
+(`VIEW.rangeRingSamples` / `rangeRingLiftM` / `rangeRingOpacity`), camera
 defaults, colours, path names and every timeout. The UI schema and the state
 reducer read the same ranges, so a slider can never disagree with the physics.
 `VIEW.cameraFovDeg` is here for the same reason: `app/pick.js` needs the vertical
 FOV to unproject a pointer, and a FOV that only the renderer knows would let the
 mouse and the picture disagree.
+
+**A default must lie inside the control that displays it, and both bounds come from
+config.** `TERRAIN.seedMin` / `TERRAIN.seedMax` exist because they did not: the default
+seed was 20251105 and the seed slider stopped at 999999, a range input sanitises an
+out-of-range value to its nearest bound, and Blink reports that sanitisation as an
+`input` event - so the panel wrote 999999 into the model at boot and the app simulated a
+different map from the one `config.js` asked for, silently, for months. Nothing in the UI
+pushes a value into the state by hand, and it does not need to: the reducer clamps, so a
+value that is in bounds is never rewritten by the DOM. `tests/unit/state.test.js` asserts
+that every numeric control of every design has its own default inside its own `[min, max]`.
 
 A module may keep a local numeric constant only when it is not a knob:
 a mathematical identity (`DEG_PER_RAD`), a structural count (`SECTOR_COUNT`), a
@@ -233,7 +251,11 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
                   controller ──▶ pure models ──▶ meshes via L4 adapters ──▶ frame
 ```
 
-- The UI **never mutates state**; it emits patch objects.
+- The UI **never mutates state**; it emits patch objects. This is more than style: a
+  DOM control that can write back is a second source of truth (see the seed story in §4 -
+  a range input sanitises an out-of-range value and Chrome reports that as user input).
+  `createInitialStateWithReport()` exists so even the values a *URL* asked for that the
+  model refused are reported instead of quietly applied.
 - `applyPatch` validates against `STATE_FIELDS`, clamps out-of-range numbers,
   rejects non-numeric junk (`null`, `''`, booleans) and returns
   `{ok, changed, clamped, rejected}` (`ok` is just `rejected.length === 0`).
@@ -274,6 +296,41 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   free-space loss, minus knife-edge diffraction over the sampled ground profile
   (with `kFactor` Earth bulge), minus clutter. Levels are **margin over the
   receiver sensitivity**, so the legend moves when the user changes sensitivity.
+  The sweep runs over the **whole map** on a grid that is a deliberate decimation of the
+  ground (`RF.coverageStride`: 15 m terrain, 30 m coverage, 90 ms instead of 734 ms for
+  the worst case) - the mesh still uses every terrain vertex, only the radio questions are
+  asked less often. `coverage.js` is the hot loop; one path's two questions (what does
+  the ground cost in dB, and does it keep the zone clear) live in `pathtrace.js`, and the
+  bookkeeping - compass tally, the limit report, which directions were clipped - in
+  `coveragestats.js`.
+- **A limit the app chooses must be drawn and named.** Three things can end the coverage
+  picture: the link's own budget, the user's study range, and the edge of the map. The
+  result says which (`stats.limitingFactor`), how much linked ground sits on each border
+  (`clippedByRangeCells`, `clippedByMapCells`), and per direction the boundary it ran into
+  (`limitM`, `limitKind`, `clippedBy`) - computed in the domain from the mast's real
+  position, because a mast 300 m from the west wall has 300 m of west and 4900 m of east.
+  `math/vec3.js`'s `rayBoxExitDistance` is what makes "how far until this ray leaves the
+  map" a piece of maths rather than a guess. The HUD then says it in words ("our study
+  range 1.40 km - the link would reach 1.67 km") and marks a clipped direction `>=`.
+  The study-range ring (`app/mapmesh.js`) is drawn *only when it could bind*: a circle
+  that can never be the limit trains the eye to ignore the one time it is.
+- **Three alpha values are a contract, not a style choice.** `1` means the link works,
+  `RF.noLinkAlpha` means the ground was asked and defeated the link, `0` means the ground
+  was never asked. Beyond the free-space budget the sweep stores the upper bound and marks
+  the point `budgetExcluded` instead of walking a ray - legitimate because diffraction and
+  clutter only subtract, so a point that misses sensitivity on free space alone could not
+  have been saved by the terrain. That makes the pre-filter lossless for the linked set,
+  which `coverage: the budget pre-filter cannot move the link boundary` proves by
+  comparing both paths over the real map (same linked set, same bands, bit-identical dB at
+  every walked point, and every dismissed point shown to be unreachable). The consequence
+  is that an excluded point carries **no verdict**: no paint, no band, no Fresnel claim,
+  and its clearance sentinel must never be read as "clear".
+- **Every percentage names its denominator.** Link availability is over the walked points,
+  map coverage over the evaluated points, the Fresnel shares over the *linked* points (a
+  zone verdict about ground that cannot receive anything is not information), and each
+  compass sector's percentage over the points in it that were neither dismissed nor the
+  mast's own cell. A single unlabelled "coverage %" is how a big map next to a small link
+  gets read as a bad antenna.
 - **The first Fresnel zone is a flag, not a loss term.** `propagation/los.js`
   samples the same ground profile the diffraction loss uses and reports the worst
   height of the ray above the ground along the path, in units of the first-zone
@@ -301,7 +358,7 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   reference link the volume is drawn around - the boresight out to where it meets the
   ground, one receiver height above it - and `propagation/fresnelmesh.js` (L4) turns
   that link into a tube. `FRESNEL.radialExaggeration` is the only reason it is
-  visible next to a 2.4 km map; at 1 it is a hairline, and the docs say so.
+  visible next to a 5.2 km map; at 1 it is a hairline, and the docs say so.
 - **Layout follows the window:** `app/controller.js` watches the canvas with a
   `ResizeObserver`, and `settle()` syncs the drawing buffer before painting, so
   headless captures and resized windows both get a correctly sized frame.
@@ -435,11 +492,15 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   `pick(ndcX, ndcY)`,
   `site`, `grabSite`, `dragSiteTo(ndcX, ndcY)`, `releaseSite`, `dragState`,
   `dispose`.
-  `rssiAt()` reports the cell's `fresnelClearanceRatio` and `fresnelClear`; `fresnel()`
-  is the aggregate - criterion, receiver height, the three buckets the ramp paints,
-  worst clearance and its distance, and `volume: {visible, vertices}` plus the `link`
-  the volume is drawn around.
-  Properties: `boot` (`{status, ...}`), `ready` (true only once boot finished -
+  `rssiAt()` reports the cell's `fresnelClearanceRatio`, `fresnelClear` and
+  `budgetExcluded` (true when the value is the free-space upper bound and the ground was
+  never asked); `fresnel()` is the aggregate - criterion, receiver height, the three
+  buckets the ramp paints, `walkedCells` (what they partition), `denominatorCells` (what
+  `clearPct` is a share of), worst clearance and its distance, and
+  `volume: {visible, vertices}` plus the `link` the volume is drawn around. `scene()`
+  carries `rangeRing: {visible, radiusM, canBind}`.
+  Properties: `boot` (`{status, overrides: {clamped, rejected}, ...}` - what the URL asked
+  for that the model trimmed), `ready` (true only once boot finished -
   the tools wait on this), `errors`, `version`, `app`. DOM layout may change;
   this API is the contract, so anything a test needs permanently gets added here
   rather than scraped.
@@ -456,6 +517,18 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   They are different objects; mixing them up is the classic flaky test here.
 - Assert *no page errors* (`session.errors()` must be empty) in any test that
   exercises the app; it is the cheapest regression net we have.
+- **Pin a probe to a feature or to the map, never to a metre reading.** Geography tests
+  that used absolute coordinates broke the moment the world grew: use fractions of
+  `WORLD.worldSize / 2`, or `ANTENNA.siteLimitsM`, so a resize costs a re-measure instead
+  of a rewrite. Check the probe is still *asked about* (`budgetExcluded === false`) rather
+  than trusting a sentinel, and remember that the landforms scale with the map while a
+  link budget does not - so a probe that must be about the ground, not the budget, pins
+  its own sensitivity.
+- **Know which sectors are empty ground.** Due west of the map centre the bump field now
+  rises to ~90 m within a few hundred metres, so no cell in the W sector links at any mast
+  height: a comparison there compares zeros and proves nothing. Either sum the westerly
+  sectors or move the mast to ground that can be served (`ANTENNA.siteLimitsM.max * 0.6`,
+  the flat field east of centre, has live ground in both compass directions).
 - Software-renderer noise (SwiftShader / ANGLE / WebGL fallback warnings) is
   filtered; genuine failures are not.
 - `node --test` does **not** put the file's directory on the module path: use
