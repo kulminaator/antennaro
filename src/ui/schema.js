@@ -73,10 +73,13 @@ export function buildPanel(state) {
     {
       id: 'placement',
       title: 'Placement and aim',
-      note: aimEnabled
+      note: `${aimEnabled
         ? 'The beam is a template: the model combines an H-plane and an E-plane cut.'
-        : 'This design radiates equally in all compass directions, so azimuth only turns the hardware.',
+        : 'This design radiates equally in all compass directions, so azimuth only turns the hardware.'} `
+        + 'Drag the mast on the map, or use the two offset sliders to move the whole site.',
       fields: [
+        fieldByKey(state, 'site.x'),
+        fieldByKey(state, 'site.z'),
         fieldByKey(state, 'heightM'),
         { ...fieldByKey(state, 'aim.azimuthDeg'), disabled: !aimEnabled },
         fieldByKey(state, 'aim.tiltDeg'),

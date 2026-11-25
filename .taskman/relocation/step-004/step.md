@@ -44,3 +44,9 @@ from state, limits from `STATE_FIELDS`), and its note mentions dragging.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- The unit suite is green again after this step (the panel-completeness invariant
+  from step-002 is satisfied: 8/8 files pass).
+- The group note already tells the user to *drag the mast*; the drag itself lands
+  in step-012. Between the two steps the sentence is a promise, not a fact — do
+  not ship a release from an intermediate commit.
