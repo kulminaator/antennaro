@@ -39,7 +39,7 @@ export function createViewport(options) {
   scene.background = new THREE.Color(VIEW.background);
   scene.fog = new THREE.Fog(VIEW.fogColour, VIEW.fogNear, VIEW.fogFar);
 
-  const camera = new THREE.PerspectiveCamera(52, 1, 1, 20000);
+  const camera = new THREE.PerspectiveCamera(VIEW.cameraFovDeg, 1, 1, 20000);
   const world = new THREE.Group();
   world.name = 'world';
   scene.add(world);

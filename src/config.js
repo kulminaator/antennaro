@@ -72,6 +72,13 @@ export const ANTENNA = Object.freeze({
   defaultDesignId: 'omni-dipole',
   heightLimitsM: Object.freeze({ min: 0.5, max: 40 }),
   defaultHeightM: 10,
+  /** Default footprint of the site: the map centre (+X east, +Z south). */
+  defaultSiteXm: 0,
+  defaultSiteZm: 0,
+  /** How far the site may be relocated on each axis, metres from the centre. */
+  siteLimitsM: Object.freeze({ min: -WORLD.worldSize / 2, max: WORLD.worldSize / 2 }),
+  /** Step of the two placement sliders. */
+  siteStepM: 5,
   azimuthLimitsDeg: Object.freeze({ min: 0, max: 360 }),
   tiltLimitsDeg: Object.freeze({ min: -60, max: 60 }), // boresight elevation; negative = downtilt
   defaultAim: Object.freeze({ azimuthDeg: 0, tiltDeg: 0 }),
@@ -87,6 +94,8 @@ export const VIEW = Object.freeze({
   fogColour: 0x0d1117,
   fogNear: 1500,
   fogFar: 4600,
+  /** Vertical field of view of the perspective camera. */
+  cameraFovDeg: 52,
   cameraStart: Object.freeze({ azimuthDeg: 38, elevationDeg: 44, distance: 2100 }),
   cameraLimits: Object.freeze({ minDistance: 60, maxDistance: 4200, minElevationDeg: 2, maxElevationDeg: 88 }),
   terrainHeightExaggeration: 1,
