@@ -152,19 +152,37 @@ export function patternRgb(db, peakDbi, dynamicRangeDb = 30) {
   return mixRgb(ramp[i], ramp[i + 1], pos - i);
 }
 
-/** CSS-ready legend entries for the coverage ramp. */
+/**
+ * CSS-ready legend entries for the coverage ramp. The last entry describes the faint
+ * rim (measured, and the terrain said no); a further entry names the area left bare
+ * because free-space loss alone lost the link, which the drape does not paint at all.
+ */
 export function coverageLegendItems(coverage) {
   const items = coverage.margins.map((margin, band) => ({
     band,
     colour: COLOURS.levels[band],
     label: `>= ${(coverage.sensitivityDbm + margin).toFixed(0)} dBm`,
     count: coverage.stats.levelCounts[band] ?? 0,
+    alpha: 1,
   }));
+  const last = coverage.margins.length;
+  const excluded = coverage.stats.budgetExcludedCells ?? 0;
   items.push({
-    band: coverage.margins.length,
+    band: last,
     colour: COLOURS.noLink,
-    label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (no link)`,
-    count: coverage.stats.levelCounts[coverage.margins.length] ?? 0,
+    label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (faint: terrain stops the link)`,
+    // Only the painted ones: the points the pre-filter dismissed are the next row.
+    count: Math.max(0, (coverage.stats.levelCounts[last] ?? 0) - excluded),
+    alpha: RF.noLinkAlpha,
   });
+  if (excluded > 0) {
+    items.push({
+      band: last,
+      colour: COLOURS.noLink,
+      label: 'out of budget - not measured, not painted',
+      count: excluded,
+      alpha: 0,
+    });
+  }
   return items;
 }

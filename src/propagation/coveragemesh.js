@@ -8,17 +8,18 @@
  * Each coverage vertex is draped onto the terrain height *underneath it*, so the
  * coarser overlay still hugs the real surface.
  *
- * Vertex colours carry the message: RGBA, with alpha 0 where there is nothing to say
- * (outside the study area) so the terrain shows through instead of being lied about.
- * What the alpha means for a failed link is step-owned by the painting rules below.
+ * Vertex colours carry the message, and every alpha means something:
+ * - `1` where the link works;
+ * - `NO_LINK_ALPHA` (`RF.noLinkAlpha`) where the ground was asked and the link failed
+ *   - the faint rim is the reach the terrain actually allows, so it is shown, softly;
+ * - `0` where nothing was asked: outside the study area, or beaten by free-space loss
+ *   alone before the terrain entered into it. Blank means "no measurement", never
+ *   "no signal".
  */
 
 import * as THREE from 'three';
 import { RF, VIEW } from '../config.js';
 import { coverageRgb, fresnelZoneRgb } from '../palette.js';
-
-/** Cells that miss the link budget are painted faintly, so the ground still shows. */
-const NO_LINK_ALPHA = 0.22;
 
 /** Terrain vertex index a coverage vertex sits on, clamped to the last row/column. */
 function terrainIndex(field, stride, gx, gz) {
@@ -130,22 +131,30 @@ export function createCoverageOverlay(field) {
     const zoneView = options.zoneView === true;
     const rgb = [0, 0, 0];
     for (let i = 0; i < grid.size * grid.size; i += 1) {
-      if (coverage.evaluated[i] === 1) {
-        const band = coverage.level[i];
-        const source = zoneView
-          ? fresnelZoneRgb(coverage.fresnelClearance[i])
-          : coverageRgb(band);
-        target[i * 4] = source[0];
-        target[i * 4 + 1] = source[1];
-        target[i * 4 + 2] = source[2];
-        target[i * 4 + 3] = band >= lastBand ? NO_LINK_ALPHA : 1;
-      } else {
-        // Outside the study area: fully transparent, the terrain speaks for itself.
+      if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) {
+        // Two kinds of nothing, and they must not look the same:
+        // - outside the study area, never looked at;
+        // - `budgetExcluded`: free-space loss alone lost the link, so the ground was
+        //   never asked. Painting either one would claim knowledge of a boundary that
+        //   was only arithmetic, and would cover the map in a wash whose colour means
+        //   "this terrain defeated a link that was already dead".
         target[i * 4] = 0;
         target[i * 4 + 1] = 0;
         target[i * 4 + 2] = 0;
         target[i * 4 + 3] = 0;
+        continue;
       }
+      const band = coverage.level[i];
+      const source = zoneView
+        ? fresnelZoneRgb(coverage.fresnelClearance[i])
+        : coverageRgb(band);
+      target[i * 4] = source[0];
+      target[i * 4 + 1] = source[1];
+      target[i * 4 + 2] = source[2];
+      // Faint where the link failed, solid where it works. Alpha is interpolated
+      // across the triangle, so the edge of the reachable area fades instead of being
+      // cut - and what it fades at is the link's own boundary.
+      target[i * 4 + 3] = band >= lastBand ? RF.noLinkAlpha : 1;
     }
     grid.colour.needsUpdate = true;
   }

@@ -107,6 +107,9 @@ export function createHud(options) {
       const li = el('li', 'legend-item');
       const swatch = el('span', 'legend-swatch');
       swatch.style.background = item.colour;
+      // The swatch has to be as faint as the pixels it describes; a legend that paints
+      // the failed-link rim at full strength would not match the map beneath it.
+      swatch.style.opacity = String(item.alpha ?? 1);
       li.appendChild(swatch);
       li.appendChild(el('span', 'legend-label', item.label));
       li.appendChild(el('span', 'legend-count', `${item.count}`));

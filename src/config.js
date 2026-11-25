@@ -130,11 +130,16 @@ export const RF = Object.freeze({
    */
   coverageStride: 2,
   /**
-   * How far below sensitivity the coverage drape still hints at a failed link, dB.
-   * It is the difference between "the link ends here" and "the map ends here";
-   * weaker cells than this are not painted at all and the terrain speaks for itself.
+   * Alpha of the drape where the ground was consulted and the link failed. Faint,
+   * never blank: that rim is the reach this terrain actually allows, and blank is
+   * reserved for places nothing was asked about.
+   *
+   * No "how far below sensitivity do we still paint" threshold is needed to make it
+   * appear. The pre-filter's test is the free-space bound, so the points that get
+   * walked and still fail are precisely those the *terrain* defeated - the halo is a
+   * consequence of the method, not a distance someone typed in.
    */
-  noLinkHaloDb: 12,
+  noLinkAlpha: 0.22,
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
 });
