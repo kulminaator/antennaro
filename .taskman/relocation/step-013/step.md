@@ -50,3 +50,11 @@ pad, mast and coverage back at the map centre.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `src/app/controller.js` is now at **349 of 350 lines** — the budget is spent.
+  Anything else that wants to live in the controller must come with a split (the
+  natural seams are the coverage/RF summary block and the action switch).
+- Verified live on a fresh page: `patch({site:{x:500,z:-300}})` →
+  `action({type:'reset-site'})` returns `{ok:true, site:{x:0,z:0}}`, state follows,
+  `heightAt(0, 0)` is 8 again (the pad is home), and the rendered button row is
+  `new-seed, reset-view, reset-site, save-png, reset-all`.

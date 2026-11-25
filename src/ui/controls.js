@@ -12,6 +12,7 @@ import { buildPanel, presetOptions } from './schema.js';
 const BUTTONS = Object.freeze([
   Object.freeze({ action: 'new-seed', label: 'New terrain' }),
   Object.freeze({ action: 'reset-view', label: 'Reset view' }),
+  Object.freeze({ action: 'reset-site', label: 'Reset placement' }),
   Object.freeze({ action: 'save-png', label: 'Save PNG' }),
   Object.freeze({ action: 'reset-all', label: 'Reset all' }),
 ]);

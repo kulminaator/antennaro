@@ -14,7 +14,7 @@
  * when loading a preset).
  */
 
-import { VIEW } from '../config.js';
+import { ANTENNA, VIEW } from '../config.js';
 import { EVENTS, createEventBus } from '../core/eventbus.js';
 import { createFrameLoop } from '../core/loop.js';
 import { createAntennaModel } from '../antenna/model.js';
@@ -240,6 +240,10 @@ export function createController(options) {
         settle();
         return { ok: true, seed };
       }
+      case 'reset-site':
+        patch({ site: { x: ANTENNA.defaultSiteXm, z: ANTENNA.defaultSiteZm } });
+        settle();
+        return { ok: true, site: state.site };
       case 'reset-view':
         viewport.resetCamera({ x: site.x, y: site.groundY, z: site.z });
         return { ok: true };
