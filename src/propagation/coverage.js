@@ -1,37 +1,33 @@
 /**
  * Coverage grid: received signal strength over the whole map.
  *
- * Layer: L2 (domain service, pure). For each grid point it asks the antenna model for
- * gain towards it, applies free-space loss, terrain diffraction and an optional
- * clutter margin, then classifies the result against the receiver sensitivity. The
- * result is a bundle of typed arrays that the WebGL overlay paints and the HUD
- * summarises.
+ * Layer: L2 (domain service, pure). For each grid point: antenna gain towards it,
+ * free-space loss, terrain diffraction, an optional clutter margin, classified against
+ * the receiver sensitivity. The result is a bundle of typed arrays that the WebGL
+ * overlay paints and the HUD summarises. This is the hot loop of the application - keep
+ * it allocation-free per point - while the two questions asked of each path live in
+ * `pathtrace.js` and the direction tally and limit report in `coveragestats.js`.
  *
  * Two decisions keep the picture honest and the loop cheap:
  *
  * - **The study area is the map, not a circle.** `maxRangeM` still exists (the slider
- *   can shrink the work area to save time), but its default covers the map. A disc we
- *   chose must never be able to look like the antenna's reach: when it bites, the
- *   result reports it (`stats.limitingFactor`) and the view draws the ring.
- * - **Points evaluated on a coarser grid than the ground.** `RF.coverageStride` points
- *   at every n-th terrain vertex: landforms need ~15 m vertices to look like land,
- *   while a link boundary is kilometres wide. Walking 121 800 of them measured 734 ms
- *   in Node; the stride is what makes whole-map evaluation interactive.
+ *   can shrink the work area to save time) but its default covers the map. A disc we
+ *   chose must never look like the antenna's reach: when it bites, `stats.limitingFactor`
+ *   says so and the view draws the ring.
+ * - **Coarser than the ground.** `RF.coverageStride` points at every n-th terrain
+ *   vertex: landforms need ~15 m vertices to look like land while a link boundary is
+ *   kilometres wide. Walking all 121 800 of them measured 734 ms in Node.
  *
  * A point whose **free-space loss alone** already breaks the budget is flagged
- * `budgetExcluded` and no ray is walked for it. That is not an approximation of the
- * answer: diffraction and clutter only ever subtract, so such a point cannot link and
- * the value stored is the upper bound it failed to beat. `tests/unit/coverage.test.js`
- * proves the shortcut leaves the linked set identical; keep that test true.
+ * `budgetExcluded` and no ray is walked for it. That is not an approximation: diffraction
+ * and clutter only subtract, so such a point cannot link and the stored value is the
+ * upper bound it failed to beat. `tests/unit/coverage.test.js` proves the shortcut
+ * leaves the linked set identical; keep that test true.
  *
- * Alongside the decibels each walked point records the state of its **first Fresnel
- * zone**: how much of the zone the ground leaves clear on the way from the mast to a
- * receiver at `RF.fresnelRxHeightM`, and whether that meets the
- * `RF.fresnelClearFraction` criterion. That is a reliability flag, not another loss
- * term - the dB already come from the same Fresnel/Kirchhoff ratio, and charging it
- * twice would punish the same ridge twice.
- *
- * This is the hot loop of the application: keep it allocation-free per cell.
+ * Each walked point also records its **first Fresnel zone** clearance against
+ * `RF.fresnelClearFraction` - a reliability flag, not another loss term, because the dB
+ * already come from the same Fresnel/Kirchhoff ratio and charging it twice would punish
+ * the same ridge twice.
  */
 
 import { RF } from '../config.js';
@@ -39,7 +35,7 @@ import { toCompass } from '../math/vec3.js';
 import { clamp, mean, percentile } from '../math/scalar.js';
 import { freeSpaceLossDb, freeSpaceRangeM, levelIndexFor, levelMarginsDb } from './rf.js';
 import { tracePath } from './pathtrace.js';
-import { createSectorTally } from './coveragestats.js';
+import { createSectorTally, describeLimits } from './coveragestats.js';
 
 export { SECTOR_COUNT, SECTOR_LABELS, sectorIndexForAzimuth } from './coveragestats.js';
 
@@ -146,6 +142,12 @@ export function computeCoverage(options) {
       const optimistic = txPowerDbm - feederLossDb + gainDbi - pathLoss - clutterLossDb;
       const excluded = budgetPrefilter && optimistic < rxSensitivityDbm;
 
+      // A point the pre-filter dismissed carries **no verdict**: obstruction 0, the
+      // clearance sentinel, and `fresnelClear` false. Those arrays are not claims about
+      // ground we never looked at - `budgetExcluded` is the claim - and every bucket,
+      // statistic and colour that reads them skips dismissed points. Keeping the pair
+      // "sentinel + false" rather than "sentinel + true" is what stops the zone view
+      // painting the far map green.
       let obstruction = 0;
       let ratio = CLEARANCE_CAP;
       let zoneClear = false;
@@ -201,11 +203,7 @@ export function computeCoverage(options) {
       }
 
       const { azimuthDeg } = toCompass({ x: dx, y: 0, z: dz });
-      sectors.record(azimuthDeg, {
-        linked: value >= rxSensitivityDbm,
-        horizontal,
-        value,
-      });
+      sectors.record(azimuthDeg, { linked: value >= rxSensitivityDbm, horizontal, value, excluded });
       if (value >= rxSensitivityDbm) {
         linkedCells += 1;
         if (clippedByRange) clippedByRangeCells += 1;
@@ -219,22 +217,30 @@ export function computeCoverage(options) {
     }
   }
 
+  // Points the ground was actually asked about. Every share below is stated against
+  // this, because a percentage whose denominator includes ground that could never have
+  // linked is a statement about the size of the map, not about the link.
+  const walkedCells = evaluatedCells - budgetExcludedCells;
+
   // Free-space reach of the boresight: what this budget buys over perfectly flat
   // ground. A radius, so it can be compared with the study range and the map edge.
   const budgetRangeM = freeSpaceRangeM(txPowerDbm, model.peakGainDbi, rxSensitivityDbm, freqHz, feederLossDb);
 
   const stats = {
     cells,
-    /** Terrain vertices this grid steps over, and what one coverage cell measures. */
-    coverageStride: gridStride,
-    coverageCellSizeM: cellSpan,
+    /** Terrain vertices this grid steps over, and what one coverage point measures. */
+    coverageStride: gridStride, coverageCellSizeM: cellSpan,
     evaluatedCells,
+    /** Points the ground was asked about: the study area minus the hopeless tail. */
+    walkedCells,
     linkedCells,
     /** Points where free-space loss alone lost the link; no ray was walked there. */
     budgetExcludedCells,
-    linkAvailabilityPct: evaluatedCells === 0 ? 0 : (100 * linkedCells) / evaluatedCells,
+    linkAvailabilityPct: walkedCells === 0 ? 0 : (100 * linkedCells) / walkedCells,
+    /** The same links as a share of the whole study area: how much *map* is served. */
+    mapCoveragePct: evaluatedCells === 0 ? 0 : (100 * linkedCells) / evaluatedCells,
     blockedCells,
-    blockedPct: evaluatedCells === 0 ? 0 : (100 * blockedCells) / evaluatedCells,
+    blockedPct: walkedCells === 0 ? 0 : (100 * blockedCells) / walkedCells,
     /** Evaluated points whose first Fresnel zone meets the clearance criterion. */
     fresnelClearCells,
     /** The three buckets the zone colour ramp paints, mutually exclusive and total. */
@@ -269,22 +275,14 @@ export function computeCoverage(options) {
     sensitivityDbm: rxSensitivityDbm,
     margins,
     maxRangeM,
-    /** The work area, named so the HUD can say when it - not the link - is the limit. */
-    studyRangeM: maxRangeM,
-    /** Free-space reach of the boresight: what this budget buys over perfectly flat
-        ground. A radius, so it can be compared with the two areas drawn on the map. */
-    budgetRangeM,
-    /** Distance from the mast to the nearest edge of the world. */
-    nearestMapEdgeM,
-    /** Linked points within one coverage cell of the study-range ring / the map edge. */
-    clippedByRangeCells,
-    clippedByMapCells,
-    /** Which of those - or the link itself - is actually holding the coverage in.
-        `'budget'` is the answer you want: it means the drape ends where the link does. */
-    limitingFactor: linkedCells === 0 ? 'budget'
-      : (clippedByMapCells > 0 && nearestMapEdgeM <= Math.min(budgetRangeM, maxRangeM)
-        ? 'map-edge'
-        : (clippedByRangeCells > 0 && maxRangeM <= budgetRangeM ? 'study-range' : 'budget')),
+    ...describeLimits({
+      linkedCells,
+      budgetRangeM,
+      studyRangeM: maxRangeM,
+      nearestMapEdgeM,
+      clippedByRangeCells,
+      clippedByMapCells,
+    }),
   };
 
   return {

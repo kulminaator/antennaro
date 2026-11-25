@@ -159,27 +159,66 @@ test('terrain: the ground does not depend on where the mast stands', () => {
 });
 
 test('terrain: the valley channel stays south of the site instead of cutting the map', () => {
-  // The valley floor is measured across x, so without a meridional fade it runs
-  // the whole north-south length of the map: a trench through the mountain sector
-  // and through the site at the centre, which then needs a 30 m fill under it.
+  // The valley floor is measured across x, so without a meridional fade it runs the
+  // whole north-south length of the map: a trench through the mountain sector and
+  // through the middle of the map.
+  //
+  // The probes below are *found*, not typed: the channel meanders with the noise and
+  // the landforms were rescaled with the map, so any fixed x written into this file is
+  // a guess about the terrain rather than a statement about the promise.
+  const half = WORLD.worldSize / 2;
+  const cfg = TERRAIN.valley;
+  const scan = (z) => {
+    let floor = Infinity;
+    let floorX = 0;
+    for (let x = -half; x <= half; x += 25) {
+      const y = heightAt(x, z, ctx);
+      if (y < floor) { floor = y; floorX = x; }
+    }
+    let rim = -Infinity;
+    for (let x = 0; x <= half; x += 25) {
+      const lateral = Math.abs(x - floorX);
+      if (lateral > cfg.halfWidth && lateral < 2 * cfg.rimWidth) rim = Math.max(rim, heightAt(x, z, ctx));
+    }
+    let outside = 0;
+    let samples = 0;
+    for (let x = 0; x <= half; x += 100) {
+      if (Math.abs(x - floorX) < 2.2 * cfg.rimWidth) continue;
+      outside += heightAt(x, z, ctx);
+      samples += 1;
+    }
+    return { floor, floorX, rim, outside: samples === 0 ? 0 : outside / samples };
+  };
+
+  const south = scan(0.4 * half);
+  assert.ok(south.rim > south.floor + cfg.depth * 0.5,
+    `a valley needs a floor (${south.floor.toFixed(0)} m) under a rim (${south.rim.toFixed(0)} m)`);
+  assert.ok(south.rim > south.outside + 5,
+    `and the rim must stand proud of the ground beyond it, not just above the floor: rim ${south.rim.toFixed(0)} m, beyond ${south.outside.toFixed(0)} m`);
+
+  // North of the centre the channel has faded out. That is measured on the valley's own
+  // height function, because that is the term carrying the fade: the blended surface
+  // north of the centre is the mountain, whose 400 m of relief is not a trench.
   const valley = ZONE_HEIGHT_FN[ZONES.VALLEY];
-  for (const z of [-1100, -800, -400, -200, -100]) {
-    assert.ok(valley(0, z, ctx) >= valley(500, z, ctx) - 5,
-      `z=${z}: the valley axis (${valley(0, z, ctx).toFixed(0)} m) is still cut below its shoulder (${valley(500, z, ctx).toFixed(0)} m)`);
+  const channelCut = (z) => {
+    let floor = Infinity;
+    for (let x = -(cfg.halfWidth + cfg.meander); x <= cfg.halfWidth + cfg.meander; x += 25) {
+      floor = Math.min(floor, valley(x, z, ctx));
+    }
+    return valley(1.9 * cfg.rimWidth, z, ctx) - floor;
+  };
+  const deepCut = channelCut(0.4 * half);
+  assert.ok(deepCut > cfg.depth * 0.5, `the southern channel is cut ${deepCut.toFixed(0)} m below its shoulder`);
+  for (const z of [-0.35 * half, -0.15 * half, 0]) {
+    const cut = channelCut(z);
+    assert.ok(cut < 10,
+      `z=${z.toFixed(0)}: ${cut.toFixed(0)} m of cut against ${deepCut.toFixed(0)} m in the south - the channel reached the middle of the map`);
   }
-  // And in the south it is still the valley the README describes: a floor with
-  // raised rims either side of it.
-  assert.ok(valley(0, 900, ctx) < valley(500, 900, ctx) - 20, 'the southern valley stopped being a valley');
-  const floor = heightAt(0, 900, ctx);
-  const rim = Math.max(heightAt(350, 900, ctx), heightAt(-350, 900, ctx));
-  const outside = heightAt(900, 900, ctx);
-  assert.ok(rim > floor + 20, `valley floor ${floor.toFixed(0)} m should be well below its rim ${rim.toFixed(0)} m`);
-  assert.ok(rim > outside, `the rim (${rim.toFixed(0)} m) should stand above the ground beyond it (${outside.toFixed(0)} m)`);
-  // North of the centre there is no trench to grade away: the channel fades out
-  // before it reaches the middle of the map.
-  const northOfCentre = heightAt(0, -400, ctx);
-  assert.ok(northOfCentre > floor + 20,
-    `the valley still cuts ${(-400).toFixed(0)} m north of the centre: ${northOfCentre.toFixed(0)} m vs a ${floor.toFixed(0)} m floor`);
+  // And it is a channel the whole way south, not a pit at one latitude.
+  for (const z of [0.3, 0.5, 0.7, 0.85].map((f) => f * half)) {
+    assert.ok(channelCut(z) > cfg.depth * 0.4,
+      `z=${z.toFixed(0)}: the valley floor should still be cut deep here (${channelCut(z).toFixed(0)} m)`);
+  }
 });
 
 test('terrain: profileAlong walks outward from the origin', () => {

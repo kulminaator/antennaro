@@ -38,3 +38,53 @@ answer.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Split the old 421-line `propagation.test.js` (over the 320-line test budget) into the
+  three files the plan implied, each with one subject:
+  - `tests/unit/propagation.test.js` - radio maths and the ray (175 lines),
+  - `tests/unit/coverage.test.js` - the **grid contract**: stride, whole-map sweep,
+    pre-filter equivalence, statistics and denominators, sampling, sector bookkeeping,
+  - `tests/unit/coveragebehaviour.test.js` - how the sweep **behaves**: shadowing,
+    aiming, power/clutter/receiver, falloff, downtilt, frequency, determinism.
+- The flagship test walks the default map twice per design (filter on/off, three
+  designs including the 27 dBm biquad where almost nothing is skipped) and asserts:
+  same evaluated set, **zero** differences in which points link, zero in band
+  assignment, bit-identical dB at every walked point, and `walked.rssi <= filtered.rssi
+  < sensitivity` at every dismissed point (the bound really is an upper bound, and a
+  dismissed point really could not have linked). It ends with `assert.ok(excluded > 0)`
+  so the test can never pass by having skipped nothing.
+- Cost gate from the plan is satisfied by measurement, not assertion (a timing assert
+  would be a flaky test): worst case 90 ms in Node, see step-003.
+- A full-map sweep is in the suite: `the whole map is looked at, and the sweep says what
+  limited it` asserts `evaluatedCells > 0.9 * cells` and drives all three
+  `limitingFactor` populations (budget / study-range / map-edge).
+- Two real bugs fell out of writing these tests, both fixed in `src/`, not in the tests:
+  1. `stats.linkAvailabilityPct`, `blockedPct` and every sector `linkedPct` divided by
+     `evaluatedCells`, which now includes points the budget dismissed. On flat ground a
+     Yagi's "east" sector read 43 % purely because the map is bigger than the link.
+     Now there are two named shares - `linkAvailabilityPct` over `walkedCells`, and
+     `mapCoveragePct` over the whole study area - plus a per-sector `excluded` count, so
+     the reader can tell "the antenna does not serve that direction" from "the map is
+     larger than the link". The old single number conflated the two.
+  2. A pre-filtered point stored the clearance sentinel (100 r1) together with
+     `fresnelClear = false`, so "flag follows ratio" was false for exactly those points.
+     The fix is a stated contract rather than a tweak: an unasked point carries **no
+     verdict**, `budgetExcluded` is the claim, and `tests/unit/fresnel.test.js` now
+     asserts that an unasked point never claims a clear zone and never claims loss.
+- Terrain valley test rewritten the way the plan asked (relative to config, not weaker):
+  the floor, the rim and the ground beyond are *found* by scanning `heightAt` across the
+  channel rather than typed as fixed metres - the meander moves the axis by `meander`
+  (260 m) and the rescale moved everything else. Measured south of the fade: floor
+  -76 m, rim +20 m, ground beyond +4 m; the channel cut is 79 m in the south and under
+  10 m at z = -910, -390 and 0. The meridional claim is measured on the valley height
+  function itself, because the blended surface to the north is the mountain and its
+  400 m of relief is not a trench - the first version of this test asserted exactly that
+  confusion and failed with "419 m of cut".
+- Also repaired the two deferred step-002 failures here (they were blocking the gate):
+  the valley test above, and `the mountain really diffracts the signal` which had
+  hardcoded "north". On the rescaled map the wall is to the **west/north-west**
+  (19-22 dB mean obstruction, 0 % linked) and the open ground is south-east (0.5 dB,
+  56 % linked), so the test now takes the best and worst sectors and asserts the
+  difference is the *ground* (obstruction dB), while the flat-field pattern test keeps
+  the compass-direction promises where the compass is the only variable.
+- `npm run lint` ok (43 src, 17 test files); `npm run test:unit`: all 12 files pass.

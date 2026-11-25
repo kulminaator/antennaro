@@ -134,24 +134,45 @@ test('coverage: every evaluated cell reports its zone state', () => {
   const model = createAntennaModel({ designId: 'omni-dipole', aim: { azimuthDeg: 0, tiltDeg: 0 }, wavelength: wavelengthM(FREQ) });
   const coverage = computeCoverage({ field, site, model, freqHz: 868e6, maxRangeM: 1200 });
 
-  assert.equal(coverage.fresnelClearance.length, field.size * field.size);
-  assert.equal(coverage.fresnelClear.length, field.size * field.size, 'a grid slot for every cell');
+  assert.equal(coverage.fresnelClearance.length, coverage.size * coverage.size);
+  assert.equal(coverage.fresnelClear.length, coverage.size * coverage.size, 'a grid slot for every coverage point');
 
   let flags = 0;
+  let clearLinked = 0;
   let worst = Infinity;
   let evaluated = 0;
+  let unasked = 0;
   for (let i = 0; i < coverage.evaluated.length; i += 1) {
     if (!coverage.evaluated[i]) continue;
     evaluated += 1;
     const ratio = coverage.fresnelClearance[i];
-    assert.ok(Number.isFinite(ratio) && ratio >= -1e9, `cell ${i} reports a usable ratio`);
+    assert.ok(Number.isFinite(ratio) && ratio >= -1e9, `point ${i} reports a usable ratio`);
+    if (coverage.budgetExcluded[i] === 1) {
+      // The ground was never asked, so there is no verdict to check - only the promise
+      // that an unasked point is not silently reported as a clear zone.
+      unasked += 1;
+      assert.equal(coverage.fresnelClear[i], 0, 'an unasked point claims no clear zone');
+      assert.equal(coverage.obstructionDb[i], 0, 'and no diffraction loss');
+      continue;
+    }
     assert.equal(coverage.fresnelClear[i], ratio >= RF.fresnelClearFraction ? 1 : 0, 'flag follows the ratio');
     if (coverage.fresnelClear[i]) flags += 1;
+    if (coverage.fresnelClear[i] && coverage.rssi[i] >= coverage.sensitivityDbm) clearLinked += 1;
     if (ratio < worst) worst = ratio;
   }
-  assert.ok(evaluated > 0, 'the fixture evaluates cells');
+  assert.ok(evaluated > 0, 'the fixture evaluates points');
+  assert.equal(
+    coverage.stats.fresnelClearCells + coverage.stats.fresnelPartialCells + coverage.stats.fresnelCutCells,
+    coverage.stats.walkedCells,
+    'the zone buckets cover the points the ground was asked about, and no others',
+  );
   assert.equal(coverage.stats.fresnelClearCells, flags, 'the stat counts the flags');
-  assert.ok(approxEqual(coverage.stats.fresnelClearPct, (100 * flags) / evaluated, 1e-9));
+  assert.equal(coverage.stats.fresnelClearLinkedCells, clearLinked);
+  assert.ok(approxEqual(
+    coverage.stats.fresnelClearPct,
+    coverage.stats.linkedCells === 0 ? 0 : (100 * clearLinked) / coverage.stats.linkedCells,
+    1e-9,
+  ), 'the clearance share is stated against working links, not against the whole map');
   assert.ok(approxEqual(coverage.stats.worstClearance, worst, 1e-6), 'the stat is the minimum ratio');
   assert.equal(coverage.stats.fresnelRxHeightM, RF.fresnelRxHeightM);
   assert.equal(coverage.stats.fresnelClearFraction, RF.fresnelClearFraction);

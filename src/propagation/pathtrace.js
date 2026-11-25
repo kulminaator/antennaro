@@ -2,7 +2,7 @@
  * One path, two questions: what does the ground cost, and how much first Fresnel
  * zone is left?
  *
- * Layer: L1 (pure domain). Extracted from `coverage.js` because the coverage loop
+ * Layer: L2 (domain service, pure). Extracted from `coverage.js` because the coverage loop
  * asks this of tens of thousands of points and the answer has one subtlety worth
  * stating in one place: the **loss** is charged against the ray that ends on the
  * cell's own ground, while the **zone** is judged against a receiver standing a few

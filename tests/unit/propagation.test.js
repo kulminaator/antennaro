@@ -1,9 +1,14 @@
 /**
- * Unit tests: radio maths, terrain shadowing and the coverage grid.
+ * Unit tests: the radio maths and the terrain ray - FSPL, Fresnel zones, diffraction
+ * and line-of-sight profiles.
  *
  * The reference numbers are textbook values (ITU-style FSPL, 6.02 dB per
  * doubling of distance or frequency, ~6 dB at a grazing knife edge) so a future
  * change to the model has to be a deliberate, documented one.
+ *
+ * The coverage *grid* has its own files: `coverage.test.js` for what the sweep
+ * promises (whole-map evaluation, the budget pre-filter, what the statistics mean)
+ * and `coveragebehaviour.test.js` for how it behaves over real ground.
  */
 
 import { test } from 'node:test';
@@ -12,11 +17,6 @@ import assert from 'node:assert/strict';
 import { RF } from '../../src/config.js';
 import { approxEqual } from '../../src/math/scalar.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
-import { generateTerrain } from '../../src/terrain/generators.js';
-import { resolveSite } from '../../src/terrain/site.js';
-import { createAntennaModel } from '../../src/antenna/model.js';
-import { createDefaultParams } from '../../src/antenna/catalogue.js';
-import { fromCompass } from '../../src/math/vec3.js';
 import {
   eirpDbm, freeSpaceLossDb, freeSpaceRangeM, frequencyLabel, fresnelRadiusM, levelIndexFor, levelMarginsDb,
   linkMarginDb, receivedDbm, resolveFrequencyHz, rfSummary, wavelengthM, SPEED_OF_LIGHT_MPS,
@@ -24,9 +24,6 @@ import {
 import {
   diffractionLossDb, hasLineOfSight, obstructionLossDb, rayProfile, requiredHeightForClearance,
 } from '../../src/propagation/los.js';
-import {
-  SECTOR_COUNT, SECTOR_LABELS, bandFor, computeCoverage, coverageLegend, sampleCoverage, sectorIndexForAzimuth,
-} from '../../src/propagation/coverage.js';
 
 const FLAT = new HeightField({ size: 41, worldSize: 2000 }).fillFromFunction(() => 0);
 
@@ -36,10 +33,6 @@ function walledTerrain(height) {
 }
 
 const SITE = { x: 0, y: 10, z: 0 };
-
-function omniModel(tiltDeg = 0) {
-  return createAntennaModel({ designId: 'omni-dipole', aim: { azimuthDeg: 0, tiltDeg }, wavelength: wavelengthM('868') });
-}
 
 test('rf: frequency selection accepts labels, MHz and hertz', () => {
   assert.equal(resolveFrequencyHz('868'), 868e6);
@@ -182,240 +175,4 @@ test('los: diffraction loss is monotone, ~6 dB at grazing and zero when clear', 
     'a longer wavelength bends over the hill better');
   assert.ok(approxEqual(diffractionLossDb(10, 300, 700, '868'), diffractionLossDb(10, 700, 300, '868'), 1e-12),
     'the edge position is symmetric in d1/d2');
-});
-
-test('coverage: sector bookkeeping is exhaustive and clockwise', () => {
-  assert.equal(SECTOR_COUNT, SECTOR_LABELS.length);
-  assert.deepEqual(SECTOR_LABELS, ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
-  assert.equal(sectorIndexForAzimuth(0), 0, 'north');
-  assert.equal(sectorIndexForAzimuth(22), 0, 'the N sector spans +-22.5 deg');
-  assert.equal(sectorIndexForAzimuth(23), 1);
-  assert.equal(sectorIndexForAzimuth(90), 2, 'east');
-  assert.equal(sectorIndexForAzimuth(180), 4, 'south');
-  assert.equal(sectorIndexForAzimuth(270), 6, 'west');
-  assert.equal(sectorIndexForAzimuth(337), 7, 'north-west');
-  assert.equal(sectorIndexForAzimuth(359), 0, '359 is still inside the +-22.5 deg north sector');
-  assert.equal(sectorIndexForAzimuth(-10), 0, 'negative bearings wrap into north');
-  const seen = new Set();
-  for (let az = -720; az <= 720; az += 1) seen.add(sectorIndexForAzimuth(az));
-  assert.equal(seen.size, SECTOR_COUNT, 'every sector is reachable');
-});
-
-const field = generateTerrain({ size: 81, worldSize: 2400, seed: 4242 });
-const site = resolveSite(field, { heightM: 12 });
-const baseCoverage = computeCoverage({
-  field, site, model: omniModel(), freqHz: '868', txPowerDbm: 10, maxRangeM: 1000,
-});
-
-test('coverage: the grid agrees with its own statistics', () => {
-  const { stats } = baseCoverage;
-  assert.equal(baseCoverage.size, field.size);
-  assert.equal(stats.cells, field.size * field.size);
-  assert.ok(stats.evaluatedCells > 1000, 'most of the map inside the range is evaluated');
-  assert.ok(stats.evaluatedCells < stats.cells, 'the near-field footprint and the range limit are skipped');
-
-  let linked = 0;
-  let evaluated = 0;
-  let bandTotal = 0;
-  for (let i = 0; i < baseCoverage.evaluated.length; i += 1) {
-    if (!baseCoverage.evaluated[i]) continue;
-    evaluated += 1;
-    assert.ok(Number.isFinite(baseCoverage.rssi[i]), 'no NaN RSSI');
-    if (baseCoverage.rssi[i] >= baseCoverage.sensitivityDbm) linked += 1;
-    bandTotal += baseCoverage.stats.levelCounts[baseCoverage.level[i]] !== undefined ? 0 : 1;
-    assert.ok(baseCoverage.level[i] <= RF.levelMarginsDb.length, 'band index is valid');
-    assert.ok(baseCoverage.distanceM[i] >= 0 && baseCoverage.obstructionDb[i] >= 0);
-  }
-  assert.equal(evaluated, stats.evaluatedCells);
-  assert.equal(linked, stats.linkedCells);
-  assert.equal(bandTotal, 0, 'every cell carries a known band');
-  assert.equal(stats.levelCounts.reduce((a, b) => a + b, 0), stats.evaluatedCells, 'bands cover every cell');
-  assert.ok(approxEqual(stats.linkAvailabilityPct, (100 * linked) / evaluated, 1e-9));
-  assert.equal(stats.sectors.length, SECTOR_COUNT);
-  assert.equal(stats.sectors.reduce((acc, sector) => acc + sector.evaluated, 0), stats.evaluatedCells,
-    'the per-sector table accounts for every evaluated cell');
-  assert.ok(approxEqual(stats.bestDbm, Math.max(...Array.from(baseCoverage.rssi).filter((_, i) => baseCoverage.evaluated[i])), 1e-3));
-});
-
-test('coverage: the mountain shadows the north while the east reaches out', () => {
-  const north = baseCoverage.stats.sectors.find((sector) => sector.label === 'N');
-  const east = baseCoverage.stats.sectors.find((sector) => sector.label === 'E');
-  assert.ok(east.linkedPct > north.linkedPct + 10,
-    `east links ${east.linkedPct.toFixed(1)}% vs north ${north.linkedPct.toFixed(1)}%`);
-  assert.ok(east.maxRangeM > north.maxRangeM, 'the flat field is reachable further than the valley behind the ridge');
-
-  let northObstruction = 0;
-  let northCount = 0;
-  let eastObstruction = 0;
-  let eastCount = 0;
-  field.forEachCell((x, z, h, index) => {
-    if (!baseCoverage.evaluated[index]) return;
-    const az = (Math.atan2(x, -z) * 180) / Math.PI;
-    if (sectorIndexForAzimuth(az) === 0) {
-      northObstruction += baseCoverage.obstructionDb[index];
-      northCount += 1;
-    } else if (sectorIndexForAzimuth(az) === 2) {
-      eastObstruction += baseCoverage.obstructionDb[index];
-      eastCount += 1;
-    }
-  });
-  assert.ok(northObstruction / northCount > eastObstruction / eastCount + 2,
-    'the mountain really diffracts the signal');
-});
-
-test('coverage: switching terrain shadowing off makes the shadow disappear', () => {
-  const freeSpace = computeCoverage({
-    field, site, model: omniModel(), freqHz: '868', txPowerDbm: 10, maxRangeM: 1000, useDiffraction: false,
-  });
-  let withLoss = 0;
-  let withoutLoss = 0;
-  for (let i = 0; i < baseCoverage.evaluated.length; i += 1) {
-    if (!baseCoverage.evaluated[i]) continue;
-    withLoss += baseCoverage.rssi[i];
-    withoutLoss += freeSpace.rssi[i];
-  }
-  assert.ok(withoutLoss > withLoss, 'free space is always at least as strong as diffracted');
-  assert.ok(freeSpace.stats.maxLinkedRangeM >= baseCoverage.stats.maxLinkedRangeM);
-  let anyObstruction = false;
-  for (let i = 0; i < freeSpace.obstructionDb.length; i += 1) anyObstruction = anyObstruction || freeSpace.obstructionDb[i] > 0;
-  assert.equal(anyObstruction, false, 'with shadowing disabled no cell carries obstruction loss');
-});
-
-test('coverage: aiming a beam east moves the coverage, and power extends it', () => {
-  const aimedEast = createAntennaModel({
-    designId: 'yagi',
-    params: createDefaultParams('yagi'),
-    aim: { azimuthDeg: 90, tiltDeg: 0 },
-    wavelength: wavelengthM('868'),
-  });
-  const aimedNorth = createAntennaModel({
-    designId: 'yagi',
-    params: createDefaultParams('yagi'),
-    aim: { azimuthDeg: 0, tiltDeg: 0 },
-    wavelength: wavelengthM('868'),
-  });
-  const options = { field, site, freqHz: '868', txPowerDbm: 10, maxRangeM: 1200 };
-  const eastRun = computeCoverage({ ...options, model: aimedEast });
-  const northRun = computeCoverage({ ...options, model: aimedNorth });
-  const eastEast = eastRun.stats.sectors.find((s) => s.label === 'E').linked;
-  const northEast = northRun.stats.sectors.find((s) => s.label === 'E').linked;
-  const northNorth = northRun.stats.sectors.find((s) => s.label === 'N').linked;
-  const eastNorth = eastRun.stats.sectors.find((s) => s.label === 'N').linked;
-  assert.ok(eastEast > northEast, 'pointing east links more eastern cells');
-  assert.ok(northNorth > eastNorth, 'and pointing north links more northern cells');
-
-  // The map is only 2400 m wide, so maxLinkedRange saturates; area is the honest measure.
-  const louder = computeCoverage({ ...options, model: aimedEast, txPowerDbm: 20 });
-  assert.ok(louder.stats.linkedCells > eastRun.stats.linkedCells * 1.2, '10 dB more power serves a lot more ground');
-  assert.ok(louder.stats.linkAvailabilityPct > eastRun.stats.linkAvailabilityPct);
-  assert.ok(approxEqual(louder.stats.meanDbm - eastRun.stats.meanDbm, 10, 0.2), 'every cell gains exactly the extra 10 dB');
-
-  const greedy = computeCoverage({ ...options, model: aimedEast, rxSensitivityDbm: -60 });
-  assert.ok(greedy.stats.linkedCells < eastRun.stats.linkedCells, 'a less sensitive receiver sees less coverage');
-
-  const cluttered = computeCoverage({ ...options, model: aimedEast, clutterLossDb: 12 });
-  assert.ok(cluttered.stats.maxLinkedRangeM < eastRun.stats.maxLinkedRangeM, 'clutter eats range');
-});
-
-test('coverage: RSSI falls off with distance along a clear bearing', () => {
-  const samples = [];
-  for (let distance = 120; distance <= 900; distance += 60) {
-    const sample = sampleCoverage(baseCoverage, field, distance, 0);
-    if (sample) samples.push({ distanceM: sample.distanceM, rssi: sample.rssiDbm });
-  }
-  assert.ok(samples.length > 8, 'the east bearing is evaluated out to the range limit');
-  for (let i = 1; i < samples.length; i += 1) {
-    assert.ok(samples[i].rssi < samples[i - 1].rssi + 3,
-      `RSSI roughly follows distance (${samples[i - 1].rssi.toFixed(1)} -> ${samples[i].rssi.toFixed(1)})`);
-    assert.ok(samples[i].distanceM > samples[i - 1].distanceM - 1);
-  }
-  assert.ok(samples.at(-1).rssi - samples[0].rssi < -15, 'almost a kilometre out is more than 15 dB quieter');
-});
-
-test('coverage: sampling respects the grid and the range limit', () => {
-  assert.equal(sampleCoverage(baseCoverage, field, 90_000, 0), null, 'off the map');
-  assert.equal(sampleCoverage(baseCoverage, field, 5, 5), null, 'inside the transmitter footprint');
-  assert.equal(sampleCoverage(baseCoverage, field, 5000, 0), null, 'beyond the evaluation range');
-  const probe = sampleCoverage(baseCoverage, field, 400, 0);
-  assert.ok(probe && Number.isFinite(probe.rssiDbm));
-  const legend = coverageLegend(baseCoverage);
-  assert.equal(legend.length, RF.levelMarginsDb.length);
-  for (let i = 1; i < legend.length; i += 1) {
-    assert.ok(legend[i].minDbm < legend[i - 1].minDbm, 'legend thresholds descend');
-  }
-  assert.equal(bandFor(legend[0].minDbm, baseCoverage), 0);
-  assert.equal(bandFor(-200, baseCoverage), RF.levelMarginsDb.length);
-});
-
-test('coverage: the same inputs give byte-identical output', () => {
-  const again = computeCoverage({
-    field, site, model: omniModel(), freqHz: '868', txPowerDbm: 10, maxRangeM: 1000,
-  });
-  assert.deepEqual(Array.from(again.rssi), Array.from(baseCoverage.rssi));
-  assert.deepEqual(Array.from(again.level), Array.from(baseCoverage.level));
-  assert.deepEqual(again.stats, baseCoverage.stats);
-});
-
-test('coverage: downtilt trades horizon reach for ground under the mast', () => {
-  const tower = resolveSite(field, { heightM: 30 });
-  const flatTop = createAntennaModel({
-    designId: 'omni-collinear',
-    params: { elements: 8, spacingLambda: 0.5 },
-    aim: { azimuthDeg: 0, tiltDeg: 0 },
-    wavelength: wavelengthM('868'),
-  });
-  const downtilted = createAntennaModel({
-    designId: 'omni-collinear',
-    params: { elements: 8, spacingLambda: 0.5 },
-    aim: { azimuthDeg: 0, tiltDeg: -25 },
-    wavelength: wavelengthM('868'),
-  });
-  const options = { field, site: tower, freqHz: '868', txPowerDbm: 10, maxRangeM: 1400 };
-  const level = computeCoverage({ ...options, model: flatTop });
-  const down = computeCoverage({ ...options, model: downtilted });
-  assert.ok(down.stats.linkAvailabilityPct < level.stats.linkAvailabilityPct - 10,
-    `a flat-top omni steered 25 deg down wastes power on the hillside (${down.stats.linkAvailabilityPct.toFixed(1)}% vs ${level.stats.linkAvailabilityPct.toFixed(1)}%)`);
-  const patch = (beamTiltDeg) => createAntennaModel({
-    designId: 'patch',
-    params: { sizeLambda: 1, beamTiltDeg },
-    aim: { azimuthDeg: 0, tiltDeg: 0, beamTiltDeg },
-    wavelength: wavelengthM('868'),
-  });
-  const panelRuns = [0, 6, 15, 20].map((beamTiltDeg) => computeCoverage({
-    field, site, freqHz: '868', txPowerDbm: 10, maxRangeM: 1400, model: patch(beamTiltDeg),
-  }));
-  for (let i = 1; i < panelRuns.length; i += 1) {
-    assert.ok(panelRuns[i].stats.linkedCells <= panelRuns[i - 1].stats.linkedCells,
-      'more electrical downtilt never serves more ground from a 12 m mast');
-    assert.ok(panelRuns[i].stats.maxLinkedRangeM <= panelRuns[i - 1].stats.maxLinkedRangeM,
-      'and it never reaches further');
-  }
-  assert.ok(panelRuns[3].stats.linkedCells < panelRuns[0].stats.linkedCells, 'steering 20 deg down does cost area');
-});
-
-test('coverage: frequency decides reach more than anything else does', () => {
-  const options = { field, site, model: omniModel(0), freqHz: '868', txPowerDbm: 10, maxRangeM: 1400 };
-  const low = computeCoverage({ ...options, freqHz: '433' });
-  const mid = computeCoverage({ ...options, freqHz: '868' });
-  const wifi = computeCoverage({ ...options, freqHz: '2400' });
-  const millimetre = computeCoverage({ ...options, freqHz: '5800' });
-  assert.ok(low.stats.maxLinkedRangeM > mid.stats.maxLinkedRangeM, '433 MHz reaches past 868 MHz');
-  assert.ok(mid.stats.maxLinkedRangeM > wifi.stats.maxLinkedRangeM, '868 MHz reaches past 2.4 GHz');
-  assert.ok(wifi.stats.maxLinkedRangeM > millimetre.stats.maxLinkedRangeM, '2.4 GHz reaches past 5.8 GHz');
-  assert.ok(mid.stats.linkAvailabilityPct > wifi.stats.linkAvailabilityPct + 10, 'and serves far more ground');
-});
-
-test('coverage: a direction that points at the sky serves nobody', () => {
-  const skyward = createAntennaModel({
-    designId: 'yagi',
-    params: createDefaultParams('yagi'),
-    aim: { azimuthDeg: 0, tiltDeg: 60 },
-    wavelength: wavelengthM('868'),
-  });
-  const run = computeCoverage({ field, site, model: skyward, freqHz: '868', txPowerDbm: 10, maxRangeM: 1000 });
-  const horizon = computeCoverage({ field, site, model: omniModel(), freqHz: '868', txPowerDbm: 10, maxRangeM: 1000 });
-  assert.ok(run.stats.maxLinkedRangeM < horizon.stats.maxLinkedRangeM);
-  const boresight = fromCompass(0, 60);
-  assert.ok(approxEqual(skyward.gainDbiForDirection(boresight), skyward.peakGainDbi, 1e-9),
-    'the beam is where the user aimed it, even if that is at a cloud');
 });
