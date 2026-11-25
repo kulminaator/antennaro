@@ -242,9 +242,13 @@ test('architecture: determinism - one dice roll in the whole app', () => {
     .map((module) => ({ relative: module.relative, hits: findLines(module.source, /Math\.random/) }))
     .filter((entry) => entry.hits.length > 0);
   assert.equal(randomUsers.length, 1, `Math.random appears in ${randomUsers.map((r) => r.relative).join(', ')}`);
-  assert.equal(randomUsers[0].relative, 'src/app/controller.js',
-    'only the explicit "new seed" button may roll dice; everything downstream is seeded');
-  assert.equal(findLines(modules.find((m) => m.relative === 'src/app/controller.js').source, /Math\.random/).length, 1);
+  // The dice roll travels with the action channel, wherever that lives: the point is
+  // that exactly one place rolls, and it is the deliberate "new seed" request.
+  assert.equal(randomUsers[0].relative, 'src/app/actions.js',
+    'only the explicit "new seed" action may roll dice; everything downstream is seeded');
+  assert.equal(findLines(modules.find((m) => m.relative === 'src/app/actions.js').source, /Math\.random/).length, 1);
+  const actionsSource = modules.find((m) => m.relative === 'src/app/actions.js').source;
+  assert.ok(actionsSource.includes("case 'new-seed'"), 'and the roll sits inside that action');
 });
 
 test('architecture: nothing hard-codes an antenna design id outside the catalogue', () => {

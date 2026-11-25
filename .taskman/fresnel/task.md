@@ -76,3 +76,8 @@ split before anything new is wired into it**.
 - Do not add a "Fresnel loss" term: the dB already come from the Kirchhoff/Lee
   parameter `v = sqrt(2) * h / r1`. A second penalty for the same ground is double
   counting; the criterion is a reliability flag next to the dB.
+- **Step order swapped: 007 before finishing 006.** `fresnelmesh.js` is written but a
+  module that nothing imports trips the reachability rule, so lint cannot be green
+  until it is wired; wiring belongs in the controller, and the controller has one line
+  of budget left. The split (step-007) therefore happens first, and step-006 finishes
+  with its wiring instead of being committed as dead code.

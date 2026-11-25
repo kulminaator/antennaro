@@ -14,7 +14,7 @@
  * when loading a preset).
  */
 
-import { ANTENNA, VIEW } from '../config.js';
+import { VIEW } from '../config.js';
 import { EVENTS, createEventBus } from '../core/eventbus.js';
 import { createFrameLoop } from '../core/loop.js';
 import { createAntennaModel } from '../antenna/model.js';
@@ -22,10 +22,10 @@ import { createAntennaRig } from '../antenna/rigmesh.js';
 import { generateTerrain } from '../terrain/generators.js';
 import { resolveSite } from '../terrain/site.js';
 import { createMapObjects } from './mapmesh.js';
-import { computeCoverage } from '../propagation/coverage.js';
-import { resolveFrequencyHz, rfSummary, wavelengthM } from '../propagation/rf.js';
+import { resolveFrequencyHz, wavelengthM } from '../propagation/rf.js';
 import { applyPatch, createInitialState, impactedStages, RECOMPUTE } from './state.js';
-import { getPreset } from './presets.js';
+import { createActions } from './actions.js';
+import { createReports } from './reports.js';
 import { createLabels } from './labels.js';
 import { createOrbitControls } from './orbit.js';
 import { createSiteRelocator } from './relocate.js';
@@ -75,9 +75,24 @@ export function createController(options) {
 
   /** @type {import('../antenna/model.js').AntennaModel|null} */
   let model = null;
-  /** @type {ReturnType<typeof computeCoverage>|null} */
-  let coverage = null;
   let site = currentSite();
+
+  /** Coverage recompute plus the summary objects the HUD, legend and tests read. */
+  const reports = createReports({
+    getState: () => state,
+    getModel: () => model,
+    getField: () => field,
+    getSite: () => site,
+    getRigInfo: () => rig.info(),
+    getMapObjects: () => mapObjects,
+    getViewportInfo: () => viewport.info(),
+    getCameraState: () => viewport.cameraState(),
+    onCoverage: (coverage) => {
+      mapObjects.overlay.update(field, coverage, { zoneView: state.display.showFresnel === true });
+      lastCoverageMs = now();
+      bus.emit(EVENTS.COVERAGE_READY, coverage);
+    },
+  });
 
   const dirty = { terrain: true, antenna: true, coverage: true };
   let lastCoverageMs = 0;
@@ -118,26 +133,6 @@ export function createController(options) {
     bus.emit(EVENTS.ANTENNA_REBUILT, model.summary());
   }
 
-  function recomputeCoverage() {
-    if (!model) return;
-    site = currentSite();
-    coverage = computeCoverage({
-      field,
-      site,
-      model,
-      freqHz: resolveFrequencyHz(state.frequencyKey),
-      txPowerDbm: state.txPowerDbm,
-      feederLossDb: state.feederLossDb,
-      rxSensitivityDbm: state.rxSensitivityDbm,
-      maxRangeM: state.maxRangeM,
-      clutterLossDb: state.clutterLossDb,
-      useDiffraction: state.useDiffraction,
-    });
-    mapObjects.overlay.update(field, coverage);
-    lastCoverageMs = now();
-    bus.emit(EVENTS.COVERAGE_READY, coverage);
-  }
-
   function applyVisibility() {
     mapObjects.overlay.mesh.visible = state.display.showCoverage;
     rig.setPatternVisible(state.display.showPattern);
@@ -161,7 +156,8 @@ export function createController(options) {
       worked = true;
     }
     if (dirty.coverage && (force || now() - lastCoverageMs >= throttleMs)) {
-      recomputeCoverage();
+      site = currentSite();
+      reports.recomputeCoverage(site);
       dirty.coverage = false;
       worked = true;
     }
@@ -222,46 +218,21 @@ export function createController(options) {
     return loop.stats();
   }
 
-  function action(request) {
-    const { type, value } = request ?? {};
-    switch (type) {
-      case 'apply-preset': {
-        const preset = getPreset(String(value));
-        if (!preset) return { ok: false, reason: `unknown preset ${value}` };
-        const result = patch(preset.patch);
-        settle();
-        return { ok: true, preset: preset.id, ...result };
-      }
-      case 'new-seed': {
-        // The only unseeded randomness in the app: a deliberate, user-initiated
-        // dice roll. Everything downstream stays seeded and reproducible.
-        const seed = 1 + Math.floor(Math.random() * 999998);
-        patch({ seed });
-        settle();
-        return { ok: true, seed };
-      }
-      case 'reset-site':
-        patch({ site: { x: ANTENNA.defaultSiteXm, z: ANTENNA.defaultSiteZm } });
-        settle();
-        return { ok: true, site: state.site };
-      case 'reset-view':
-        viewport.resetCamera({ x: site.x, y: site.groundY, z: site.z });
-        return { ok: true };
-      case 'save-png':
-        return savePng();
-      case 'reset-all':
-        state = createInitialState({});
-        dirty.terrain = true;
-        dirty.antenna = true;
-        dirty.coverage = true;
-        viewport.resetCamera();
-        settle();
-        bus.emit(EVENTS.STATE_CHANGED, { state, changed: ['*'], clamped: [], rejected: [], stages: [RECOMPUTE.TERRAIN] });
-        return { ok: true };
-      default:
-        return { ok: false, reason: `unknown action ${type}` };
-    }
-  }
+  const action = createActions({
+    getState: () => state,
+    setState: (next) => { state = next; },
+    patch,
+    settle,
+    markAllDirty: () => {
+      dirty.terrain = true;
+      dirty.antenna = true;
+      dirty.coverage = true;
+    },
+    resetCamera: (center) => viewport.resetCamera(center),
+    getSite: () => site,
+    savePng,
+    bus,
+  });
 
   /** Paint and hand back a PNG data URL (works thanks to preserveDrawingBuffer). */
   function savePng() {
@@ -274,25 +245,6 @@ export function createController(options) {
       link.click();
     }
     return { ok: true, dataUrl };
-  }
-
-  function sceneInfo() {
-    const rigInfo = rig.info();
-    return {
-      ...viewport.info(),
-      terrainVertices: mapObjects.terrain.surface.geometry.attributes.position.count,
-      terrainGrid: field.size,
-      sitePosition: [site.x, site.z],
-      terrainStats: field.stats(),
-      antennaParts: rigInfo.parts,
-      antennaVisualScale: rigInfo.visualScale,
-      antennaY: rigInfo.bodyY,
-      mastHeightM: rigInfo.mastHeightM,
-      patternVisible: rigInfo.patternVisible,
-      coverageVisible: mapObjects.overlay.mesh.visible,
-      labelsVisible: mapObjects.labels.group.visible,
-      camera: viewport.cameraState(),
-    };
   }
 
   if (typeof globalThis.ResizeObserver === 'function' && options.canvas) {
@@ -316,18 +268,12 @@ export function createController(options) {
     stop: loop.stop,
     step: loop.step,
     stats: loop.stats,
-    sceneInfo,
+    sceneInfo: reports.sceneInfo,
     model: () => model,
-    coverage: () => coverage,
-    coverageStats: () => (coverage ? coverage.stats : null),
-    antennaSummary: () => (model ? model.summary() : null),
-    rf: () => rfSummary({
-      txPowerDbm: state.txPowerDbm,
-      peakGainDbi: model ? model.peakGainDbi : 0,
-      feederLossDb: state.feederLossDb,
-      rxSensitivityDbm: state.rxSensitivityDbm,
-      freqHz: resolveFrequencyHz(state.frequencyKey),
-    }),
+    coverage: reports.coverage,
+    coverageStats: reports.coverageStats,
+    antennaSummary: reports.antennaSummary,
+    rf: reports.rf,
     cameraState: () => viewport.cameraState(),
     setCamera: (next) => viewport.setCamera(next),
     grabSite: () => relocator.beginAtSite(),
