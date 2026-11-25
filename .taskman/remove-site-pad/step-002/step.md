@@ -51,3 +51,19 @@ moves the rig and recomputes coverage, and never regenerates the height field.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Live check (port 8133, name `pad`): patching `site` to (365, -400) left all seven
+  sampled `heightAt` values bit-identical (max diff `0`), `site().groundY` equalled
+  `heightAt(365, -400)` at 149.712 m, and `y - groundY` stayed 10 m. The frame loop
+  stayed active and the rig moved (`scene().sitePosition` = [365, -400]).
+- `window.__sim` has **no `errors()`** - that is a harness helper
+  (`session.errors()`), not app API. Browser assertions about errors go through the
+  session.
+- `stats()` exposes no per-stage timing map, only `fps`/`frames`/`idleFrames`; the HUD
+  "Coverage compute" row is where a compute cost shows. Terrain skipping is proven by
+  unchanged ground values, not by timing.
+- Failing-but-expected after this step, both owned by step-004:
+  `tests/unit/terrain.test.js` (imports the removed `naturalHeightAt`) and
+  `tests/unit/state.test.js` (asserts the placement fields dirty the terrain stage).
+- Lint does no scope analysis: had `generateTerrain` kept referencing the deleted
+  `siteX`/`siteZ` bindings it would have passed lint and thrown at boot.

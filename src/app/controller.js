@@ -67,7 +67,7 @@ export function createController(options) {
   });
 
   let field = generateTerrain({
-    size: state.gridSize, worldSize: state.worldSize, seed: state.seed, siteX: state.site.x, siteZ: state.site.z,
+    size: state.gridSize, worldSize: state.worldSize, seed: state.seed,
   });
   let fieldSignature = terrainSignature();
   const mapObjects = createMapObjects(field, viewport);
@@ -103,9 +103,13 @@ export function createController(options) {
   let lastCoverageMs = 0;
   let lastZoneView = false;
 
-  /** Everything the height field depends on - including where the pad sits. */
+  /**
+   * Everything the height field depends on - and the site is deliberately not one of
+   * them. The ground belongs to the map: moving the mast reuses the terrain cache and
+   * its mesh instead of regenerating a world that never changed.
+   */
   function terrainSignature() {
-    return `${state.gridSize}:${state.worldSize}:${state.seed}:${state.site.x}:${state.site.z}`;
+    return `${state.gridSize}:${state.worldSize}:${state.seed}`;
   }
 
   /** The mast's footprint: the state's site position on the current ground. */
@@ -117,7 +121,7 @@ export function createController(options) {
     const signature = terrainSignature();
     if (signature !== fieldSignature) {
       field = generateTerrain({
-        size: state.gridSize, worldSize: state.worldSize, seed: state.seed, siteX: state.site.x, siteZ: state.site.z,
+        size: state.gridSize, worldSize: state.worldSize, seed: state.seed,
       });
       fieldSignature = signature;
       mapObjects.refresh(field, viewport);

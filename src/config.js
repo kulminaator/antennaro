@@ -11,17 +11,12 @@ export const APP = Object.freeze({
   version: '0.1.0',
 });
 
-/** World / terrain grid. `gridSize` must be odd so the site sits exactly on a cell. */
+/** World / terrain grid. `gridSize` must be odd so the map centre is a cell. */
 export const WORLD = Object.freeze({
   gridSize: 161,
-  worldSize: 2400, // metres, square domain centred on the antenna site
+  worldSize: 2400, // metres, square domain centred on the map origin
   minGridSize: 17,
   maxGridSize: 321,
-  sitePadRadius: 45, // metres of flattened ground directly under the antenna
-  // How far beyond that radius the flattened ground cross-fades back into the
-  // natural surface. The pad is cut level with the ground the mast stands on, so
-  // it follows the terrain instead of sitting at a fixed datum.
-  sitePadBlendFactor: 2.4,
 });
 
 /** Terrain feature parameters. All amplitudes are metres. */

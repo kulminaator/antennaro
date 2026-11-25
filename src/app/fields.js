@@ -30,14 +30,14 @@ export const STATE_FIELDS = Object.freeze([
   Object.freeze({
     key: 'site.x', path: ['site', 'x'], label: 'Site east offset', kind: 'range',
     min: ANTENNA.siteLimitsM.min, max: ANTENNA.siteLimitsM.max, step: ANTENNA.siteStepM, unit: 'm',
-    group: 'Placement', impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
-    hint: 'Move the pad and the mast east (+X); negative is west. The flat pad and the coverage move with it.',
+    group: 'Placement', impact: [RECOMPUTE.ANTENNA, RECOMPUTE.COVERAGE],
+    hint: 'Move the mast east (+X); negative is west. The ground does not move with it - the mast stands wherever you put it.',
   }),
   Object.freeze({
     key: 'site.z', path: ['site', 'z'], label: 'Site south offset', kind: 'range',
     min: ANTENNA.siteLimitsM.min, max: ANTENNA.siteLimitsM.max, step: ANTENNA.siteStepM, unit: 'm',
-    group: 'Placement', impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
-    hint: 'Move the pad and the mast south (+Z); negative is north, towards the mountain.',
+    group: 'Placement', impact: [RECOMPUTE.ANTENNA, RECOMPUTE.COVERAGE],
+    hint: 'Move the mast south (+Z); negative is north, towards the mountain. Height above ground is measured from the real surface there.',
   }),
   Object.freeze({
     key: 'aim.azimuthDeg', path: ['aim', 'azimuthDeg'], label: 'Azimuth', kind: 'range',

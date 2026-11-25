@@ -58,3 +58,11 @@ browser tests drive `window.__sim`; `src/` files stay under 350 lines
 7. step-007 — full `npm run verify` and closing commit
 
 ## Comments
+
+- The terrain cache key (`terrainSignature()`) no longer contains the site, so a
+  relocation now costs one coverage rebuild and nothing else. Keep it that way: any
+  future feature that wants the ground to depend on the antenna is reintroducing the
+  bug this task removed.
+- `src/app/fields.js` gives `site.x`/`site.z` the impact `[ANTENNA, COVERAGE]`;
+  `markDirty` cascades ANTENNA -> COVERAGE, and `rebuildAntenna()` is what re-resolves
+  the site and re-places the rig, so dropping the TERRAIN edge loses nothing.
