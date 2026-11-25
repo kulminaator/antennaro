@@ -87,6 +87,8 @@ export function zoneAt(x, z, ctx) {
 
 /** Low-amplitude regional undulation shared by every zone. */
 function regional(x, z, ctx) {
+  // The noise frequencies below are per metre and stay that way: they are texture,
+  // sized to the grid cells that resolve them, not landforms sized to the map.
   return TERRAIN.regionalAmplitude * fbm2(x * TERRAIN.regionalFrequency, z * TERRAIN.regionalFrequency, {
     seed: ctx.seed,
     octaves: 4,
@@ -154,17 +156,17 @@ function mountainHeight(x, z, ctx) {
     peak: cfg.peak,
     centreZ: cfg.centreZ,
     width: cfg.width,
-    meanderAmp: 110,
+    meanderAmp: cfg.meanderM,
     meanderFreq: cfg.curvature,
-    rock: 22,
+    rock: cfg.rockM,
   });
   const distant = ridgeHeight(x, z, ctx, {
     peak: cfg.distantPeak,
     centreZ: cfg.distantCentreZ,
     width: cfg.distantWidth,
-    meanderAmp: 70,
+    meanderAmp: cfg.distantMeanderM,
     meanderFreq: cfg.curvature * 0.6,
-    rock: 30,
+    rock: cfg.distantRockM,
   });
   return regional(x, z, ctx) + near + distant;
 }

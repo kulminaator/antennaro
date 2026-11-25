@@ -38,3 +38,30 @@ valley, verified by numbers and by two screenshots.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Rule that made this measurable: **landforms scale, texture does not**. Peaks, the
+  valley and the bump field had amplitude *and* width scaled by 2.17, so slopes are
+  preserved; `regionalFrequency`, `flat.roughness`, `fineNoise` and the per-metre noise
+  frequencies are untouched so detail stays the physical size the 15 m cells resolve.
+  Written into the `TERRAIN` header and into `regional()`, so nobody "fixes" it later.
+- Character before (2400 m, half 1200) vs after (5200 m, half 2600), all ratios against
+  the half-extent: relief 0.252 -> 0.251; north top 0.219 -> 0.217 (mean step 11.17 ->
+  11.26 m per 25 m); west top 0.050 -> 0.048 (step 4.70 -> 4.73); valley floor -34 m ->
+  -76 m (0.028 -> 0.029 x half); east mean step 0.14 -> 0.13 m (texture unchanged, as
+  intended). Absolute relief 302 -> 652 m, max height 576 m.
+- Four magic numbers that this step had to touch were hard-coded in `generators.js`
+  (`meanderAmp: 110/70`, `rock: 22/30`); they are now `mountain.meanderM`,
+  `distantMeanderM`, `rockM`, `distantRockM` in config.
+- Known red tests, owned by step-007 (recorded, not weakened here):
+  - `terrain: the valley channel stays south of the site...` - "the rim (-10 m) should
+    stand above the ground beyond it (14 m)": probed at fixed metres that are no longer
+    on the rim.
+  - `propagation: aiming a beam east moves the coverage, and power extends it` - "and
+    pointing north links more northern cells": the north is now a taller ridge, so the
+    shadowed area grew; the test needs to be expressed relative to the map or with
+    shadowing off.
+- Screenshots `.tmp/reach-terrain-default.png` (drape ends in terrain, 936 m) and
+  `.tmp/reach-terrain-valley.png`. The valley preset still shows a hard arc: it carries
+  `maxRangeM: 1600` of its own, so it re-introduces the cap - step-010 owns that.
+- Second screenshot took 8.2 s to settle vs 4.5 s: whole-map coverage on the 15 m grid is
+  exactly the cost step-003 must fix.

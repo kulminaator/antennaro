@@ -24,7 +24,16 @@ export const WORLD = Object.freeze({
   maxGridSize: 401,
 });
 
-/** Terrain feature parameters. All amplitudes are metres. */
+/**
+ * Terrain feature parameters. All amplitudes and widths are metres.
+ *
+ * Landforms (the peaks, the valley, the bump field) scale with the map, so the world
+ * keeps its shape however wide it is: relief / half-extent stays about 0.25 and a
+ * ridge still blocks a ray at the same relative distance. Texture deliberately does
+ * **not** scale - `regionalFrequency`, `flat.roughness`, `fineNoise` and the noise
+ * frequencies inside `generators.js` are per metre, so detail stays the physical size
+ * the grid cells can actually resolve.
+ */
 export const TERRAIN = Object.freeze({
   seed: 20251105,
   regionalAmplitude: 7,
@@ -37,23 +46,27 @@ export const TERRAIN = Object.freeze({
    * valley cuts a gash through the whole map, mountain sector and site included.
    */
   valley: Object.freeze({
-    depth: 36,
-    halfWidth: 165,
-    rimHeight: 9,
-    rimWidth: 430,
-    meander: 120,
+    depth: 78,
+    halfWidth: 358,
+    rimHeight: 20,
+    rimWidth: 933,
+    meander: 260,
     northLimit: -0.06,
     southLimit: 0.2,
   }),
-  bumps: Object.freeze({ amplitude: 34, radius: 110, density: 0.75, spacingFactor: 1.4, fineNoise: 3.2 }),
+  bumps: Object.freeze({ amplitude: 74, radius: 239, density: 0.75, spacingFactor: 1.4, fineNoise: 3.2 }),
   mountain: Object.freeze({
-    peak: 190,
+    peak: 412,
     centreZ: -0.36, // fraction of half-extent; negative = north of the site
-    width: 200,
-    curvature: 0.006,
-    distantPeak: 235,
+    width: 434,
+    curvature: 0.0028, // 1/m: how fast the crest wiggles along its own length
+    meanderM: 239,
+    rockM: 48,
+    distantPeak: 510,
     distantCentreZ: -0.88,
-    distantWidth: 300,
+    distantWidth: 651,
+    distantMeanderM: 152,
+    distantRockM: 65,
   }),
   blendBand: 0.16, // fraction of half-extent over which adjacent zones cross-fade
 });
