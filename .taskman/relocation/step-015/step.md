@@ -66,3 +66,13 @@ errors.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- All five tests pass; the file is 160 lines (tests/ budget 320).
+- Two rules the assertions had to respect, both discovered in earlier steps:
+  `site()`/`scene()` only agree with `state()` **after** `settle()` (the pipeline
+  rebuilds on the next frame), and a dragged point is snapped to
+  `ANTENNA.siteStepM` by the reducer, so it is compared with a one-step tolerance.
+- The pick test aims the camera at the site (`setCamera` with `targetY: site.groundY`)
+  instead of trusting the default framing: with the look-at point on the pad plane
+  the centre of the screen picks the footprint within 5 m, which makes the
+  assertion about the maths rather than about the start view.
