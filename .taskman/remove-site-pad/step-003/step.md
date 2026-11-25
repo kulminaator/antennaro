@@ -43,3 +43,14 @@ no reference to a pad anywhere in `src/terrain/`.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- No code change was needed in `resolveSite()`: it already sampled
+  `field.sample(x, z)`. Verified on the default seed - centre 0.72 m, ridge shoulder
+  (365,-400) 149.71 m, mountain (0,-900) 201.78 m, valley floor (0,900) -31.40 m,
+  corner (-800,-800) 64.57 m, edge (1100,200) 3.27 m - every spot reported
+  `groundY === field.sample(x, z)` exactly and `y - groundY === 10.00`.
+- Clamp path still good: `resolveSite(field, { x: 99999, z: NaN, heightM: -3 })`
+  gave `x = 1200` (= `field.half`), `z = 0`, `heightM = 0`, no throw.
+- Deviation from "no reference to a pad anywhere in `src/terrain/`": the headers of
+  `generators.js` and `site.js` deliberately name the removed pad, with the measured
+  99.7 m figure, so nobody reintroduces it by accident. Nothing *implements* a pad.
