@@ -24,6 +24,7 @@ export const LAYER_TABLE = Object.freeze([
   Object.freeze({ match: /^src\/antenna\/(aim|catalogue|pattern|geometryspec)\.js$/, layer: 1, name: 'antenna domain' }),
   Object.freeze({ match: /^src\/propagation\/(rf|los)\.js$/, layer: 1, name: 'propagation domain' }),
   Object.freeze({ match: /^src\/app\/fields\.js$/, layer: 1, name: 'state schema' }),
+  Object.freeze({ match: /^src\/app\/pick\.js$/, layer: 1, name: 'picking maths' }),
 
   Object.freeze({ match: /^src\/antenna\/model\.js$/, layer: 2, name: 'domain service' }),
   Object.freeze({ match: /^src\/propagation\/coverage\.js$/, layer: 2, name: 'domain service' }),
@@ -56,7 +57,7 @@ export const PURE_PATTERNS = Object.freeze([
   /^src\/terrain\/(heightfield|generators|site)\.js$/,
   /^src\/antenna\/(pattern|catalogue|aim|model|geometryspec)\.js$/,
   /^src\/propagation\/(rf|los|coverage)\.js$/,
-  /^src\/app\/(fields|state|presets)\.js$/,
+  /^src\/app\/(fields|state|presets|pick)\.js$/,
   /^src\/ui\/schema\.js$/,
 ]);
 

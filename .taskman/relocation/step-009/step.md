@@ -113,3 +113,16 @@ list.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- The degenerate case uses `normalize(cross(viewDir, {x:1,y:0,z:0}))` rather than
+  assigning `right = {x:1,y:0,z:0}` as this step's sketch said: with the eye
+  looking straight down, `viewDir = (0,-1,0)` and the literal `right` would not be
+  perpendicular to the view direction, so `up = cross(right, viewDir)` would be a
+  sheared basis instead of a rotation.
+- `pick(0, 0)` at the default camera returned `{x: 5.1, z: -6.5}`, a few metres off
+  the target: the camera looks at `targetY = 0` while the pick plane is the pad
+  ground (`groundY = 8`), so the centre ray crosses that plane slightly before the
+  target. Tests must compare a centre pick to the site *approximately*, not exactly.
+- `pick(0, 0.999)` is **not** sky at the default camera: 44° elevation plus a 52°
+  fov still points the top of the screen downwards, so it returns a point ~3 km
+  away. Only rays genuinely aimed above the horizon return null.

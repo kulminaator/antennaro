@@ -10,6 +10,7 @@
  */
 
 import { APP } from '../config.js';
+import { cameraPose, pickGround } from './pick.js';
 
 /**
  * @param {{controller:object, errors:Array<{message:string, at:number}>, version?:string}} options
@@ -106,6 +107,18 @@ export function installTestApi(options) {
     },
     terrain: () => controller.terrainField().stats(),
     heightAt: (x, z) => controller.terrainField().sample(x, z),
+    /**
+     * Ground point under a pointer position in NDC (-1..1, y up), or null when the
+     * pointer looks at sky. The plane is the ground the mast stands on, which is
+     * exactly what a relocation drag slides along.
+     */
+    pick: (ndcX, ndcY) => {
+      const camera = controller.viewport.camera;
+      const pose = cameraPose({
+        ...controller.cameraState(), fovDeg: camera.fov, aspect: camera.aspect,
+      });
+      return pickGround(pose, ndcX, ndcY, controller.site().groundY);
+    },
     rf: () => controller.rf(),
     pixelStats,
     /** Control-panel widget keys currently rendered. */
