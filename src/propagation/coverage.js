@@ -37,23 +37,17 @@
 import { RF } from '../config.js';
 import { toCompass } from '../math/vec3.js';
 import { clamp, mean, percentile } from '../math/scalar.js';
-import { freeSpaceLossDb, levelIndexFor, levelMarginsDb } from './rf.js';
-import { diffractionLossDb, rayProfile } from './los.js';
+import { freeSpaceLossDb, freeSpaceRangeM, levelIndexFor, levelMarginsDb } from './rf.js';
+import { tracePath } from './pathtrace.js';
+import { createSectorTally } from './coveragestats.js';
 
-export const SECTOR_COUNT = 8;
-export const SECTOR_LABELS = Object.freeze(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
+export { SECTOR_COUNT, SECTOR_LABELS, sectorIndexForAzimuth } from './coveragestats.js';
 
 /** Cells closer than this many cell widths are the transmitter's own footprint. */
 const NEAR_FIELD_SKIP_FACTOR = 0.6;
 
 /** Clearance ratios are stored capped: 100 zone radii means "nothing to judge". */
 const CLEARANCE_CAP = 100;
-
-/** Compass sector index (0 = N, clockwise) for an azimuth in degrees. */
-export function sectorIndexForAzimuth(azimuthDeg) {
-  const shifted = (((azimuthDeg + 22.5) % 360) + 360) % 360;
-  return Math.floor(shifted / (360 / SECTOR_COUNT)) % SECTOR_COUNT;
-}
 
 /**
  * @typedef {{x:number, z:number, y:number, groundY:number, heightM:number}} Site
@@ -88,6 +82,9 @@ export function computeCoverage(options) {
   const gridStride = Math.max(1, Math.min(field.size - 1, Math.round(stride)));
   const size = Math.floor((field.size - 1) / gridStride) + 1;
   const cellSpan = field.cellSize * gridStride;
+  const half = field.worldSize / 2;
+  // How far the mast can get from home before the picture stops: the nearest map edge.
+  const nearestMapEdgeM = Math.min(half - site.x, half + site.x, half - site.z, half + site.z);
   const cells = size * size;
   const rssi = new Float32Array(cells);
   const level = new Uint8Array(cells).fill(255);
@@ -102,17 +99,7 @@ export function computeCoverage(options) {
   const margins = levelMarginsDb();
   const bandCount = margins.length;
   const levelCounts = new Array(bandCount + 1).fill(0);
-  const sectors = [];
-  for (let i = 0; i < SECTOR_COUNT; i += 1) {
-    sectors.push({
-      label: SECTOR_LABELS[i],
-      azimuthDeg: i * (360 / SECTOR_COUNT),
-      evaluated: 0,
-      linked: 0,
-      bestDbm: -Infinity,
-      maxRangeM: 0,
-    });
-  }
+  const sectors = createSectorTally();
 
   const samples = [];
   const skipWithin = cellSpan * NEAR_FIELD_SKIP_FACTOR;
@@ -132,6 +119,9 @@ export function computeCoverage(options) {
   let maxLinkedRangeM = 0;
   let maxLinkedBearingDeg = 0;
   let budgetExcludedCells = 0;
+  let clippedByRangeCells = 0;
+  let clippedByMapCells = 0;
+  let fresnelClearLinkedCells = 0;
 
   for (let gz = 0; gz < size; gz += 1) {
     const tz = Math.min(gz * gridStride, field.size - 1);
@@ -159,28 +149,23 @@ export function computeCoverage(options) {
       let obstruction = 0;
       let ratio = CLEARANCE_CAP;
       let zoneClear = false;
+      let clippedByRange = false;
+      let clippedByMap = false;
       if (!excluded) {
         const steps = clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
-        // The zone is judged against a receiver standing `rxHeightM` above the point -
-        // see RF.fresnelRxHeightM for why a terminal on the ground makes the criterion
-        // meaningless. The ray the loss is charged against stays the one that ends on
-        // the ground, so moving the assumption does not quietly move the decibels.
-        const zone = { x, y: h + rxHeightM, z };
-        const zoneProfile = rayProfile(field, from, zone, {
-          samples: steps, freqHz, guard: RF.fresnelEndpointGuard,
+        const traced = tracePath(field, from, { x, y: h, z }, {
+          freqHz, samples: steps, rxHeightM, guard: RF.fresnelEndpointGuard,
         });
-        obstruction = useDiffraction
-          ? (() => {
-            const groundProfile = rxHeightM === 0
-              ? zoneProfile
-              : rayProfile(field, from, { x, y: h, z }, { samples: steps });
-            return diffractionLossDb(groundProfile.maxExcess, groundProfile.d1, groundProfile.d2, freqHz);
-          })()
-          : 0;
-        ratio = Number.isFinite(zoneProfile.minClearance)
-          ? Math.min(CLEARANCE_CAP, zoneProfile.minClearance)
+        obstruction = useDiffraction ? traced.obstructionDb : 0;
+        ratio = Number.isFinite(traced.clearanceRatio)
+          ? Math.min(CLEARANCE_CAP, traced.clearanceRatio)
           : CLEARANCE_CAP;
         zoneClear = ratio >= fresnelClearFraction;
+        // Linked points sitting on the rim of an area *we* chose, rather than inside a
+        // link that happens to end there. Only `maxRangeM` is ours; the map edge is the
+        // world, and it gets named too so nobody reads a border as an antenna limit.
+        clippedByRange = horizontal > maxRangeM - cellSpan;
+        clippedByMap = Math.abs(x) > half - cellSpan || Math.abs(z) > half - cellSpan;
       }
       const value = optimistic - obstruction;
       const band = levelIndexFor(value, rxSensitivityDbm, margins);
@@ -216,13 +201,16 @@ export function computeCoverage(options) {
       }
 
       const { azimuthDeg } = toCompass({ x: dx, y: 0, z: dz });
-      const sector = sectors[sectorIndexForAzimuth(azimuthDeg)];
-      sector.evaluated += 1;
-      if (value > sector.bestDbm) sector.bestDbm = value;
+      sectors.record(azimuthDeg, {
+        linked: value >= rxSensitivityDbm,
+        horizontal,
+        value,
+      });
       if (value >= rxSensitivityDbm) {
-        sector.linked += 1;
-        if (horizontal > sector.maxRangeM) sector.maxRangeM = horizontal;
         linkedCells += 1;
+        if (clippedByRange) clippedByRangeCells += 1;
+        if (clippedByMap) clippedByMapCells += 1;
+        if (zoneClear) fresnelClearLinkedCells += 1;
         if (horizontal > maxLinkedRangeM) {
           maxLinkedRangeM = horizontal;
           maxLinkedBearingDeg = azimuthDeg;
@@ -230,6 +218,10 @@ export function computeCoverage(options) {
       }
     }
   }
+
+  // Free-space reach of the boresight: what this budget buys over perfectly flat
+  // ground. A radius, so it can be compared with the study range and the map edge.
+  const budgetRangeM = freeSpaceRangeM(txPowerDbm, model.peakGainDbi, rxSensitivityDbm, freqHz, feederLossDb);
 
   const stats = {
     cells,
@@ -243,15 +235,22 @@ export function computeCoverage(options) {
     linkAvailabilityPct: evaluatedCells === 0 ? 0 : (100 * linkedCells) / evaluatedCells,
     blockedCells,
     blockedPct: evaluatedCells === 0 ? 0 : (100 * blockedCells) / evaluatedCells,
-    /** Evaluated cells whose first Fresnel zone meets the clearance criterion. */
+    /** Evaluated points whose first Fresnel zone meets the clearance criterion. */
     fresnelClearCells,
-    fresnelClearPct: evaluatedCells === 0 ? 0 : (100 * fresnelClearCells) / evaluatedCells,
     /** The three buckets the zone colour ramp paints, mutually exclusive and total. */
     fresnelPartialCells,
     fresnelCutCells,
+    /** Zone state is reported **against working links**: a zone verdict on a point that
+        cannot receive anything is not information. `fresnelClearPct` and
+        `fresnelObstructedLinkedPct` are the two halves of the linked set. */
+    fresnelDenominatorCells: linkedCells,
+    fresnelClearLinkedCells,
+    fresnelClearPct: linkedCells === 0 ? 0 : (100 * fresnelClearLinkedCells) / linkedCells,
     /** Cells that make the link budget and still have the zone cut: links that work
         on paper and misbehave in the field. */
     fresnelObstructedLinkedCells,
+    fresnelObstructedLinkedPct: linkedCells === 0 ? 0
+      : (100 * fresnelObstructedLinkedCells) / linkedCells,
     /** Tightest clearance found on any evaluated path, in first-zone radii. */
     worstClearance: Number.isFinite(worstClearance) ? worstClearance : 0,
     worstClearanceDistanceM,
@@ -266,16 +265,26 @@ export function computeCoverage(options) {
     maxLinkedRangeM,
     maxLinkedBearingDeg,
     levelCounts,
-    sectors: sectors.map((sector) => ({
-      ...sector,
-      linkedPct: sector.evaluated === 0 ? 0 : (100 * sector.linked) / sector.evaluated,
-      bestDbm: Number.isFinite(sector.bestDbm) ? sector.bestDbm : 0,
-    })),
+    sectors: sectors.summary(),
     sensitivityDbm: rxSensitivityDbm,
     margins,
     maxRangeM,
     /** The work area, named so the HUD can say when it - not the link - is the limit. */
     studyRangeM: maxRangeM,
+    /** Free-space reach of the boresight: what this budget buys over perfectly flat
+        ground. A radius, so it can be compared with the two areas drawn on the map. */
+    budgetRangeM,
+    /** Distance from the mast to the nearest edge of the world. */
+    nearestMapEdgeM,
+    /** Linked points within one coverage cell of the study-range ring / the map edge. */
+    clippedByRangeCells,
+    clippedByMapCells,
+    /** Which of those - or the link itself - is actually holding the coverage in.
+        `'budget'` is the answer you want: it means the drape ends where the link does. */
+    limitingFactor: linkedCells === 0 ? 'budget'
+      : (clippedByMapCells > 0 && nearestMapEdgeM <= Math.min(budgetRangeM, maxRangeM)
+        ? 'map-edge'
+        : (clippedByRangeCells > 0 && maxRangeM <= budgetRangeM ? 'study-range' : 'budget')),
   };
 
   return {
