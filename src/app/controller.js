@@ -91,6 +91,10 @@ export function createController(options) {
     getCameraState: () => viewport.cameraState(),
     onCoverage: (coverage) => {
       mapObjects.overlay.update(field, coverage, { zoneView: state.display.showFresnel === true });
+      // The ring is the boundary of the area this result was computed over, so it is
+      // refreshed with the result - and it follows the mast for free, because moving
+      // the mast recomputes coverage.
+      mapObjects.ring.update(site, coverage.stats.studyRangeM);
       // The volume rides the same inputs as the grid - site, aim, height, frequency,
       // range and receiver assumption - so it is rebuilt here rather than tracked.
       fresnel.update(reports.fresnelLink());
@@ -145,6 +149,7 @@ export function createController(options) {
 
   function applyVisibility() {
     mapObjects.overlay.mesh.visible = state.display.showCoverage;
+    mapObjects.ring.setShown(state.display.showCoverage);
     rig.setPatternVisible(state.display.showPattern);
     mapObjects.terrain.setWireframe(state.display.showWireframe);
     mapObjects.labels.group.visible = state.display.showSectors;

@@ -34,3 +34,33 @@ artificial circle, in a colour the coverage ramp never uses.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- The ring went into `src/app/mapmesh.js` (82 -> 175 lines) as a fourth map object
+  rather than a new module: it is built from the same height field and shares its life
+  cycle, and `mapmesh.js` already matches the `/mesh\.js$/` THREE-allow pattern, so no
+  `LAYER_TABLE` / `PURE_PATTERNS` / reachability change was needed.
+- Drawn as a `THREE.LineLoop` of `VIEW.rangeRingSamples` (160) points sampled around the
+  mast, each lifted to `field.sample(x, z) + VIEW.coverageOffsetM + VIEW.rangeRingLiftM`
+  so it rides the surface it describes. It follows the *coverage drape's* height
+  convention deliberately (`coveragemesh.js` draws at raw field height + `coverageOffsetM`);
+  the comment at the top of the ring says so, because the two must not drift apart.
+- The "can never bind" rule lives with the geometry: `canBind() = 0 < radius <
+  field.half * sqrt(2)`, combined with `setShown(coverageVisible)`. So the default
+  `RF.defaultMaxRangeM` of 3800 m draws **no** ring on the 5200 m map (half-diagonal
+  3677 m): a circle that could never cut a coverage blob is not drawn, because an
+  always-present circle trains the eye to ignore it.
+- Live, port 8147 (`/project/.tmp/artifacts/reach-ring.png`):
+  - default: `{ visible: false, radiusM: 3800, canBind: false }`,
+  - study range 1400: `{ visible: true, radiusM: 1400, canBind: true }`, and the picture
+    shows the dipole's ragged 934 m blob well inside the drawn circle - which is the
+    whole point: the link died inside our work area and nothing looks clipped,
+  - moving the mast to (-1600, 300) moves the ring with it,
+  - turning the coverage overlay off hides the ring; whole-map study range hides it again,
+  - no console errors.
+- Follow-up found while reading the HUD in that screenshot, for step-009: the HUD prints
+  `Cells with link 26.0 % (800/6318)` - 26 % is the new walked-cell denominator and
+  800/6318 is the evaluated one, printed side by side in the same row. Both numbers are
+  correct; the row now has to say which is which, using `mapCoveragePct` and
+  `walkedCells`.
+- `npm run lint` ok, `npm run test:unit` all 12 files pass (architecture included:
+  `mapmesh.js` importing three.js is still inside the allow-list).

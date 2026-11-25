@@ -133,6 +133,8 @@ export function createReports(accessors) {
       mastHeightM: rigInfo.mastHeightM,
       patternVisible: rigInfo.patternVisible,
       coverageVisible: mapObjects.overlay.mesh.visible,
+      /** Our work-area boundary: `{ visible, radiusM, canBind }`. */
+      rangeRing: mapObjects.ring.info(),
       labelsVisible: mapObjects.labels.group.visible,
       camera: getCameraState(),
     };

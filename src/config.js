@@ -208,6 +208,12 @@ export const VIEW = Object.freeze({
   cameraLimits: Object.freeze({ minDistance: 60, maxDistance: 9200, minElevationDeg: 2, maxElevationDeg: 88 }),
   terrainHeightExaggeration: 1,
   coverageOffsetM: 0.8, // drape the coverage overlay this far above the terrain
+  /** The study-range ring: points around the circle, metres it rides above the
+      coverage drape, and how solid the line looks. Thin on purpose - it describes a
+      decision, not a result. */
+  rangeRingSamples: 160,
+  rangeRingLiftM: 0.5,
+  rangeRingOpacity: 0.9,
   /**
    * Hardware is decimetres across while the map is kilometres wide, so the
    * structure is drawn scaled up to roughly this span (metres). The mast is
