@@ -94,3 +94,10 @@ draws is now the link.
   one; `coverage.js` at 323 lines is close to the 350 budget and would take another seam
   to split; and the pre-filter could skip whole *rows* outside the budget circle instead
   of testing every point, which the numbers say is not yet worth the complexity.
+- One latent risk named rather than papered over: because `patch()` does not rebuild,
+  a test that patches and then reads a derived result without `settle()` is reading the
+  previous sweep. `tests/browser/reach.test.js` settles after every patch, but a few
+  places in `tests/browser/fresnel.test.js` (the sensitivity, frequency, zone-height and
+  visibility patches) read on after a bare patch. The suite has been green on every run
+  of this task, so this is not an observed failure - it is a race the next person should
+  know about before it bites, and the convention is now written in GUIDELINES.

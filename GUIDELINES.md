@@ -585,3 +585,12 @@ Also expected of a change:
 - New physics covered by an invariant test with a comment explaining the maths.
 - User-visible behaviour change reflected in README.md; structural change
   reflected here. Third-party code stays in `vendor/three/` with its licence.
+
+## 10. One more thing the harness will not tell you
+
+`window.__sim.patch()` returns the reducer's report and **returns before anything is
+rebuilt**; the sweep and the meshes happen on the next frame. So a test that patches and
+then reads a derived result - `coverage()`, `site()`, `fresnel()`, `scene()` - is reading
+the *previous* sweep unless it `await session.settle()` in between. `state()` is the
+exception: it is the instant answer. This is easy to miss because a CDP round trip usually
+outlasts a frame, so the stale read looks correct right up until it does not.
