@@ -38,11 +38,11 @@ const STAT_ROWS = Object.freeze([
  * from a drape that simply stops.
  */
 const LIMIT_SENTENCES = Object.freeze({
-  budget: (c) => `link budget ${(c.budgetRangeM / 1000).toFixed(2)} km - the drape ends where the link does`,
-  'study-range': (c) => `our study range ${(c.studyRangeM / 1000).toFixed(2)} km - `
-    + `the link would reach ${(c.budgetRangeM / 1000).toFixed(2)} km`,
-  'map-edge': (c) => `edge of the map ${(c.nearestMapEdgeM / 1000).toFixed(2)} km - `
-    + `the link would reach ${(c.budgetRangeM / 1000).toFixed(2)} km`,
+  budget: (c) => `the link: budget ${km(c.budgetRangeM)}, last link ${km(c.maxLinkedRangeM)}`,
+  'study-range': (c) => `our study range ${km(c.studyRangeM)} - `
+    + `the link would reach ${km(c.budgetRangeM)}`,
+  'map-edge': (c) => `edge of the map ${km(c.nearestMapEdgeM)} - `
+    + `the link would reach ${km(c.budgetRangeM)}`,
 });
 
 const km = (metres) => `${(metres / 1000).toFixed(2)} km`;

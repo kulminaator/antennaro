@@ -7,7 +7,7 @@
  * table that contains no logic beyond range clamping metadata.
  */
 
-import { ANTENNA, RF, WORLD } from '../config.js';
+import { ANTENNA, RF, TERRAIN, WORLD } from '../config.js';
 
 /** Which pipeline stages a change to each key invalidates. */
 export const RECOMPUTE = Object.freeze({
@@ -79,9 +79,13 @@ export const STATE_FIELDS = Object.freeze([
       + 'failed and says nothing.',
   }),
   Object.freeze({
-    key: 'maxRangeM', path: ['maxRangeM'], label: 'Evaluation range', kind: 'range',
+    key: 'maxRangeM', path: ['maxRangeM'], label: 'Study range', kind: 'range',
     min: RF.maxRangeLimitsM.min, max: RF.maxRangeLimitsM.max, step: 50, unit: 'm',
     group: 'Radio', impact: [RECOMPUTE.COVERAGE],
+    hint: 'How far from the mast the sweep looks. At the maximum that is the whole map, so '
+      + 'every edge you see is the link itself. Lower it and a pale ring shows the edge of '
+      + 'the work area: links beyond it are not measured, and directions still alive there '
+      + 'are marked ">=" in the HUD.',
   }),
   Object.freeze({
     key: 'clutterLossDb', path: ['clutterLossDb'], label: 'Clutter loss', kind: 'range',
@@ -95,7 +99,9 @@ export const STATE_FIELDS = Object.freeze([
   }),
   Object.freeze({
     key: 'seed', path: ['seed'], label: 'Terrain seed', kind: 'int',
-    min: 1, max: 999999, step: 1, group: 'Terrain', impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
+    min: TERRAIN.seedMin, max: TERRAIN.seedMax, step: 1, group: 'Terrain',
+    impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
+    hint: 'Any change rebuilds the ground, so the map you had is gone.',
   }),
   Object.freeze({
     key: 'display.showCoverage', path: ['display', 'showCoverage'], label: 'Coverage overlay', kind: 'toggle',

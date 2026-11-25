@@ -25,9 +25,22 @@ const STRUCTURAL_KEYS = Object.freeze(['designId', 'params', 'aim', 'display', '
  * @param {Partial<ReturnType<typeof baseState>>} [overrides]
  */
 export function createInitialState(overrides = {}) {
-  const base = baseState(ANTENNA.defaultDesignId);
-  const result = applyPatch(base, overrides);
-  return result.state;
+  return createInitialStateWithReport(overrides).state;
+}
+
+/**
+ * Same, but keeps the reducer's verdict on the requested values.
+ *
+ * A shared link or a test harness can ask for something outside the model - `?range=9000`
+ * on a map we only sweep to 3800 m. Silently answering with the clamped number would let
+ * a screenshot look like physics when it is a limit of ours, so the boot record says what
+ * was asked for and what was applied.
+ *
+ * @returns {{state:Record<string,unknown>, clamped:Array, rejected:Array}}
+ */
+export function createInitialStateWithReport(overrides = {}) {
+  const result = applyPatch(baseState(ANTENNA.defaultDesignId), overrides);
+  return { state: result.state, clamped: result.clamped, rejected: result.rejected };
 }
 
 function baseState(designId) {

@@ -12,7 +12,8 @@ import assert from 'node:assert/strict';
 
 import { ANTENNA, RF, TERRAIN, WORLD } from '../../src/config.js';
 import {
-  applyPatch, createInitialState, diffStates, getPath, impactedStages, RECOMPUTE, STATE_FIELDS, withPath,
+  applyPatch, createInitialState, createInitialStateWithReport, diffStates, getPath, impactedStages, RECOMPUTE,
+  STATE_FIELDS, withPath,
 } from '../../src/app/state.js';
 import { PRESETS, PRESET_IDS, getPreset, validatePresets } from '../../src/app/presets.js';
 import { buildPanel, presetOptions } from '../../src/ui/schema.js';
@@ -66,7 +67,7 @@ test('state: out-of-range numbers clamp, junk is rejected', () => {
   const clamped = applyPatch(initial, { heightM: 9999, txPowerDbm: -100, seed: 1e12 });
   assert.equal(clamped.state.heightM, ANTENNA.heightLimitsM.max);
   assert.equal(clamped.state.txPowerDbm, -10);
-  assert.equal(clamped.state.seed, 999999);
+  assert.equal(clamped.state.seed, TERRAIN.seedMax, 'the seed clamps to the control ceiling');
   assert.deepEqual(clamped.clamped.map((entry) => entry.key).sort(), ['heightM', 'seed', 'txPowerDbm']);
   assert.deepEqual(clamped.rejected, []);
 
@@ -314,4 +315,44 @@ test('panel: the placement group exposes both site offsets', () => {
     assert.equal(field.max, ANTENNA.siteLimitsM.max);
     assert.equal(field.step, ANTENNA.siteStepM);
   }
+});
+
+test('state: a requested value we cannot honour is reported, not swallowed', () => {
+  // URL links and test harnesses ask for the impossible. Clamping is right; clamping in
+  // silence is not, because a limited picture would then look like physics.
+  const asked = createInitialStateWithReport({
+    maxRangeM: RF.maxRangeLimitsM.max + 5000,
+    site: { x: ANTENNA.siteLimitsM.max + 10_000, z: 0 },
+    heightM: 5.5,
+    frequencyKey: 'terahertz',
+  });
+  assert.equal(asked.state.maxRangeM, RF.maxRangeLimitsM.max, 'the request is trimmed to the study maximum');
+  const range = asked.clamped.find((entry) => entry.key === 'maxRangeM');
+  assert.ok(range, 'the trim is listed');
+  assert.equal(range.from, RF.maxRangeLimitsM.max + 5000, 'the report keeps what was asked for');
+  assert.equal(range.to, RF.maxRangeLimitsM.max);
+  const east = asked.clamped.find((entry) => entry.key === 'site.x');
+  assert.equal(east.to, ANTENNA.siteLimitsM.max, 'and the placement is trimmed to the map, not the old map');
+  assert.equal(asked.rejected.some((entry) => entry.key === 'frequencyKey'), true, 'junk is refused out loud');
+  assert.deepEqual(createInitialStateWithReport({}).clamped, [], 'a plain boot asks for nothing');
+});
+
+test('panel: no default sits outside the bounds of its own control', () => {
+  // A range input sanitises an out-of-range value to the nearest bound, and Blink reports
+  // that as an `input` event - so a default outside its own slider does not merely look
+  // wrong, the panel writes the clamped number back into the model at boot and the world
+  // you get is not the one the configuration asked for. That is exactly how the terrain
+  // seed used to arrive as 999999 instead of TERRAIN.seed.
+  for (const designId of ANTENNA_IDS) {
+    const state = createInitialState({ designId });
+    for (const field of buildPanel(state).flatMap((group) => group.fields)) {
+      if (field.kind !== 'range' && field.kind !== 'int') continue;
+      const value = Number(field.value);
+      assert.ok(value >= field.min && value <= field.max,
+        `${designId}: ${field.key} defaults to ${value}, outside [${field.min}, ${field.max}]`);
+      if (field.kind === 'int') assert.equal(Number.isInteger(value), true, `${field.key}: an int default`);
+    }
+  }
+  assert.equal(createInitialState().seed, TERRAIN.seed, 'the map you get is the map the configuration asked for');
+  assert.equal(createInitialState().seed <= 999_999, false, 'the old slider ceiling was what swallowed the seed');
 });

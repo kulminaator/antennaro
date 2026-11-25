@@ -5,9 +5,17 @@
  * offers them as a dropdown and the reducer applies them like any other change.
  * They exist so a first-time user sees an interesting terrain/antenna story in
  * one click instead of having to discover the sliders first.
+ *
+ * Every scenario is tuned so that *its own link* is the last thing to give out:
+ * the transmit power and receiver sensitivity are chosen so the free-space budget
+ * dies inside the map, and the study range is left at the whole map unless the
+ * scenario is about a deliberately small work area. A preset whose picture ended at
+ * our evaluation cap would show the app, not the antenna - `tests/unit/state.test.js`
+ * checks that no preset ends up `limitingFactor: 'study-range'` or `'map-edge'`.
  */
 
 import { ANTENNA_IDS } from '../antenna/catalogue.js';
+import { RF } from '../config.js';
 
 /**
  * @typedef {{id:string, label:string, description:string, patch:Record<string,unknown>}} Preset
@@ -18,40 +26,47 @@ export const PRESETS = Object.freeze([
   Object.freeze({
     id: 'site-sector',
     label: 'Sector around the site',
-    description: 'Panel with electrical downtilt covering the flattened area around the mast.',
+    description: 'Panel with electrical downtilt: the lobe is pushed into the ground, so the '
+      + 'served ring sits under the mast instead of reaching the horizon.',
     patch: Object.freeze({
       designId: 'patch',
       params: Object.freeze({ sizeLambda: 1.1, beamTiltDeg: 8 }),
       aim: Object.freeze({ azimuthDeg: 135, tiltDeg: 0 }),
       heightM: 18,
-      maxRangeM: 900,
+      maxRangeM: RF.defaultMaxRangeM,
+      txPowerDbm: 10,
       rxSensitivityDbm: -85,
     }),
   }),
   Object.freeze({
     id: 'valley-reach',
     label: 'Reach down the valley',
-    description: 'Long Yagi aimed south, tilted down into the valley floor.',
+    description: 'Long Yagi aimed south, tilted down into the valley floor. The beam dies in '
+      + 'the middle of the map, not at its edge.',
     patch: Object.freeze({
       designId: 'yagi',
       params: Object.freeze({ directors: 10, spacingLambda: 0.28, beamTiltDeg: 0 }),
       aim: Object.freeze({ azimuthDeg: 180, tiltDeg: -6 }),
       heightM: 24,
-      maxRangeM: 1600,
-      rxSensitivityDbm: -95,
+      maxRangeM: RF.defaultMaxRangeM,
+      txPowerDbm: 10,
+      rxSensitivityDbm: -80,
     }),
   }),
   Object.freeze({
     id: 'flat-field',
     label: 'Down the flat field',
-    description: 'Yagi east over the flat field: the range limit is the link budget, not the ground.',
+    description: 'Yagi east over the flat field: here the range limit is the link budget, not the ground.',
     patch: Object.freeze({
       designId: 'yagi',
       params: Object.freeze({ directors: 5, spacingLambda: 0.32, beamTiltDeg: 0 }),
       aim: Object.freeze({ azimuthDeg: 90, tiltDeg: 0 }),
-      heightM: 10,
-      maxRangeM: 1800,
-      rxSensitivityDbm: -100,
+      // High enough that the ray to the ground stays inside the first Fresnel zone, so the
+      // last link really is the free-space budget: measured 1913 m against a 1913 m budget.
+      heightM: 25,
+      maxRangeM: RF.defaultMaxRangeM,
+      txPowerDbm: 10,
+      rxSensitivityDbm: -80,
     }),
   }),
   Object.freeze({
@@ -63,8 +78,9 @@ export const PRESETS = Object.freeze([
       params: Object.freeze({ elements: 6, spacingLambda: 0.5 }),
       aim: Object.freeze({ azimuthDeg: 0, tiltDeg: 0 }),
       heightM: 32,
-      maxRangeM: 2200,
-      rxSensitivityDbm: -105,
+      maxRangeM: RF.defaultMaxRangeM,
+      txPowerDbm: 10,
+      rxSensitivityDbm: -80,
     }),
   }),
   Object.freeze({
@@ -75,9 +91,11 @@ export const PRESETS = Object.freeze([
       designId: 'biquad-reflector',
       params: Object.freeze({ turns: 2, reflectorSpacingLambda: 0.25, beamTiltDeg: 0 }),
       aim: Object.freeze({ azimuthDeg: 270, tiltDeg: 2 }),
-      heightM: 14,
-      maxRangeM: 1200,
-      rxSensitivityDbm: -90,
+      // 25 m, yet the bumps still cut the link at 1.3 km while the budget allows 3.0 km.
+      heightM: 25,
+      maxRangeM: RF.defaultMaxRangeM,
+      txPowerDbm: 10,
+      rxSensitivityDbm: -80,
     }),
   }),
 ]);

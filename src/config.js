@@ -41,6 +41,16 @@ export const WORLD = Object.freeze({
  */
 export const TERRAIN = Object.freeze({
   seed: 20251105,
+  /**
+   * Bounds of the seed control, and of the "New terrain" dice roll. The default seed
+   * **must** lie inside them: a `<input type=range>` sanitises an out-of-range value to
+   * the nearest bound, and Blink then reports that as an `input` event - so a default
+   * outside its own slider gets written back into the model by the panel at boot, and the
+   * map you see is not the map the configuration asked for. `tests/unit/state.test.js`
+   * keeps every control's default inside its declared bounds for exactly this reason.
+   */
+  seedMin: 1,
+  seedMax: 99_999_999,
   regionalAmplitude: 7,
   regionalFrequency: 0.0009,
   flat: Object.freeze({ roughness: 1.4, label: 'Flat field' }),

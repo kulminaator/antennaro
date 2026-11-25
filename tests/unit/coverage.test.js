@@ -21,6 +21,8 @@ import { wavelengthM } from '../../src/propagation/rf.js';
 import {
   SECTOR_COUNT, SECTOR_LABELS, bandFor, computeCoverage, coverageLegend, sampleCoverage, sectorIndexForAzimuth,
 } from '../../src/propagation/coverage.js';
+import { PRESETS } from '../../src/app/presets.js';
+import { applyPatch, createInitialState } from '../../src/app/state.js';
 
 const freqHz = 868e6;
 
@@ -281,5 +283,34 @@ test('coverage: a direction that ran out of map says so', () => {
       `${sector.label}: the mark and the boundary agree`);
     assert.ok(sector.clippedBy === null || sector.maxRangeM >= sector.limitM - run.cellSize,
       `${sector.label}: only a range that really touches the limit is marked`);
+  }
+});
+
+test('coverage: no preset is cut off by our own limits', () => {
+  // A scenario is a claim about a link, so its picture has to end where the link does.
+  // A preset reporting 'study-range' or 'map-edge' would be showing our work area and
+  // calling it the antenna's reach, which is the whole thing this task set out to stop.
+  for (const preset of PRESETS) {
+    const applied = applyPatch(createInitialState(), preset.patch).state;
+    const presetSite = resolveSite(map, { x: applied.site.x, z: applied.site.z, heightM: applied.heightM });
+    const run = computeCoverage({
+      field: map,
+      site: presetSite,
+      model: createAntennaModel({
+        designId: applied.designId, params: applied.params, aim: applied.aim, wavelength: wavelengthM(freqHz),
+      }),
+      freqHz,
+      txPowerDbm: applied.txPowerDbm,
+      feederLossDb: applied.feederLossDb,
+      rxSensitivityDbm: applied.rxSensitivityDbm,
+      maxRangeM: applied.maxRangeM,
+      clutterLossDb: applied.clutterLossDb,
+      useDiffraction: applied.useDiffraction,
+    });
+    const s = run.stats;
+    assert.equal(s.limitingFactor, 'budget', `${preset.id}: something other than the link ends the picture`);
+    assert.equal(s.sectors.filter((sector) => sector.clippedBy).length, 0, `${preset.id}: a direction is clipped`);
+    assert.ok(s.linkedCells > 100, `${preset.id}: too few linked points to show a story`);
+    assert.equal(s.clippedByRangeCells + s.clippedByMapCells, 0, `${preset.id}: linked ground sits on a border`);
   }
 });

@@ -18,6 +18,7 @@ import { EVENTS, createEventBus } from './core/eventbus.js';
 import { createController } from './app/controller.js';
 import { installTestApi } from './app/testapi.js';
 import { getPreset } from './app/presets.js';
+import { createInitialStateWithReport } from './app/state.js';
 import { createControls } from './ui/controls.js';
 import { createHud } from './ui/hud.js';
 
@@ -54,9 +55,10 @@ function boot() {
   if (!canvas) throw new Error('canvas #scene is missing from the page');
 
   const bus = createEventBus();
+  const startup = createInitialStateWithReport(readInitialState(params));
   const controller = createController({
     canvas,
-    initialState: readInitialState(params),
+    initialState: startup.state,
     bus,
     autoStart: !params.has('manual'),
   });
@@ -118,8 +120,14 @@ function boot() {
 
   const api = installTestApi({ controller, errors, version: APP.version });
   api.ready = true;
-  api.boot = { ...globalThis.__simBoot, status: 'ready', version: APP.version };
-  globalThis.__simBoot = { ...globalThis.__simBoot, status: 'ready', version: APP.version, at: Date.now() };
+  // What the URL asked for that the model refused or trimmed, so a limited picture can
+  // always be traced back to the request that asked for it.
+  const overrides = {
+    clamped: startup.clamped.map((entry) => ({ ...entry })),
+    rejected: startup.rejected.map((entry) => ({ ...entry })),
+  };
+  api.boot = { ...globalThis.__simBoot, status: 'ready', version: APP.version, overrides };
+  globalThis.__simBoot = { ...globalThis.__simBoot, status: 'ready', version: APP.version, overrides, at: Date.now() };
   globalThis.addEventListener('beforeunload', () => controller.dispose());
 }
 

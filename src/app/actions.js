@@ -10,7 +10,7 @@
  * because only it can reach the canvas.
  */
 
-import { ANTENNA } from '../config.js';
+import { ANTENNA, TERRAIN } from '../config.js';
 import { EVENTS, createEventBus } from '../core/eventbus.js';
 import { createInitialState, RECOMPUTE } from './state.js';
 import { getPreset } from './presets.js';
@@ -47,8 +47,11 @@ export function createActions(deps) {
       }
       case 'new-seed': {
         // The only unseeded randomness in the app: a deliberate, user-initiated
-        // dice roll. Everything downstream stays seeded and reproducible.
-        const seed = 1 + Math.floor(Math.random() * 999998);
+        // dice roll. Everything downstream stays seeded and reproducible. The roll
+        // stays inside the control's own bounds, so what it produces is reachable by
+        // the slider too.
+        const span = TERRAIN.seedMax - TERRAIN.seedMin + 1;
+        const seed = TERRAIN.seedMin + Math.floor(Math.random() * span);
         patch({ seed });
         settle();
         return { ok: true, seed };
