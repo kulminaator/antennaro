@@ -38,3 +38,16 @@ the renderer can use.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Measured, flat ground, 10 m mast, receiver at the configured 4 m, 800 m path:
+  clearance ratio 0.76 at 868 MHz (clear) and 1.97 at 5800 MHz (clearer - the zone
+  shrinks with wavelength). A 7 m ridge at 400 m gives ratio 0.00 and is not clear,
+  while `hasLineOfSight` on the same geometry is *false* with 8.95 dB of loss: the
+  two measures agree, which is the point of `v = sqrt(2) * h / r1`.
+- `rayProfile` only judges clearance strictly inside `guard * total` of each end, and
+  `fresnelStatus` raises the ground end by `rxHeightM`. With `rxHeightM: 0` the same
+  flat 800 m path reads 0.23 (not clear) - that number is the whole reason the
+  assumption is a config knob with its reasoning in the comment, not a constant.
+- Endpoints must be skipped explicitly: the receiver sits on the ground it is
+  measured against, so its own clearance is 0 by construction and every cell would
+  otherwise be flagged.

@@ -2,11 +2,12 @@
 
 ## How to perform this step
 
-1. `src/propagation/coveragemesh.js`, in `update()`: a cell that is evaluated and
-   linked but not `fresnelClear` paints with `fresnelObstructedRgb()` instead of its
-   band colour; everything else keeps `coverageRgb(band)`. It needs the sensitivity to
-   know "linked": pass `coverage.sensitivityDbm` (already on the coverage result).
-   Keep the "not evaluated" alpha-0 path exactly as it is.
+1. `src/propagation/coveragemesh.js`: `update(field, coverage, options)` where
+   `options.zoneView` (default false) switches the *whole* drape from RSSI bands to
+   zone state - clear / partial / cut - using `fresnelObstructedRgb()` and the palette
+   ramps. Off means the overlay paints exactly what it paints today. Painting
+   "not zone-clear" on top of the default RSSI map is wrong: it is ~95 % of the map
+   (task Comments), which reads as a bug rather than as information.
 2. `src/ui/controls.js` legend renderer: after the RSSI band rows, render the marker
    row from `fresnelLegendRow()` (same DOM shape as the band rows so the CSS needs no
    change). The legend must say what it is: a linked cell whose first Fresnel zone is

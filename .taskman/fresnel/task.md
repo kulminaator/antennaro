@@ -59,3 +59,20 @@ split before anything new is wired into it**.
   prose lands in the wrong place; the real exports are `APP, WORLD, TERRAIN, RF,
   ANTENNA, VIEW, TIMEOUTS, PATHS, COLOURS` (+ `FRESNEL` from step-001). Corrected in
   step-011.
+
+- **The textbook 60 %-of-r1 criterion is degenerate against a ground-level
+  receiver**, so it cannot be painted over the default coverage map as the task
+  description assumed. The zone radius collapses to 0 at the receiver, so the flat
+  earth is always inside the zone: the Fresnel radio horizon `d = 2.2*(h1+h2)/lambda`
+  for a 10 m mast is 32 m at 433 MHz and 89 m at 868 MHz even *with* a 4 m receiver,
+  426–596 m at 5.8 GHz. Painting "not zone-clear" in the RSSI overlay would colour
+  95 %+ of the map one hue and read as a bug.
+  Two consequences, both implemented: (a) clearance is judged for a link to a
+  receiver at a stated height (`RF.fresnelRxHeightM`, default 4 m, documented
+  everywhere it appears, because the answer depends on it) and excludes a guard
+  neighbourhood of each end (`RF.fresnelEndpointGuard`); (b) the zone gets **its own
+  colour view**, switched on by the same `display.showFresnel` toggle that shows the
+  volume - the RSSI overlay keeps its colours when the toggle is off.
+- Do not add a "Fresnel loss" term: the dB already come from the Kirchhoff/Lee
+  parameter `v = sqrt(2) * h / r1`. A second penalty for the same ground is double
+  counting; the criterion is a reliability flag next to the dB.

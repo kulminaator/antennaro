@@ -8,10 +8,13 @@
    and the Fresnel numbers from the *same* profile. Do not walk the path twice: this
    is the hot loop (GUIDELINES.md §7: keep it allocation-free per cell).
 2. New typed arrays alongside `obstructionDb`:
-   - `fresnelClearance` (Float32Array, worst clearance ratio in units of r1),
+   - `fresnelClearance` (Float32Array, worst clearance ratio in units of r1 for the
+     link to a receiver at `RF.fresnelRxHeightM`, judged outside the end guards),
    - `fresnelClear` (Uint8Array, 1 = at least `RF.fresnelClearFraction` of the first
      zone is clear).
-   Only meaningful where `evaluated[i] === 1`.
+   Only meaningful where `evaluated[i] === 1`. The receiver height is a documented
+   assumption, not a hidden fudge - the criterion is meaningless against a receiver
+   lying on the ground (see task Comments).
 3. `stats`: add `fresnelClearCells`, `fresnelObstructedCells`, `fresnelClearPct`,
    and `fresnelObstructedLinkedCells` (a link that is not zone-clear: the number the
    user is really buying). Keep the existing keys and their meaning untouched.

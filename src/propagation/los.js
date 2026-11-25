@@ -1,5 +1,6 @@
 /**
- * Terrain line-of-sight and single-obstruction diffraction.
+ * Terrain line-of-sight, single-obstruction diffraction and first-Fresnel-zone
+ * clearance.
  *
  * Layer: L1 (pure domain). Given a transmit point in the air and a ground point,
  * work out how much of the ray is buried in the terrain and how much that costs
@@ -7,11 +8,20 @@
  * k-factor, then ITU-R P.526-style single knife-edge diffraction (Maqsood/Lee
  * closed form). It is intentionally deterministic and cheap: this runs once per
  * terrain cell on every parameter change.
+ *
+ * The same walk also reports how much of the **first Fresnel zone** the ground
+ * intrudes into, because dB and zone occupancy are one physics seen two ways. With
+ * h the height of the ray above the ground at a point that splits the path into
+ * d1 + d2, and r1 = sqrt(lambda * d1 * d2 / (d1 + d2)) the first-zone radius there,
+ * the Kirchhoff parameter used below is exactly `v = sqrt(2) * h / r1`. So a path
+ * can clear the ray (h > 0, small loss) and still have its zone cut (h < 0.6 * r1),
+ * which is a link that works on paper and misbehaves in the field. `clearance`
+ * below is h / r1, in zone radii.
  */
 
 import { RF } from '../config.js';
 import { clamp } from '../math/scalar.js';
-import { wavelengthM } from './rf.js';
+import { fresnelRadiusM, wavelengthM } from './rf.js';
 
 /**
  * Sample the terrain against the straight ray from `from` (in the air) to `to`.
@@ -28,6 +38,8 @@ export function rayProfile(field, from, to, options = {}) {
     samples = RF.profileSamples,
     kFactor = RF.kFactor,
     earthRadiusM = RF.earthRadiusM,
+    freqHz = null,
+    guard = 0,
   } = options;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -37,6 +49,8 @@ export function rayProfile(field, from, to, options = {}) {
   const points = new Array(n + 1);
   let maxExcess = -Infinity;
   let maxExcessDistance = 0;
+  let minClearance = Infinity;
+  let minClearanceDistance = 0;
   for (let i = 0; i <= n; i += 1) {
     const t = i / n;
     const x = from.x + dx * t;
@@ -48,10 +62,21 @@ export function rayProfile(field, from, to, options = {}) {
     const rayY = from.y + dy * t + bulge;
     const terrainY = i === n ? to.y : field.sample(x, z);
     const excess = i === 0 ? -Infinity : terrainY - rayY;
-    points[i] = { x, z, distance, terrainY, rayY, excess };
+    // Neither end is an obstacle: the transmitter is in the air and the receiver
+    // sits on the ground it is measured against, so their clearance is not a thing
+    // that can be cut. Only the samples in between can.
+    const isEnd = i === 0 || i === n;
+    const judged = !isEnd && distance > guard * total && distance < (1 - guard) * total;
+    const radiusM = freqHz && !isEnd ? fresnelRadiusM(d1, d2, freqHz) : 0;
+    const clearance = isEnd || !(radiusM > 0) ? Infinity : (rayY - terrainY) / radiusM;
+    points[i] = { x, z, distance, terrainY, rayY, excess, fresnelRadiusM: radiusM, clearance };
     if (excess > maxExcess) {
       maxExcess = excess;
       maxExcessDistance = distance;
+    }
+    if (judged && clearance < minClearance) {
+      minClearance = clearance;
+      minClearanceDistance = distance;
     }
   }
   return {
@@ -61,6 +86,8 @@ export function rayProfile(field, from, to, options = {}) {
     d1: maxExcessDistance,
     d2: Math.max(0, total - maxExcessDistance),
     totalDistance: total,
+    minClearance: Number.isFinite(minClearance) ? minClearance : Infinity,
+    minClearanceDistance,
   };
 }
 
@@ -84,6 +111,10 @@ export function diffractionLossDb(excessM, d1, d2, freqHz) {
 /**
  * Total obstruction loss between an airborne point and a ground point.
  * The most obstructed sample dominates (single-edge approximation).
+ *
+ * Deliberately does not ask for the Fresnel radius: the loss only needs the worst
+ * excess, and this is the hottest function in the app. Call `rayProfile` with a
+ * `freqHz` (or `fresnelStatus`) when the zone occupancy is wanted as well.
  * @returns {number} dB of extra loss, 0 when the path is clear
  */
 export function obstructionLossDb(field, from, to, freqHz, options = {}) {
@@ -102,6 +133,72 @@ export function hasLineOfSight(field, from, to, options = {}) {
   if (horizontal < (options.minDistanceM ?? 1)) return true;
   const profile = rayProfile(field, from, to, options);
   return profile.maxExcess <= 0;
+}
+
+/**
+ * How much of the first Fresnel zone the terrain leaves clear along a path.
+ *
+ * This is a *reliability* measure, not a second loss term: the dB a path pays are
+ * already the Kirchhoff/Lee diffraction loss, which is a function of the same
+ * h / r1 ratio. Reporting both is the point - a path can pay 1 dB and still have
+ * most of its zone in the ground. Because the zone narrows to nothing at either
+ * antenna, the answer is stated for a receiver at `RF.fresnelRxHeightM` and measured
+ * outside `RF.fresnelEndpointGuard` of each end: judged against a terminal lying on
+ * the ground the criterion always fails and says nothing (see the horizon maths in
+ * `src/config.js`).
+ *
+ * @param {import('../terrain/heightfield.js').HeightField} field
+ * @param {{x:number,y:number,z:number}} from airborne end (the antenna)
+ * @param {{x:number,y:number,z:number}} to ground end (the cell)
+ * @param {number} freqHz
+ * @param {{clearFraction?:number, rxHeightM?:number, guard?:number, samples?:number,
+ *   minDistanceM?:number}} [options]
+ * @returns {{clearanceRatio:number, distanceM:number, radiusM:number, rxHeightM:number,
+ *   clearFraction:number, clear:boolean}} `clearanceRatio` is the worst height of
+ *   the ray above the ground along the path, in first-zone radii (negative = the
+ *   ground rises above the ray). Judged for a receiver at `rxHeightM` above the
+ *   ground end.
+ */
+export function fresnelStatus(field, from, to, freqHz, options = {}) {
+  const clearFraction = Number.isFinite(options.clearFraction) ? options.clearFraction : RF.fresnelClearFraction;
+  const rxHeightM = Number.isFinite(options.rxHeightM) ? options.rxHeightM : RF.fresnelRxHeightM;
+  const guard = Number.isFinite(options.guard) ? options.guard : RF.fresnelEndpointGuard;
+  const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
+  if (horizontal < (options.minDistanceM ?? 1)) {
+    return { clearanceRatio: Infinity, distanceM: 0, radiusM: 0, rxHeightM, clearFraction, clear: true };
+  }
+  const terminal = { x: to.x, y: to.y + rxHeightM, z: to.z };
+  const steps = options.samples ?? clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
+  const profile = rayProfile(field, from, terminal, { ...options, samples: steps, freqHz, guard });
+  const ratio = profile.minClearance;
+  return {
+    clearanceRatio: ratio,
+    distanceM: profile.minClearanceDistance,
+    radiusM: fresnelRadiusM(profile.minClearanceDistance, Math.max(0, profile.totalDistance - profile.minClearanceDistance), freqHz),
+    rxHeightM,
+    clearFraction,
+    clear: ratio >= clearFraction,
+  };
+}
+
+/**
+ * Radius of the first Fresnel zone sampled along a straight link of `distanceM`,
+ * for drawing the zone as a volume. Zero at both ends (the antennas themselves) and
+ * largest at the middle, where `radius` equals `fresnelRadiusM(D/2, D/2, freqHz)`.
+ *
+ * @param {number} distanceM length of the link
+ * @param {number} freqHz
+ * @param {number} steps number of samples, ends included
+ * @returns {Array<{distance:number, radius:number}>}
+ */
+export function firstFresnelEnvelope(distanceM, freqHz, steps) {
+  const n = Math.max(2, Math.round(steps));
+  const out = new Array(n + 1);
+  for (let i = 0; i <= n; i += 1) {
+    const distance = (distanceM * i) / n;
+    out[i] = { distance, radius: fresnelRadiusM(distance, distanceM - distance, freqHz) };
+  }
+  return out;
 }
 
 /**

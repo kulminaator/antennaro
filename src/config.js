@@ -86,6 +86,21 @@ export const RF = Object.freeze({
    * come from the Fresnel/Kirchhoff diffraction parameter.
    */
   fresnelClearFraction: 0.6,
+  /**
+   * Height above the ground of the *receiving* terminal the zone is judged against.
+   * Not a fudge - a stated assumption, because the answer depends on it: judged
+   * against a receiver lying on the ground, the zone radius collapses to nothing at
+   * the receiver and flat earth is always inside the zone (a 10 m mast is only
+   * Fresnel-clear within 2.2*(h1+h2)/lambda = 89 m at 868 MHz, 596 m at 5.8 GHz).
+   * A rooftop terminal of a few metres is what "the link holds" is really claiming.
+   */
+  fresnelRxHeightM: 4,
+  /**
+   * Fraction of the path at each end whose samples are not judged. Near an antenna
+   * the zone is narrower than the terrain sampling and the geometry, not the
+   * ground, decides the answer, so only obstacles well inside the path count.
+   */
+  fresnelEndpointGuard: 0.1,
   coverageResolutionDivisor: 1, // 1 = evaluate coverage on the full terrain grid
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
