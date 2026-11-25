@@ -65,3 +65,12 @@ suites green at every step boundary.
   on the 349^2 grid, so every "cells with link / % clear" denominator in the HUD and the
   docs is a different quantity than before - it must be re-expressed (linked cells as a
   count, zone percentages of linked cells), not just re-measured.
+- Closed by step-014. `npm run verify` green (17 test files, 48.5 s). The measurement that
+  the task was opened for: five designs on the same ground now report last-link distances
+  of 932, 1664, 1393, 2169 and 3035 m against free-space budgets of 937, 1670, 1563, 2204
+  and 3049 m - each ending at its own link, none clipped by the study range or the map,
+  and the live app agreeing with Node cell for cell. The old complaint (everything cut to
+  the same 1400 m circle) is impossible now: the study range defaults to the whole 5.2 km
+  map, a range that cannot bind draws no ring, and the one configuration that does run off
+  a limit (43 dBm, -124 dBm, whole map linked) reports `limitingFactor: map-edge` and says
+  what the link would have reached.
