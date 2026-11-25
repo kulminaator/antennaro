@@ -164,3 +164,23 @@ test('site: rangeFromSite reports metres and compass bearing', () => {
   assert.ok(approxEqual(rangeFromSite(site, 0, 500).azimuthDeg, 180));
   assert.ok(approxEqual(rangeFromSite(site, -500, 0).azimuthDeg, -90), 'west is reported as -90');
 });
+
+test('terrain: the flattened pad travels with the site', () => {
+  const pad = WORLD.sitePadRadius / 2;
+  const moved = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: 400, siteZ: -260 });
+
+  // Level wherever the mast lands, so relocating never leaves it floating or buried.
+  for (const [x, z] of [[400, -260], [400 + pad, -260], [400, -260 - pad]]) {
+    assert.ok(approxEqual(heightAt(x, z, moved), WORLD.siteElevation, 1e-6), `pad point (${x}, ${z}) is level`);
+  }
+
+  // The pad is a property of the site, not of the map: with the site gone, the
+  // map centre is natural ground again.
+  assert.ok(Math.abs(heightAt(0, 0, moved) - WORLD.siteElevation) > 0.5,
+    `the abandoned centre is still a pad (${heightAt(0, 0, moved).toFixed(2)} m)`);
+  assert.ok(approxEqual(heightAt(0, 0, ctx), WORLD.siteElevation, 1e-6), 'the default context keeps its pad at the centre');
+
+  // Relocating the antenna does not relocate the mountain.
+  assert.equal(zoneAt(0, -700, moved), ZONES.MOUNTAIN, 'the zones stay keyed to the map centre');
+  assert.equal(zoneAt(400 + 700, -260, moved), ZONES.FLAT, 'east of the old centre is still the flat field');
+});
