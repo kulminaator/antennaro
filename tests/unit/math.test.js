@@ -15,7 +15,7 @@ import {
 } from '../../src/math/scalar.js';
 import {
   add, angularDistance, AXIS_X, AXIS_Y, AXIS_Z, cloneVec, cross, distance, dot, fromCompass, horizontalLength,
-  isVec3, length, lengthSq, lerpVec, neg, normalize, scale, sub, toCompass, v3,
+  isVec3, length, lengthSq, lerpVec, neg, normalize, rayBoxExitDistance, scale, sub, toCompass, v3,
 } from '../../src/math/vec3.js';
 import { createRandom, fbm2, hash2i, pick, randomInRange, ridgedFbm2, valueNoise2 } from '../../src/math/noise.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
@@ -232,4 +232,21 @@ test('height field: cell edits, stats, clone and iteration agree', () => {
 
   field.mapInPlace((h) => h * 2);
   assert.equal(field.heightAtCell(0, 0), 20);
+});
+
+test('vec3: a horizontal ray knows where the map ends', () => {
+  const half = 1000;
+  // From the centre, every cardinal bearing is the same distance to the border.
+  for (const az of [0, 90, 180, 270]) {
+    assert.ok(approxEqual(rayBoxExitDistance(v3(), fromCompass(az, 0), half), half, 1e-9),
+      `azimuth ${az} should hit the border at exactly half the map width`);
+  }
+  // A diagonal travels further, by sqrt(2) at 45 degrees.
+  assert.ok(approxEqual(rayBoxExitDistance(v3(), fromCompass(45, 0), half), half * Math.SQRT2, 1e-9));
+  // Off centre, the wall behind you is not the one you are heading for.
+  const east = { x: 600, z: 0 };
+  assert.ok(approxEqual(rayBoxExitDistance(east, fromCompass(90, 0), half), 400, 1e-9), 'east: the near wall');
+  assert.ok(approxEqual(rayBoxExitDistance(east, fromCompass(270, 0), half), 1600, 1e-9), 'west: the far wall');
+  // A direction with no horizontal component never leaves the box.
+  assert.equal(rayBoxExitDistance(v3(), { x: 0, z: 0 }, half), Infinity);
 });

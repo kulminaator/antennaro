@@ -247,3 +247,39 @@ test('coverage: sampling finds the nearest evaluated coverage point', () => {
   assert.equal(bandFor(legend[0].minDbm, run), 0);
   assert.equal(bandFor(-200, run), RF.levelMarginsDb.length);
 });
+
+test('coverage: a direction that ran out of map says so', () => {
+  // A mast near the western edge, plenty of budget: east is free space all the way to
+  // the far wall, west stops at the wall next door. The table must not present either
+  // as the link's maximum.
+  const nearEdge = resolveSite(map, { x: -WORLD.worldSize / 2 + 300, z: 0, heightM: 10 });
+  const run = computeCoverage({
+    field: map, site: nearEdge, model: omni(), freqHz, txPowerDbm: 27, feederLossDb: 0, maxRangeM: 400,
+  });
+  const west = run.stats.sectors.find((sector) => sector.label === 'W');
+  const east = run.stats.sectors.find((sector) => sector.label === 'E');
+  assert.equal(west.limitKind, 'map-edge');
+  assert.ok(Math.abs(west.limitM - 300) < 1,
+    `west stops at the near wall, reported as ${west.limitM} m`);
+  assert.equal(west.clippedBy, 'map-edge', 'a range that touches the wall is marked, not reported as a maximum');
+  assert.equal(east.clippedBy, 'study-range', 'with a 400 m study area, east is cut by the work area instead');
+  assert.equal(east.limitKind, 'study-range');
+
+  // Widen the work area and the boundary that ends the east search becomes the map.
+  const wide = computeCoverage({
+    field: map, site: nearEdge, model: omni(), freqHz, txPowerDbm: 27, feederLossDb: 0, maxRangeM: 5000,
+  });
+  const wideEast = wide.stats.sectors.find((sector) => sector.label === 'E');
+  assert.equal(wideEast.limitKind, 'map-edge', 'the work area no longer intervenes to the east');
+  const farWall = WORLD.worldSize / 2 - nearEdge.x;
+  assert.ok(Math.abs(wideEast.limitM - farWall) < 1,
+    `the east wall is ${wideEast.limitM} m away, not ${farWall}`);
+  assert.ok(wideEast.limitM > 3 * west.limitM, 'east has the whole map in front of it, west the wall next door');
+  for (const sector of run.stats.sectors) {
+    assert.ok(sector.limitM > 0 && Number.isFinite(sector.limitM), `${sector.label} names its boundary`);
+    assert.ok(sector.clippedBy === null || sector.clippedBy === sector.limitKind,
+      `${sector.label}: the mark and the boundary agree`);
+    assert.ok(sector.clippedBy === null || sector.maxRangeM >= sector.limitM - run.cellSize,
+      `${sector.label}: only a range that really touches the limit is marked`);
+  }
+});

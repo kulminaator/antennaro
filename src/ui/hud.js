@@ -20,7 +20,9 @@ const STAT_ROWS = Object.freeze([
   Object.freeze({ key: 'eirp', label: 'EIRP at boresight' }),
   Object.freeze({ key: 'wavelength', label: 'Wavelength' }),
   Object.freeze({ key: 'fsRange', label: 'Free-space range' }),
+  Object.freeze({ key: 'rangeLimit', label: 'Range limit' }),
   Object.freeze({ key: 'link', label: 'Cells with link' }),
+  Object.freeze({ key: 'avail', label: 'Served within reach' }),
   Object.freeze({ key: 'maxRange', label: 'Max linked range' }),
   Object.freeze({ key: 'best', label: 'Best RSSI' }),
   Object.freeze({ key: 'median', label: 'Median RSSI' }),
@@ -28,6 +30,22 @@ const STAT_ROWS = Object.freeze([
   Object.freeze({ key: 'blocked', label: 'Shadowed cells' }),
   Object.freeze({ key: 'fresnel', label: 'First Fresnel zone' }),
 ]);
+
+/**
+ * One line answering the question the coverage picture cannot: is this edge the
+ * antenna's reach, or the app's own work area? Each sentence names the limit *and* the
+ * number that would apply without it, because that is the thing a user cannot infer
+ * from a drape that simply stops.
+ */
+const LIMIT_SENTENCES = Object.freeze({
+  budget: (c) => `link budget ${(c.budgetRangeM / 1000).toFixed(2)} km - the drape ends where the link does`,
+  'study-range': (c) => `our study range ${(c.studyRangeM / 1000).toFixed(2)} km - `
+    + `the link would reach ${(c.budgetRangeM / 1000).toFixed(2)} km`,
+  'map-edge': (c) => `edge of the map ${(c.nearestMapEdgeM / 1000).toFixed(2)} km - `
+    + `the link would reach ${(c.budgetRangeM / 1000).toFixed(2)} km`,
+});
+
+const km = (metres) => `${(metres / 1000).toFixed(2)} km`;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -75,6 +93,7 @@ export function createHud(options) {
     tr.appendChild(range);
     sectorTable.appendChild(tr);
   }
+  const sectorNote = el('p', 'hud-notes', '');
 
   const notes = el('p', 'hud-notes', '');
   const perf = el('p', 'hud-perf', '');
@@ -86,6 +105,7 @@ export function createHud(options) {
   card.appendChild(statsList);
   card.appendChild(el('h3', 'hud-subtitle', 'Link availability by direction'));
   card.appendChild(sectorTable);
+  card.appendChild(sectorNote);
   legendTitle = el('h3', 'hud-subtitle', 'Coverage legend');
   card.appendChild(legendTitle);
   card.appendChild(legendList);
@@ -139,7 +159,14 @@ export function createHud(options) {
     set('fsRange', `${(rf.freeSpaceRangeM / 1000).toFixed(2)} km`);
 
     const cov = coverage.stats;
-    set('link', `${cov.linkAvailabilityPct.toFixed(1)} % (${cov.linkedCells}/${cov.evaluatedCells})`);
+    // The binding limit in words. When it is `'budget'` that is good news: the picture
+    // ends where the link does. Otherwise the user is looking at a border of the app.
+    set('rangeLimit', (LIMIT_SENTENCES[cov.limitingFactor] ?? LIMIT_SENTENCES.budget)(cov));
+    // Two shares, each labelled with what it is a share *of*: the map, and the ground
+    // where a link was even possible. Quoting one number without its denominator is how
+    // a big map next to a small link gets read as a poor antenna.
+    set('link', `${cov.linkedCells} of ${cov.evaluatedCells} points (${cov.mapCoveragePct.toFixed(1)} % of the map)`);
+    set('avail', `${cov.linkAvailabilityPct.toFixed(1)} % of ground a link could reach`);
     set('maxRange', cov.maxLinkedRangeM > 0
       ? `${cov.maxLinkedRangeM.toFixed(0)} m @ ${cov.maxLinkedBearingDeg.toFixed(0)} deg`
       : 'none');
@@ -148,20 +175,32 @@ export function createHud(options) {
     set('worst', `${formatDb(cov.worstDbm)} dBm`);
     set('blocked', `${cov.blockedPct.toFixed(1)} % (> 6 dB diffracted)`);
     // The zone verdict next to the decibels, because that is the whole point of it:
-    // cells that make the budget with the zone cut are links that work on paper.
-    set('fresnel', `${cov.fresnelClearPct.toFixed(1)} % clear - `
+    // links that make the budget with the zone cut work on paper and misbehave outside.
+    set('fresnel', `${cov.fresnelClearPct.toFixed(1)} % of linked points clear - `
       + `${cov.fresnelObstructedLinkedCells} linked with the zone cut - `
       + `worst ${cov.worstClearance.toFixed(1)} r1 @ ${cov.worstClearanceDistanceM.toFixed(0)} m`);
 
+    let clipped = null;
     for (const sector of cov.sectors) {
       const row = sectors.get(sector.label);
       if (!row) continue;
       row.linked.textContent = `${sector.linkedPct.toFixed(0)} %`;
-      row.range.textContent = sector.maxRangeM > 0 ? `${sector.maxRangeM.toFixed(0)} m` : '-';
+      row.linked.title = `${sector.linked} of ${sector.evaluated - sector.excluded} points where a link was possible`;
+      const reach = sector.maxRangeM > 0 ? `${sector.maxRangeM.toFixed(0)} m` : '-';
+      row.range.textContent = sector.clippedBy ? `>= ${reach}` : reach;
+      row.range.title = sector.clippedBy
+        ? `the link was still alive here: we stopped looking at ${sector.limitM.toFixed(0)} m (${sector.limitKind})`
+        : 'farthest linked point in this direction';
+      if (sector.clippedBy && (!clipped || sector.limitM < clipped.limitM)) clipped = sector;
     }
+    sectorNote.textContent = clipped
+      ? `>= the link was still alive where we stopped looking: ${clipped.limitKind} at `
+        + `${km(clipped.limitM)} (a ${clipped.label} link would go further).`
+      : '';
 
     renderLegend(coverage, state.display?.showFresnel === true);
     notes.textContent = 'Antenna hardware is drawn enlarged to stay visible; the mast is true scale. '
+      + 'A pale ring, when drawn, is the area this sweep evaluated - our work area, not a signal limit. '
       + 'Free space + terrain diffraction only: no clutter, vegetation, multipath or receiver noise figure.';
     if (view) {
       perf.textContent = `${view.fps.toFixed(0)} fps - ${view.calls} draw calls - `

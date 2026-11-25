@@ -106,6 +106,29 @@ export function angularDistance(a, b) {
   return Math.acos(clamp(dot(a, b) / (la * lb), -1, 1));
 }
 
+/**
+ * How far a horizontal ray travels before it leaves the square map.
+ *
+ * The map is `[-half, half]` in both axes; the point is where the ray starts. Answer
+ * is metres, and `Infinity` for a degenerate direction. Used to tell "the link ended"
+ * from "the world ended": a range measured to this distance is a border of the picture,
+ * not a property of the antenna.
+ *
+ * @param {{x:number, z:number}} origin @param {{x:number, z:number}} direction
+ * @param {number} half half the map width, metres
+ */
+export function rayBoxExitDistance(origin, direction, half) {
+  let best = Infinity;
+  for (const axis of ['x', 'z']) {
+    const d = direction[axis];
+    if (Math.abs(d) < 1e-12) continue;
+    const wall = d > 0 ? half : -half;
+    const t = (wall - origin[axis]) / d;
+    if (t >= 0 && t < best) best = t;
+  }
+  return best;
+}
+
 export const AXIS_X = Object.freeze({ x: 1, y: 0, z: 0 });
 export const AXIS_Y = Object.freeze({ x: 0, y: 1, z: 0 });
 export const AXIS_Z = Object.freeze({ x: 0, y: 0, z: 1 });

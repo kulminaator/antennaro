@@ -7,6 +7,8 @@
  * thing that file has to be about - it is the hot path of the whole application.
  */
 
+import { fromCompass, rayBoxExitDistance } from '../math/vec3.js';
+
 export const SECTOR_COUNT = 8;
 export const SECTOR_LABELS = Object.freeze(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
 
@@ -14,6 +16,39 @@ export const SECTOR_LABELS = Object.freeze(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W'
 export function sectorIndexForAzimuth(azimuthDeg) {
   const shifted = (((azimuthDeg + 22.5) % 360) + 360) % 360;
   return Math.floor(shifted / (360 / SECTOR_COUNT)) % SECTOR_COUNT;
+}
+
+/**
+ * Say where each direction's sweep stopped looking, so a range in the direction table
+ * can be marked as a border rather than a maximum.
+ *
+ * Two boundaries end the search: our study range, and the edge of the map. A direction
+ * whose farthest link lies within one coverage cell of the nearer of them did not run
+ * out of link - it ran out of map or of work area - and `clippedBy` names which.
+ *
+ * @param {object[]} sectors the tally's summary
+ * @param {{siteX:number, siteZ:number, half:number, studyRangeM:number, cellSpan:number}} options
+ */
+export function markClippedSectors(sectors, options) {
+  const { siteX, siteZ, half, studyRangeM, cellSpan } = options;
+  return sectors.map((sector) => {
+    const edgeM = rayBoxExitDistance(
+      { x: siteX, z: siteZ },
+      fromCompass(sector.azimuthDeg, 0),
+      half,
+    );
+    const isEdge = edgeM <= studyRangeM;
+    const limitM = isEdge ? edgeM : studyRangeM;
+    return {
+      ...sector,
+      /** Distance from the mast to the boundary that ends the search in this direction. */
+      limitM,
+      limitKind: isEdge ? 'map-edge' : 'study-range',
+      clippedBy: sector.maxRangeM > 0 && sector.maxRangeM >= limitM - cellSpan
+        ? (isEdge ? 'map-edge' : 'study-range')
+        : null,
+    };
+  });
 }
 
 /**
