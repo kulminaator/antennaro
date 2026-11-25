@@ -1,5 +1,5 @@
 /**
- * Terrain generation: four zones around the antenna site.
+ * Terrain generation: four zones around the map centre.
  *
  * Layer: L1 (pure domain). `heightAt` is a pure function of (x, z, context), so
  * the same seed always yields the same ground and any point can be queried
@@ -11,20 +11,21 @@
  *   south (+Z)  valley with raised rims
  *   west  (-X)  land with bumps
  *
- * The zones belong to the map; the flattened **site pad** belongs to the antenna
- * and is centred on `siteX`/`siteZ` (the map centre unless the user relocates it).
- * The pad is cut level with the *natural ground where the mast stands*, never to a
- * fixed elevation: move the mast onto a hill and the platform rides up with the
- * hill, so the mast always stands on the surface rather than at the bottom of a
- * pit, and the bench can never stand above the ground beside it and make a
- * hillside look like it grew.
+ * The ground belongs to the map, and to nothing else: the generators do not take a
+ * site position, because where the antenna stands must not reshape the world. There
+ * used to be a flattened **site pad** under the mast, cut level with the ground the
+ * mast stood on. On gentle ground that read as a workmen's platform; on steep ground
+ * it was a landform - with the mast on the shoulder of the northern ridge it filled
+ * the slope by 99.7 m only 57 m away, and that plateau travelled with the mast, so
+ * dragging the antenna moved a hill and shadowed the map behind its new cliff. The
+ * mast now simply stands on the surface it was placed on (see `terrain/site.js`).
  *
  * Zone heights cross-fade over `TERRAIN.blendBand` of the angular sector, which
  * keeps the surface C0-continuous without hard seams.
  */
 
 import { TERRAIN, WORLD } from '../config.js';
-import { bump, clamp, lerp, smoothstep, wrapDeg180 } from '../math/scalar.js';
+import { bump, clamp, smoothstep, wrapDeg180 } from '../math/scalar.js';
 import { fbm2, hash2i, ridgedFbm2 } from '../math/noise.js';
 import { HeightField } from './heightfield.js';
 
@@ -44,20 +45,13 @@ export const ZONE_LAYOUT = Object.freeze([
 ]);
 
 /** Build the immutable evaluation context passed to every height function. */
-export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.worldSize, siteX = 0, siteZ = 0 } = {}) {
-  const half = worldSize / 2;
-  const base = {
+export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.worldSize } = {}) {
+  return Object.freeze({
     seed: seed | 0,
     worldSize,
-    half,
-    padRadius: WORLD.sitePadRadius,
-    padBlendFactor: WORLD.sitePadBlendFactor,
-    // The flattened pad is centred on the site; the four zones are centred on the map.
-    siteX,
-    siteZ,
+    half: worldSize / 2,
     blendHalfDeg: clamp(TERRAIN.blendBand, 0.02, 0.45) * 45,
-  };
-  return Object.freeze({ ...base, padElevation: gradePadLevel(base) });
+  });
 }
 
 /** Normalised angular weights for the four zones. Always sums to 1. */
@@ -184,11 +178,11 @@ export const ZONE_HEIGHT_FN = Object.freeze({
 });
 
 /**
- * Elevation in metres above the datum at a world position, **without** the site
- * pad: the four zone heights cross-faded by their sector weights. `heightAt` is
- * this plus the flattened pad; the pad's grading needs the untouched surface.
+ * Elevation in metres above the datum at a world position: the four zone heights
+ * cross-faded by their sector weights. Nothing else - in particular no grading
+ * around the antenna, so `heightAt` cannot depend on where the mast stands.
  */
-export function naturalHeightAt(x, z, ctx) {
+export function heightAt(x, z, ctx) {
   const weights = sectorWeights(x, z, ctx);
   let h = 0;
   for (const zone of ZONE_LAYOUT) {
@@ -199,44 +193,14 @@ export function naturalHeightAt(x, z, ctx) {
 }
 
 /**
- * The level the pad is cut to: the natural ground **where the mast stands**.
- * Three rules were tried and only this one survives both ways the wrong choice
- * shows up: a fixed datum buries the mast on a hilltop and puts it on a pedestal
- * in a valley; averaging the wider blend reach lets a ridge flank dominate the
- * average, so the platform stands tens of metres above the ground beside it and
- * the hillside appears to grow sideways under the antenna; averaging even the flat
- * disc still shifts the platform a dozen metres off the mast's own ground where
- * the relief is asymmetric. Cut level with the mast's own ground, the pad is a
- * bench: it cuts the uphill side and fills the downhill side by the same local
- * relief, never more, and it cannot invent a landform.
- */
-function gradePadLevel(ctx) {
-  return naturalHeightAt(ctx.siteX, ctx.siteZ, ctx);
-}
-
-/**
- * Elevation in metres above the datum at a world position, with the flattened
- * site pad blended in around the site (`ctx.siteX`, `ctx.siteZ`). Inside
- * `padRadius` this is exactly `ctx.padElevation` - flat ground graded to the
- * terrain there - and the natural surface takes over by `padRadius * padBlendFactor`.
- */
-export function heightAt(x, z, ctx) {
-  const natural = naturalHeightAt(x, z, ctx);
-  const blend = smoothstep(ctx.padRadius, ctx.padRadius * ctx.padBlendFactor,
-    Math.hypot(x - ctx.siteX, z - ctx.siteZ));
-  return lerp(ctx.padElevation, natural, blend);
-}
-
-/**
- * @typedef {import('./heightfield.js').HeightField} HeightField
- * @param {{size?:number, worldSize?:number, seed?:number, siteX?:number, siteZ?:number}} [options]
+ * @param {{size?:number, worldSize?:number, seed?:number}} [options]
  * @returns {HeightField}
  */
 export function generateTerrain(options = {}) {
   const {
-    size = WORLD.gridSize, worldSize = WORLD.worldSize, seed = TERRAIN.seed, siteX = 0, siteZ = 0,
+    size = WORLD.gridSize, worldSize = WORLD.worldSize, seed = TERRAIN.seed,
   } = options;
-  const ctx = createTerrainContext({ seed, worldSize, siteX, siteZ });
+  const ctx = createTerrainContext({ seed, worldSize });
   const field = new HeightField({ size, worldSize });
   return field.fillFromFunction((x, z) => heightAt(x, z, ctx));
 }

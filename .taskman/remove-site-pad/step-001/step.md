@@ -48,3 +48,16 @@ two site positions produce byte-identical height fields.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `generateTerrain`/`createTerrainContext` no longer accept `siteX`/`siteZ` at all, so
+  the step's "two site positions, identical fields" check degenerates — the API cannot
+  express a site-shaped ground any more. The unit test in step-004 should still assert
+  it at the API level: `generateTerrain({ siteX: 365, siteZ: -400 })` must equal
+  `generateTerrain({})`, so a future patch that reintroduces the option gets caught.
+- Removing the pad also removed the only `lerp` use in this file; lint does **not**
+  report unused imports, so the import list was cleaned by hand.
+- Measured after the change, default seed: ground at the ridge shoulder (365, -400) is
+  149.7 m and 60 m east of it is 72.5 m — the 77 m cliff the pad used to fill in is
+  back.
+- The file still imports `HeightField` as a value, so the `@returns {HeightField}`
+  JSDoc survives the removal of the local `@typedef`.
