@@ -109,3 +109,27 @@ exposes the drag programmatically.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- **Regression this step exposed and fixed:** `orbit.js` called
+  `releasePointerCapture()` unconditionally on `pointerup`. While orbit always
+  captured its own `pointerdown` that was harmless; once a gesture can be
+  *intercepted*, orbit never captured it and every relocated drag threw
+  `NotFoundError: … releasePointerCapture … No active pointer`. Fixed by releasing
+  only when the drag was orbit's own (`if (wasDragging) …`).
+- **`tools/browser.js eval --wait "EXPR"` runs EXPR repeatedly** — `--wait` polls
+  with the very same expression (`waitForExpression`) before the final
+  `evaluate()`. A script with side effects therefore runs 2–3 times and the value
+  it finally prints comes from the last pass, which looks exactly like "the page
+  remembered an old drag". Verdict: stateful probes must run **without** `--wait`
+  (single evaluation); keep `--wait` for read-only readiness expressions.
+- Under *synthetic* `PointerEvent`s, orbit's `setPointerCapture()` throws
+  `NotFoundError` (a dispatched event has no active pointer in the browser). That
+  is pre-existing orbit behaviour under fake events, not a regression — and it is
+  why the real tests (step-015) drive `grabSite`/`dragSiteTo` instead of
+  dispatching mouse events.
+- Measured with the fake-event probe on a fresh page: pointerdown on the mast →
+  cursor `grabbing`, site `{0,0}` → `{-225,-345}`, camera untouched; a second drag
+  far from the mast moved the camera and left the site alone. That is the whole
+  point of the intercept gate.
+- `src/app/controller.js` is now **345 of 350 lines**; the next feature that needs
+  to grow it must split it (GUIDELINES.md §3).

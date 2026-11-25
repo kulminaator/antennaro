@@ -34,7 +34,7 @@ export const LAYER_TABLE = Object.freeze([
   Object.freeze({ match: /^src\/core\/loop\.js$/, layer: 3, name: 'frame loop' }),
 
   Object.freeze({ match: /mesh\.js$/, layer: 4, name: 'render adapter' }),
-  Object.freeze({ match: /^src\/app\/(viewport|labels|orbit)\.js$/, layer: 4, name: 'render adapter' }),
+  Object.freeze({ match: /^src\/app\/(viewport|labels|orbit|relocate)\.js$/, layer: 4, name: 'render adapter' }),
 
   Object.freeze({ match: /^src\/ui\//, layer: 5, name: 'ui adapter' }),
   Object.freeze({ match: /^src\/app\//, layer: 5, name: 'composition' }),

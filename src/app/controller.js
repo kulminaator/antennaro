@@ -28,6 +28,7 @@ import { applyPatch, createInitialState, impactedStages, RECOMPUTE } from './sta
 import { getPreset } from './presets.js';
 import { createLabels } from './labels.js';
 import { createOrbitControls } from './orbit.js';
+import { createSiteRelocator } from './relocate.js';
 import { createViewport } from './viewport.js';
 
 /** Minimum time between two coverage recomputes while a slider is being dragged. */
@@ -51,7 +52,18 @@ export function createController(options) {
     preserveDrawingBuffer: options.preserveDrawingBuffer ?? true,
     antialias: options.antialias ?? true,
   });
-  const orbit = createOrbitControls({ domElement: options.canvas, viewport });
+  // The relocator comes first: it is the gate the orbit controls ask before they
+  // take a pointer gesture, so it has to exist when orbit is built.
+  const relocator = createSiteRelocator({
+    domElement: options.canvas,
+    viewport,
+    // Resolved lazily: the pipeline rebuilds `site` on every terrain pass.
+    getSite: () => site,
+    onMove: (next) => patch({ site: { x: next.x, z: next.z } }),
+  });
+  const orbit = createOrbitControls({
+    domElement: options.canvas, viewport, intercept: (event) => relocator.intercept(event),
+  });
 
   let field = generateTerrain({
     size: state.gridSize, worldSize: state.worldSize, seed: state.seed, siteX: state.site.x, siteZ: state.site.z,
@@ -314,12 +326,17 @@ export function createController(options) {
     }),
     cameraState: () => viewport.cameraState(),
     setCamera: (next) => viewport.setCamera(next),
+    grabSite: () => relocator.beginAtSite(),
+    dragSiteTo: (ndcX, ndcY) => relocator.dragToNdc(ndcX, ndcY),
+    releaseSite: () => relocator.release(),
+    dragState: () => relocator.state(),
     terrainField: () => field,
     site: () => site,
     dispose() {
       bus.emit('dispose');
       loop.stop();
       orbit.dispose();
+      relocator.dispose();
       rig.dispose();
       mapObjects.dispose();
       viewport.dispose();

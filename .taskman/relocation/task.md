@@ -66,3 +66,11 @@ into `STATE_FIELDS`, new tunables into `src/config.js`, new modules into
   `node tools/browser.js eval` leaves a persistent browser behind: every manual
   verification in this task must background the server, stop both afterwards, and
   run under `node tools/timebox.js -t N -- …` (see step-008 comments).
+- `node tools/browser.js eval --wait "EXPR"` evaluates **EXPR more than once**
+  (`--wait` polls with the same expression). Only use it for read-only
+  expressions; stateful verification scripts must omit `--wait`, otherwise the
+  reported state comes from the last repeat.
+- Once a gesture can be intercepted, anything that captured the pointer on
+  `pointerdown` must not assume it owns it on `pointerup` — orbit's unconditional
+  `releasePointerCapture()` threw on every relocation drag until step-012 guarded
+  it (recorded in step-012 comments).

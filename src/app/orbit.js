@@ -93,9 +93,13 @@ export function createOrbitControls(options) {
   }
 
   function onPointerUp(event) {
+    const wasDragging = dragging;
     dragging = false;
     panning = false;
-    domElement.releasePointerCapture?.(event.pointerId);
+    // Only release a capture orbit actually took. A pointerdown that `intercept`
+    // claimed never captured, and releasing a pointer we never grabbed throws a
+    // NotFoundError in the page.
+    if (wasDragging) domElement.releasePointerCapture?.(event.pointerId);
   }
 
   function onWheel(event) {
