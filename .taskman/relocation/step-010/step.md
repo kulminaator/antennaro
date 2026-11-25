@@ -56,3 +56,14 @@ the screen-right axis that the drag in step-012 depends on.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- API asymmetry that bit once while writing the tests: `cameraPose()` takes the
+  target as `targetX/targetY/targetZ` (the shape `app/viewport.js` stores), while
+  `projectToNdc()`/`pickGround()` take plain `{x, y, z}` points. Spreading a point
+  into `cameraPose` silently aims the camera at the origin and every projection is
+  off — convert explicitly.
+- Added a **seventh** test beyond the five this step listed
+  (`pick: the basis stays orthonormal, even looking straight down`): step-009 chose
+  its own degenerate `right` fallback, and that path is exactly what the
+  "camera looking straight down" case takes, so it needed a guard (unit axes,
+  perpendicular, ground still pickable at 90° elevation).
