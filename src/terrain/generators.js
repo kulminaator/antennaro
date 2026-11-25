@@ -13,9 +13,11 @@
  *
  * The zones belong to the map; the flattened **site pad** belongs to the antenna
  * and is centred on `siteX`/`siteZ` (the map centre unless the user relocates it).
- * The pad is graded to the *average natural ground under it*, never to a fixed
- * elevation: move the mast onto a hill and the platform rides up with the hill,
- * so the mast always stands on the surface rather than at the bottom of a pit.
+ * The pad is cut level with the *natural ground where the mast stands*, never to a
+ * fixed elevation: move the mast onto a hill and the platform rides up with the
+ * hill, so the mast always stands on the surface rather than at the bottom of a
+ * pit, and the bench can never stand above the ground beside it and make a
+ * hillside look like it grew.
  *
  * Zone heights cross-fade over `TERRAIN.blendBand` of the angular sector, which
  * keeps the surface C0-continuous without hard seams.
@@ -106,8 +108,11 @@ function valleyHeight(x, z, ctx) {
   const cfg = TERRAIN.valley;
   const meander = cfg.meander * ((fbm2(z * 0.0012, 12.5, { seed: ctx.seed + 21, octaves: 2 }) - 0.5) * 2);
   const lateral = Math.abs(x - meander);
-  const floor = cfg.depth * bump(lateral, cfg.halfWidth);
-  const rim = cfg.rimHeight * smoothstep(cfg.halfWidth, cfg.halfWidth * 2.1, lateral)
+  // A valley runs away from the site, not through it: the floor and its rims fade
+  // out north of the centre so the channel stays in the southern half of the map.
+  const meridional = smoothstep(cfg.northLimit, cfg.southLimit, z / ctx.half);
+  const floor = cfg.depth * meridional * bump(lateral, cfg.halfWidth);
+  const rim = cfg.rimHeight * meridional * smoothstep(cfg.halfWidth, cfg.halfWidth * 2.1, lateral)
     * (1 - smoothstep(cfg.rimWidth, cfg.rimWidth * 1.9, lateral));
   return regional(x, z, ctx) + rim - floor;
 }
@@ -194,27 +199,19 @@ export function naturalHeightAt(x, z, ctx) {
 }
 
 /**
- * The level the pad is cut and filled to: the average natural ground over the
- * disc the pad blends into. Averaging is what keeps the platform honest in both
- * directions - a point sample would drop a mast on a slope into a trench, and a
- * fixed datum would bury it on high ground and put it on a pedestal in a valley.
- * Computed once per context (a handful of samples), never per query.
+ * The level the pad is cut to: the natural ground **where the mast stands**.
+ * Three rules were tried and only this one survives both ways the wrong choice
+ * shows up: a fixed datum buries the mast on a hilltop and puts it on a pedestal
+ * in a valley; averaging the wider blend reach lets a ridge flank dominate the
+ * average, so the platform stands tens of metres above the ground beside it and
+ * the hillside appears to grow sideways under the antenna; averaging even the flat
+ * disc still shifts the platform a dozen metres off the mast's own ground where
+ * the relief is asymmetric. Cut level with the mast's own ground, the pad is a
+ * bench: it cuts the uphill side and fills the downhill side by the same local
+ * relief, never more, and it cannot invent a landform.
  */
 function gradePadLevel(ctx) {
-  const reach = ctx.padRadius * ctx.padBlendFactor;
-  const step = reach / 3;
-  let sum = 0;
-  let samples = 0;
-  for (let iz = -3; iz <= 3; iz += 1) {
-    for (let ix = -3; ix <= 3; ix += 1) {
-      const dx = ix * step;
-      const dz = iz * step;
-      if (Math.hypot(dx, dz) > reach) continue;
-      sum += naturalHeightAt(ctx.siteX + dx, ctx.siteZ + dz, ctx);
-      samples += 1;
-    }
-  }
-  return samples > 0 ? sum / samples : naturalHeightAt(ctx.siteX, ctx.siteZ, ctx);
+  return naturalHeightAt(ctx.siteX, ctx.siteZ, ctx);
 }
 
 /**

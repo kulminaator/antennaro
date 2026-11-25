@@ -240,13 +240,21 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
 - **Terrain** is a height field on an odd-sized grid (so the site lands exactly
   on a cell centre), built from four angular zones - mountain (N) with a taller
   distant range, flat field (E), valley (S), bumps (W) - blended across
-  `TERRAIN.blendBand`. The **site pad** is flattened within
+  `TERRAIN.blendBand`. The **valley is a southern feature**: its floor and rims
+  fade out north of the site (`TERRAIN.valley.northLimit` / `southLimit`, fractions
+  of the half-extent), because the floor is measured across `x` and would otherwise
+  cut a trench the whole length of the map - through the mountain sector and
+  through the site itself. The **site pad** is flattened within
   `WORLD.sitePadRadius` *around the site* and cross-fades back to the natural
   surface by `WORLD.sitePadRadius * WORLD.sitePadBlendFactor`, so the mast never
-  floats or buries. The pad is **graded to the average natural ground inside that
-  reach** (`ctx.padElevation`, sampled once per context) and never to a fixed
-  elevation - a fixed datum buries the mast on a hilltop and puts it on a pedestal
-  in a valley, which is exactly the bug this rule prevents. Because the pad is
+  floats or buries. The pad is **cut level with the natural ground where the mast
+  stands** (`ctx.padElevation`) and never to a fixed elevation or a neighbourhood
+  average: a fixed datum buries the mast on a hilltop and puts it on a pedestal in a
+  valley, and averaging the surrounding ground lets a ridge flank lift the platform
+  tens of metres above the ground beside it, which reads as the hillside growing
+  sideways under the antenna. Cut level with the mast's own ground, the pad is a
+  bench - it cuts the uphill side and fills the downhill side by the local relief
+  and no more. Because the pad is
   baked into the height field, `state.site` is part of the
   terrain cache key: relocating the mast re-runs the terrain stage (and therefore
   coverage and scene) even though the zones and the noise did not change.

@@ -19,8 +19,8 @@ export const WORLD = Object.freeze({
   maxGridSize: 321,
   sitePadRadius: 45, // metres of flattened ground directly under the antenna
   // How far beyond that radius the flattened ground cross-fades back into the
-  // natural surface. The pad is graded to the average natural ground inside this
-  // reach, so it follows the terrain instead of sitting at a fixed datum.
+  // natural surface. The pad is cut level with the ground the mast stands on, so
+  // it follows the terrain instead of sitting at a fixed datum.
   sitePadBlendFactor: 2.4,
 });
 
@@ -30,7 +30,21 @@ export const TERRAIN = Object.freeze({
   regionalAmplitude: 7,
   regionalFrequency: 0.0009,
   flat: Object.freeze({ roughness: 1.4, label: 'Flat field' }),
-  valley: Object.freeze({ depth: 36, halfWidth: 165, rimHeight: 9, rimWidth: 430, meander: 120 }),
+  /**
+   * The channel is a southern feature. `northLimit` / `southLimit` are fractions
+   * of the map half-extent: the floor and its rims are fully closed at northLimit
+   * (north of the site) and reach full depth at southLimit. Without that fade the
+   * valley cuts a gash through the whole map, mountain sector and site included.
+   */
+  valley: Object.freeze({
+    depth: 36,
+    halfWidth: 165,
+    rimHeight: 9,
+    rimWidth: 430,
+    meander: 120,
+    northLimit: -0.06,
+    southLimit: 0.2,
+  }),
   bumps: Object.freeze({ amplitude: 34, radius: 110, density: 0.75, spacingFactor: 1.4, fineNoise: 3.2 }),
   mountain: Object.freeze({
     peak: 190,

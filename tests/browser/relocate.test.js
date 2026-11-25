@@ -106,6 +106,43 @@ test('browser: the mast stays on the surface on high ground and in the valley', 
   });
 });
 
+test('browser: the site pad stops at its own reach', async () => {
+  await withApp(async (session) => {
+    // Regression: with the pad graded to the average of the ground around it, a
+    // mast on a ridge flank lifted the surface tens of metres above the valley
+    // beside it - the mountain appeared to grow sideways under the antenna. The
+    // pad may level the ground it stands on, nothing beyond its blend reach.
+    const probes = [[0, -200], [0, 200], [200, 0], [-200, 0], [140, -140], [-140, 140]];
+    const probe = async () => {
+      const out = [];
+      for (const [dx, dz] of probes) out.push(await session.sim('heightAt', 500 + dx, -600 + dz));
+      return out;
+    };
+
+    await session.patch({ site: { x: 500, z: -600 } });
+    await session.settle();
+    const site = await session.sim('site');
+    assert.ok(almost(site.groundY, await session.sim('heightAt', 500, -600), 1e-6), 'the mast is not on its pad');
+    // Flat across the platform: the grid is sampled between cells, so allow half a
+    // metre - the relief this is measured against is tens of metres.
+    for (const [px, pz] of [[515, -610], [530, -625], [478, -583]]) {
+      assert.ok(almost(site.groundY, await session.sim('heightAt', px, pz), 0.5),
+        `the platform is not level at (${px}, ${pz})`);
+    }
+    const withPadHere = await probe();
+
+    await session.patch({ site: { x: -900, z: 900 } });
+    await session.settle();
+    const afterItLeft = await probe();
+    for (let i = 0; i < probes.length; i += 1) {
+      assert.ok(almost(withPadHere[i], afterItLeft[i], 1e-6),
+        `the pad still shapes ground 200 m from the mast: ${withPadHere[i]} vs ${afterItLeft[i]}`);
+    }
+    // And the platform itself was real: flat, and at the mast's own ground level.
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
 test('browser: grabbing the mast and dragging moves the site', async () => {
   await withApp(async (session) => {
     await session.settle();

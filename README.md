@@ -50,9 +50,10 @@ an edited import map, and `npm run vendor` tells you which.
   not the middle of it. The mast is drawn at true height;
   the antenna body is enlarged so you can see what it is - treat the hardware as
   "not to scale". The ground is flattened into a pad around wherever the site
-  stands, and that pad is graded level with the ground around it - up on a hilltop,
+  stands, cut level with the ground the mast stands on - up on a hilltop,
   down on a valley floor - so the mast always stands on the surface and the
-  *Antenna height* you set is always measured from the ground it stands on.
+  *Antenna height* you set is always measured from the ground it stands on. The
+  pad stops about a hundred metres from the mast; it does not reshape the map.
 - **The radiation lobe**: a 3D surface of the antenna's own gain, cut off 30 dB
   below the peak. It shows the shape of the antenna, not its range.
 - **The coverage overlay**: signal level painted onto the ground, measured where
@@ -78,7 +79,7 @@ Left panel, top to bottom:
 | --- | --- |
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
-| **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground the pad is graded to), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
+| **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground the pad is cut to), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
 | **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, evaluation range, clutter loss, and a switch for terrain shadowing. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
 | **Display** | Coverage overlay, radiation pattern, terrain mesh, zone labels. |
