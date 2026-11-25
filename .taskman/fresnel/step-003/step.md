@@ -36,3 +36,19 @@ stats summarise it, and the RSSI numbers are bit-for-bit what they were.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Measured on the default map, 868 MHz, 10 m mast, 1400 m limit:
+  **RSSI and link counts are byte-for-byte unchanged** (24076 evaluated, 1811
+  linked, same as before the change) because the diffraction ray still ends on the
+  ground; only the *zone* ray ends at the receiver height. Cost: 58 ms -> 117 ms
+  with diffraction, 13 ms -> 58 ms without (a second profile per cell).
+- Zone outcome on that map: 10.1 % of evaluated cells meet the 60 % criterion, and
+  **662 of 1811 linked cells (37 %) have the zone cut** - exactly the "works on
+  paper" population the feature exists to expose. Worst clearance -22.1 r1 at 627 m
+  (a cell buried behind a ridge).
+- Consequence for step-005: a binary clear/flag colour is 10 % vs 90 %, i.e. a
+  one-colour map. The zone view must ramp on the *ratio* (clamped to about +/-2
+  zone radii) so the map shows structure instead of a wall of purple.
+- Consequence for step-007: `RF.fresnelRxHeightM` decides the answer, so it belongs
+  on the panel (`rf.zoneRxHeightM`, link-budget group) rather than being a hidden
+  constant - the user should be able to watch the green spread as the terminal rises.
