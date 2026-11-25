@@ -59,3 +59,20 @@ screenshots show it.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Removing the pad moved the documented Fresnel statistics, because the pad had been
+  flattening ground within 108 m of the mast and those near-site rays feed the grid.
+  Re-measured on the default map through `window.__sim.fresnel()` (port 8136):
+  433 MHz 17.1 % clear / 9245 linked / 5226 cut, 868 MHz 24.5 % / 5470 / 945
+  (worst -21.6 r1), 2400 MHz 39.5 %, 5800 MHz 42.9 %. README now says 945 of 5470 and
+  17 % / 25 % / 43 %. The analytic claims (`89 m` flat-ground limit, mid-path r1) are
+  unchanged, as they must be.
+- First attempt at that probe patched `frequencyMHz` and got silently rejected
+  (`rejected: 0` is the *count*, and `fresnel()` looked "unchanged"): the band field is
+  `frequencyKey`, a select over the keys of `RF.frequenciesHz`. Always check
+  `patch().rejected` with the count, not the shape.
+- The default site (0, 0) sits in a low saddle: ground 0.7 m at the mast, 18.6 m 100 m
+  north, 44 m 100 m west. The old pad was cutting ~40 m off that slope all around the
+  centre, which is why the hero screenshots now look noticeably more broken-up. The
+  captions were rewritten to match; `ANTENNA.defaultSiteXm/Zm` were left alone (moving
+  the default site is a design decision, not part of this task).

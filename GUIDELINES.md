@@ -44,7 +44,7 @@ src/             application source, layered (see §3)
   config.js      every tunable number in the project
   math/          scalar, vec3, seeded noise
   core/          eventbus, frame loop
-  terrain/       height field, generators, site pad, terrain mesh
+  terrain/       height field, generators, terrain mesh
   antenna/       catalogue, pattern maths, aim frames, model, meshes
   propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, coverage,
                  coverage mesh, Fresnel zone mesh
@@ -171,8 +171,7 @@ Every tunable that describes the **world or the radio** lives in `src/config.js`
 world size, terrain amplitudes and blend band, RF constants (including
 `RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, where the
 mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
-`siteStepM`, shared by the sliders and the drag), how far the site pad reaches
-(`WORLD.sitePadRadius`, `WORLD.sitePadBlendFactor`), the Fresnel criterion
+`siteStepM`, shared by the sliders and the drag), the Fresnel criterion
 (`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
 is stated for - and `RF.fresnelEndpointGuard`), the `FRESNEL` block (mesh density,
 opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`) and the
@@ -249,27 +248,25 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
 
 ## 7. Domain notes
 
-- **Terrain** is a height field on an odd-sized grid (so the site lands exactly
-  on a cell centre), built from four angular zones - mountain (N) with a taller
+- **Terrain** is a height field on an odd-sized grid (so the map centre is exactly a
+  cell centre), built from four angular zones - mountain (N) with a taller
   distant range, flat field (E), valley (S), bumps (W) - blended across
   `TERRAIN.blendBand`. The **valley is a southern feature**: its floor and rims
-  fade out north of the site (`TERRAIN.valley.northLimit` / `southLimit`, fractions
+  fade out north of the map centre (`TERRAIN.valley.northLimit` / `southLimit`, fractions
   of the half-extent), because the floor is measured across `x` and would otherwise
   cut a trench the whole length of the map - through the mountain sector and
-  through the site itself. The **site pad** is flattened within
-  `WORLD.sitePadRadius` *around the site* and cross-fades back to the natural
-  surface by `WORLD.sitePadRadius * WORLD.sitePadBlendFactor`, so the mast never
-  floats or buries. The pad is **cut level with the natural ground where the mast
-  stands** (`ctx.padElevation`) and never to a fixed elevation or a neighbourhood
-  average: a fixed datum buries the mast on a hilltop and puts it on a pedestal in a
-  valley, and averaging the surrounding ground lets a ridge flank lift the platform
-  tens of metres above the ground beside it, which reads as the hillside growing
-  sideways under the antenna. Cut level with the mast's own ground, the pad is a
-  bench - it cuts the uphill side and fills the downhill side by the local relief
-  and no more. Because the pad is
-  baked into the height field, `state.site` is part of the
-  terrain cache key: relocating the mast re-runs the terrain stage (and therefore
-  coverage and scene) even though the zones and the noise did not change.
+  straight through the middle of it.
+  **The height field does not know where the antenna is, and must not learn.** The
+  generators take a seed and a world size and nothing else; `heightAt()` is those four
+  zones; `state.site` is deliberately absent from the terrain cache key, so relocating
+  the mast re-runs the coverage and the scene but never the ground. There *was* a
+  flattened site pad under the mast, graded to the ground the mast stood on. On gentle
+  ground it read as a workmen's platform; on steep ground it was a landform - with the
+  mast on the shoulder of the northern ridge it filled the slope by 99.7 m only 57 m
+  away, the plateau travelled with the mast, and the coverage shadowed everything
+  behind its new cliff. Users read that, correctly, as the hills moving when the
+  antenna moves. If a future feature wants the ground to depend on the antenna, that
+  is where it was already tried and removed.
 - **Antenna pattern** is separable azimuth × elevation, evaluated per direction.
   Catalogue entries carry `gainDbi(params)` and `pattern(params)`; the model
   adds aim, tilt and electrical downtilt, and clamps to `PATTERN_FLOOR_DB`.
