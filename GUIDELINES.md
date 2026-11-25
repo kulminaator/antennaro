@@ -256,6 +256,37 @@ The browser loads `three` through the import map in `index.html`
 (`./vendor/three/three.module.min.js`); lint fails if that file is missing, if the
 value is not explicitly relative, or if any URL in the page is root-relative.
 
+## 8a. Process lifecycle rules
+
+Chromium is started `detached`, as a process-group leader, and
+`/usr/bin/chromium-headless-shell` is a *shell wrapper* around the real binary.
+Both facts have already cost a debugging session each:
+
+- **"the recorded pid is gone" is not "the browser is gone".** The wrapper can
+  exit on `SIGTERM` while the browser and its GPU/network children ignore the
+  signal and get re-parented to init. `terminate(pid, { group: true })`
+  therefore waits on `isGroupAlive(pgid)` - a group whose only member is a
+  zombie counts as dead - and escalates to `SIGKILL` on the whole group.
+  `tests/unit/tooling.test.js` reproduces this with a leader that dies on TERM
+  and a grandchild that ignores it.
+- **`.tmp/browser/<name>/state.json` is an index, not the truth.** If it is
+  deleted, or the process dies before writing it, `status` would report nothing
+  running while twelve Chromium processes stay up and make every later browser
+  test time out with an "app never booted" error. `findOrphanPids()` recognises
+  our own instances by their `--user-data-dir=<repo>/.tmp/browser` prefix;
+  `status --all` reports them and exits 2; `stop --all` sweeps them; and
+  `tools/test.js` sweeps before and after the browser suite so a crashed run
+  cannot poison the next one.
+
+Do not clean up with `pkill -f <pattern>` from a shell whose own command line
+matches the pattern - it kills the command doing the cleanup. Kill by pid, or use
+`tools/browser.js stop --all`.
+
+Lint and tests exercise the CLIs too (`--help` for every tool, `status --all`,
+the static server end to end), because `node --check` cannot see an unimported
+name inside `main()` and a server that dies at startup looks exactly like an
+application bug from the browser side.
+
 ## 9. Testing
 
 **Assert invariants and textbook numbers, never golden output.** No snapshots,

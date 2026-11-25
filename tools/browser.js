@@ -26,9 +26,11 @@ import { withTimeout } from './lib/timeout.js';
 import { exitAfterFlush } from './lib/proc.js';
 import {
   findChrome,
+  findOrphanPids,
   listInstances,
   startBrowser,
   statusBrowser,
+  stopAllBrowsers,
   stopBrowser,
   versionInfo,
 } from './lib/browser.js';
@@ -62,9 +64,19 @@ async function commandStatus(flags) {
   const names = flags.all ? listInstances() : [String(flags.name ?? 'dev')];
   const rows = [];
   for (const name of names) rows.push(await statusBrowser(name));
+  // Processes outlive their state file; say so instead of reporting "stopped".
+  const orphans = findOrphanPids();
+  if (orphans.length > 0) {
+    rows.push({
+      name: `(unrecorded chromium processes x${orphans.length})`,
+      state: 'stale',
+      pid: orphans.join(','),
+      processAlive: true,
+    });
+  }
   if (flags.json) {
     process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-    return 0;
+    return orphans.length > 0 ? 2 : 0;
   }
   for (const row of rows) {
     if (row.state === 'running') {
@@ -74,6 +86,9 @@ async function commandStatus(flags) {
     } else {
       process.stdout.write(`${row.name}: stopped\n`);
     }
+  }
+  if (orphans.length > 0) {
+    process.stdout.write(`run: node tools/browser.js stop --all  (sweeps these too)\n`);
   }
   return rows.some((row) => row.state === 'stale') ? 2 : 0;
 }
@@ -100,9 +115,12 @@ async function commandStart(flags) {
 }
 
 async function commandStop(flags) {
-  const results = await stopBrowser({ name: String(flags.name ?? 'dev'), all: Boolean(flags.all), force: Boolean(flags.force) });
+  const all = Boolean(flags.all);
+  const results = all
+    ? await stopAllBrowsers()
+    : await stopBrowser({ name: String(flags.name ?? 'dev'), force: Boolean(flags.force) });
   for (const row of results) process.stdout.write(`${row.name}: ${row.state} (${row.how})\n`);
-  if (results.length === 0) process.stdout.write('no browser instances recorded\n');
+  if (results.length === 0) process.stdout.write('no browser instances recorded, and no stray chromium processes found\n');
   return results.every((row) => row.state === 'stopped') ? 0 : 1;
 }
 

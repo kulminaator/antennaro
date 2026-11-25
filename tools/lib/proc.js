@@ -172,6 +172,31 @@ export function isAlive(pid) {
  *   renderer processes.
  * @returns {Promise<{stopped:boolean, how:string}>}
  */
+/**
+ * Does anything in process group `pgid` still run?
+ *
+ * The recorded pid is not enough: Chromium starts as a shell wrapper, so the
+ * wrapper can exit on SIGTERM while the real browser and its GPU and network
+ * children ignore it and keep running as orphans. Zombies do not count - the
+ * wrapper stays one until we reap it.
+ * @param {number} pgid
+ * @returns {boolean}
+ */
+export function isGroupAlive(pgid) {
+  if (process.platform === 'win32') return isAlive(pgid);
+  try {
+    process.kill(-pgid, 0);
+  } catch (error) {
+    if (error?.code !== 'EPERM') return false;
+  }
+  const probe = spawnSync('ps', ['-o', 'stat=', '-g', String(pgid)], { encoding: 'utf8', timeout: 1500 });
+  if (probe.status !== 0) return isAlive(pgid);
+  return probe.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .some((stat) => stat.length > 0 && !stat.startsWith('Z'));
+}
+
 export async function terminate(pid, options = {}) {
   const { graceful, termMs = 4000, killMs = 2500, group = false } = options;
   const signal = (which) => {
@@ -191,7 +216,8 @@ export async function terminate(pid, options = {}) {
       /* group already gone */
     }
   };
-  if (!isAlive(pid)) {
+  const alive = () => (group && process.platform !== 'win32' ? isGroupAlive(pid) : isAlive(pid));
+  if (!alive()) {
     // The leader may be gone while its detached children keep running.
     try {
       if (group && process.platform !== 'win32') process.kill(-pid, 'SIGKILL');
@@ -208,19 +234,19 @@ export async function terminate(pid, options = {}) {
       /* fall through to signals */
     }
   }
-  if (!isAlive(pid)) return { stopped: true, how: 'graceful' };
+  if (!alive()) return { stopped: true, how: 'graceful' };
 
-  if (!signal('SIGTERM')) return { stopped: !isAlive(pid), how: 'signal-race' };
+  if (!signal('SIGTERM')) return { stopped: !alive(), how: 'signal-race' };
   const deadline = Date.now() + termMs;
   while (Date.now() < deadline) {
-    if (!isAlive(pid)) return { stopped: true, how: 'SIGTERM' };
+    if (!alive()) return { stopped: true, how: 'SIGTERM' };
     await new Promise((r) => setTimeout(r, 80));
   }
 
   signal('SIGKILL');
   const killDeadline = Date.now() + killMs;
   while (Date.now() < killDeadline) {
-    if (!isAlive(pid)) {
+    if (!alive()) {
       signalChildren();
       return { stopped: true, how: 'SIGKILL' };
     }

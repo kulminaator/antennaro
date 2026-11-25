@@ -13,6 +13,7 @@
  *    SIGKILL, each with its own deadline; the profile is deleted afterwards.
  */
 
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PATHS, ensureDir } from './paths.js';
@@ -206,6 +207,44 @@ export async function statusBrowser(name = DEFAULT_NAME) {
   return { name, state: 'stale', pid: record.pid, port: record.port, processAlive };
 }
 
+/**
+ * Browsers we started but lost the record for.
+ *
+ * The state file is only an index: delete it (or crash before writing it) and
+ * `status` cheerfully reports nothing running while a dozen Chromium processes
+ * are. These are found by the profile directory they were started with, which
+ * only instances from this repository ever reference.
+ * @returns {number[]}
+ */
+export function findOrphanPids() {
+  const probe = spawnSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8', timeout: 2000 });
+  if (probe.status !== 0) return [];
+  const marker = `user-data-dir=${PATHS.browserProfiles}`;
+  const pids = [];
+  for (const raw of probe.stdout.split('\n')) {
+    const line = raw.trim();
+    const split = line.indexOf(' ');
+    if (split < 0) continue;
+    const pid = Number(line.slice(0, split));
+    const args = line.slice(split + 1);
+    // Only the browser leaders, never the wrapper running this very scan.
+    if (Number.isInteger(pid) && pid > 0 && args.includes(marker) && args.includes('chromium')) {
+      pids.push(pid);
+    }
+  }
+  return pids;
+}
+
+/**
+ * Kill every Chromium belonging to this checkout, recorded or not.
+ * @returns {Promise<{count:number, pids:number[]}>}
+ */
+export async function sweepOrphanBrowsers() {
+  const pids = findOrphanPids();
+  for (const pid of pids) await terminate(pid, { group: true, termMs: 1200, killMs: 2000 });
+  return { count: pids.length, pids };
+}
+
 export function listInstances() {
   if (!existsSync(PATHS.browserProfiles)) return [];
   return readdirSync(PATHS.browserProfiles, { withFileTypes: true })
@@ -265,8 +304,13 @@ function cleanupFiles(name) {
 /** Best-effort sweep used by the test runner so a crash cannot leak browsers. */
 export async function stopAllBrowsers() {
   const names = listInstances();
-  if (names.length === 0) return [];
-  return stopBrowser({ all: true });
+  const results = names.length > 0 ? await stopBrowser({ all: true }) : [];
+  // Recorded instances can die leaving unrecorded children; sweep by cmdline too.
+  const sweep = await sweepOrphanBrowsers();
+  if (sweep.count > 0) {
+    results.push({ name: 'orphan processes', state: 'stopped', how: `killed ${sweep.count} pid(s)` });
+  }
+  return results;
 }
 
 /**

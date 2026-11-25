@@ -15,8 +15,8 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { PATHS, ensureDir } from '../../tools/lib/paths.js';
-import { run, spawnDetached, terminate } from '../../tools/lib/proc.js';
-import { isPortFree } from '../../tools/lib/browser.js';
+import { run, spawnDetached, terminate, isGroupAlive } from '../../tools/lib/proc.js';
+import { isPortFree, findOrphanPids } from '../../tools/lib/browser.js';
 import { waitFor } from '../../tools/lib/timeout.js';
 import { STATE_PATH } from '../../tools/staticserver.js';
 import { TIMEOUTS } from '../../src/config.js';
@@ -84,6 +84,70 @@ test('tooling: the static server CLI serves the web root and blocks the dev dire
     await terminate(pid, { termMs: 2000, killMs: 1500, group: true });
     if (previousRecord) writeFileSync(STATE_PATH, previousRecord);
     else rmSync(STATE_PATH, { force: true });
+  }
+});
+
+test('tooling: browser.js finds and reports chromium we started but lost the record for', async () => {
+  // A fake "browser": any process whose command line points at our profile
+  // directory is one we launched, recorded or not. Deleting the state file must
+  // not make a running browser invisible.
+  const marker = `${join(ensureDir(PATHS.browserProfiles), 'ghost-profile')}/profile`;
+  const fake = spawnDetached('/bin/sh', ['-c', `sleep 30 # chromium --user-data-dir=${marker}`], {
+    cwd: PATHS.root,
+    logFile: join(PATHS.logs, 'ghost-browser.log'),
+  });
+
+  try {
+    await waitFor(() => (findOrphanPids().includes(fake) ? true : null), {
+      timeoutMs: 4000, intervalMs: 200, label: 'the fake browser to show up in the process table',
+    });
+    assert.ok(findOrphanPids().includes(fake), 'findOrphanPids missed a process it started');
+
+    const status = await tool(['tools/browser.js', 'status', '--all']);
+    assert.equal(status.code, 2, 'status must signal unrecorded processes with a non-zero exit');
+    assert.match(status.stdout, /unrecorded chromium processes/, 'status reported nothing about the stray process');
+    assert.match(status.stdout, /stop --all/, 'status must say how to get rid of them');
+  } finally {
+    await terminate(fake, { group: true, termMs: 1000, killMs: 1000 });
+    rmSync(join(PATHS.browserProfiles, 'ghost-profile'), { recursive: true, force: true });
+  }
+});
+
+test('tooling: a group terminate reaps grandchildren that outlive their leader', async () => {
+  // Chromium's launcher is a shell wrapper that dies on SIGTERM while the real
+  // browser behind it ignores the signal. Reporting "stopped" when only the
+  // recorded pid died left orphaned browsers running, and every later browser
+  // test then timed out for a reason that looked like an app bug.
+  const marker = join(ensureDir(PATHS.tmp), 'proc-group-survivor.pid');
+  rmSync(marker, { force: true });
+  const script = `sleep 30 & echo $! > ${JSON.stringify(marker)}; trap 'exit 0' TERM; wait`;
+  const pid = spawnDetached('/bin/sh', ['-c', script], {
+    cwd: PATHS.root,
+    logFile: join(ensureDir(PATHS.logs), 'proc-group.log'),
+  });
+
+  try {
+    const text = await waitFor(
+      () => (existsSync(marker) ? readFileSync(marker, 'utf8').trim() : null),
+      { timeoutMs: 4000, intervalMs: 100, label: 'the grandchild to record its pid', },
+    );
+    const survivor = Number(text);
+    assert.ok(survivor > 0, `nonsense pid in the marker file: ${text}`);
+    assert.equal(isGroupAlive(pid), true, 'the process group should be alive before termination');
+
+    const result = await terminate(pid, { group: true, termMs: 1500, killMs: 2000 });
+    assert.equal(result.stopped, true, `terminate reported ${result.how}`);
+    assert.equal(isGroupAlive(pid), false, 'a member of the group survived the terminate');
+
+    let survivorAlive = true;
+    try {
+      process.kill(survivor, 0);
+    } catch {
+      survivorAlive = false;
+    }
+    assert.equal(survivorAlive, false, `the grandchild (${survivor}) outlived its process group`);
+  } finally {
+    rmSync(marker, { force: true });
   }
 });
 
