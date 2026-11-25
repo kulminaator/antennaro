@@ -1,15 +1,18 @@
 /**
- * Terrain generation: four zones around a central antenna site.
+ * Terrain generation: four zones around the antenna site.
  *
  * Layer: L1 (pure domain). `heightAt` is a pure function of (x, z, context), so
  * the same seed always yields the same ground and any point can be queried
  * without building a grid first.
  *
- * Layout (compass azimuths, metres above the datum):
+ * Layout (compass azimuths, metres above the datum, measured from the map centre):
  *   north (-Z)  mountain, and behind it a taller distant range
  *   east  (+X)  flat field
  *   south (+Z)  valley with raised rims
  *   west  (-X)  land with bumps
+ *
+ * The zones belong to the map; the flattened **site pad** belongs to the antenna
+ * and is centred on `siteX`/`siteZ` (the map centre unless the user relocates it).
  *
  * Zone heights cross-fade over `TERRAIN.blendBand` of the angular sector, which
  * keeps the surface C0-continuous without hard seams.
@@ -36,7 +39,7 @@ export const ZONE_LAYOUT = Object.freeze([
 ]);
 
 /** Build the immutable evaluation context passed to every height function. */
-export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.worldSize } = {}) {
+export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.worldSize, siteX = 0, siteZ = 0 } = {}) {
   const half = worldSize / 2;
   return Object.freeze({
     seed: seed | 0,
@@ -44,6 +47,9 @@ export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.wo
     half,
     siteElevation: WORLD.siteElevation,
     padRadius: WORLD.sitePadRadius,
+    // The flattened pad is centred on the site; the four zones are centred on the map.
+    siteX,
+    siteZ,
     blendHalfDeg: clamp(TERRAIN.blendBand, 0.02, 0.45) * 45,
   });
 }
@@ -170,7 +176,7 @@ export const ZONE_HEIGHT_FN = Object.freeze({
 
 /**
  * Elevation in metres above the datum at a world position, with the flattened
- * site pad blended in around the origin.
+ * site pad blended in around the site (`ctx.siteX`, `ctx.siteZ`).
  */
 export function heightAt(x, z, ctx) {
   const weights = sectorWeights(x, z, ctx);
@@ -179,18 +185,21 @@ export function heightAt(x, z, ctx) {
     const w = weights[zone.id];
     if (w > 0) h += w * ZONE_HEIGHT_FN[zone.id](x, z, ctx);
   }
-  const radialBlend = smoothstep(ctx.padRadius, ctx.padRadius * 2.4, Math.hypot(x, z));
+  const radialBlend = smoothstep(ctx.padRadius, ctx.padRadius * 2.4,
+    Math.hypot(x - ctx.siteX, z - ctx.siteZ));
   return lerp(ctx.siteElevation, h, radialBlend);
 }
 
 /**
  * @typedef {import('./heightfield.js').HeightField} HeightField
- * @param {{size?:number, worldSize?:number, seed?:number}} [options]
+ * @param {{size?:number, worldSize?:number, seed?:number, siteX?:number, siteZ?:number}} [options]
  * @returns {HeightField}
  */
 export function generateTerrain(options = {}) {
-  const { size = WORLD.gridSize, worldSize = WORLD.worldSize, seed = TERRAIN.seed } = options;
-  const ctx = createTerrainContext({ seed, worldSize });
+  const {
+    size = WORLD.gridSize, worldSize = WORLD.worldSize, seed = TERRAIN.seed, siteX = 0, siteZ = 0,
+  } = options;
+  const ctx = createTerrainContext({ seed, worldSize, siteX, siteZ });
   const field = new HeightField({ size, worldSize });
   return field.fillFromFunction((x, z) => heightAt(x, z, ctx));
 }
