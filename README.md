@@ -29,12 +29,12 @@ only needed for the development tools and the test suite - see
 [Development](#development).
 
 Two conveniences if you do have Node around: `npm run dev` serves the same thing
-with no-cache headers and a `/-/health` endpoint, and `npm run browser -- shot`
-takes screenshots headlessly.
+on port 8080 with no-cache headers and a `/-/health` endpoint, and
+`npm run browser -- shot` takes screenshots headlessly.
 
 If the page shows a red **"Startup failed"** banner, the banner repeats the
-browser's own error - usually a missing `vendor/three/` file (`git clone` without
-`--filter`, or a hand-edited import map).
+browser's own error. It is almost always a missing file under `vendor/three/` or
+an edited import map, and `npm run vendor` tells you which.
 
 ## What you see
 
@@ -87,7 +87,7 @@ often tilted.
 | --- | --- |
 | Drag | Orbit around the site |
 | Wheel | Zoom in / out |
-| Right-drag | Pan |
+| Right-drag or shift-drag | Pan |
 | Arrow keys | Orbit |
 | `+` / `-` | Zoom |
 | `h` | Hide the interface (press again to bring it back) |

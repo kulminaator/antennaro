@@ -7,7 +7,7 @@ changing the code.
 Everything below is enforced by tooling, not by good intentions:
 
 - `npm run vendor` - the shipped third-party bytes match their manifest.
-- `npm run lint` - syntax, layers, renderer boundary, purity, hygiene, reachability, line budgets, vendor integrity, import map, static hostability.
+- `npm run lint` - syntax, layers, renderer boundary, purity, hygiene, reachability, line budgets, test layout, vendor integrity, import map, static hostability.
 - `npm run test` - the same architecture rules as physics-like tests, plus the maths and the browser.
 
 If a rule annoys you, change the rule in `tools/lib/arch.js` (and its test) -
@@ -52,7 +52,7 @@ src/             application source, layered (see §3)
   palette.js     shared colours (renderer + DOM legend read the same table)
   main.js        composition root: build it, wire it, mount it
 tools/           CLI tools, run with node (vendor, staticserver, browser, lint, test, timebox)
-tools/lib/       tool internals (paths, args, timeouts, proc, cdp, browser, scan, arch)
+tools/lib/       tool internals (paths, args, timeout, proc, npm, scan, cdp, browser, arch)
 tests/unit/      pure Node tests, no DOM, no browser
 tests/browser/   headless-Chromium tests through CDP
 tests/harness/   browser test harness (server + browser + app session)
@@ -61,9 +61,16 @@ docs/            screenshots for README.md (regenerate with tools/browser.js)
 node_modules/    may exist from tooling experiments; nothing at runtime needs it
 ```
 
-`tools/` and `tests/` are development-only: `tools/staticserver.js` refuses to
-serve them as content types it should not hand out (see `SERVE_DENY` for the
-directories it blocks outright, which is why `.git` is safe locally).
+**Everything below the repository root is public, by design.** The dev server
+serves any file under the root except the `SERVE_DENY` prefixes (`.git`, `.tmp`,
+`.github`, `node_modules`, `.env`), and GitHub Pages would publish `tools/`,
+`tests/` and `docs/` as well. That is acceptable only because they contain no
+secrets and nothing the runtime needs - which is the rule it implies: nothing
+sensitive is ever committed at the root, and all scratch state (server pid files,
+browser profiles, screenshots under review) lives in `.tmp/`, which is ignored
+locally and denied by the server. `tools/` and `tests/` are development-only in
+the sense that no shipped file imports them; `index.html` must keep working if
+they are deleted.
 
 ## 2a. Vendored third-party code
 
@@ -151,11 +158,22 @@ No `console.log`/`console.debug`, no `debugger`, no bare `TODO` (must be
 
 ## 4. Configuration centrality
 
-Every tunable number lives in `src/config.js`: world size, terrain amplitudes,
-RF constants (including `RF.speedOfLightMps`), antenna limits, camera defaults,
-colours, timeouts. Nothing else hard-codes a physical constant or a limit.
-The UI schema and the state reducer both read the same ranges, so a slider can
-never disagree with the physics.
+Every tunable that describes the **world or the radio** lives in `src/config.js`:
+world size, terrain amplitudes and blend band, RF constants (including
+`RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, camera
+defaults, colours, path names and every timeout. The UI schema and the state
+reducer read the same ranges, so a slider can never disagree with the physics.
+
+A module may keep a local numeric constant only when it is not a knob:
+a mathematical identity (`DEG_PER_RAD`), a structural count (`SECTOR_COUNT`), a
+numerical guard (`DEGENERATE_DOT` in `aim.js`), or something purely presentational
+that nobody would ever tune from the panel (`ORBIT_SPEED`, `HUD_REFRESH_MS`). The
+two borderline cases are deliberately declared next to the maths they belong to -
+`PATTERN_FLOOR_DB` in `antenna/pattern.js` and `NEAR_FIELD_SKIP_FACTOR` in
+`propagation/coverage.js` - because moving them to config would separate a model
+from the constant that defines where the model stops being meaningful. Both are
+named, exported or commented, and pinned by tests; neither is a magic number
+inline in an expression.
 
 ## 5. Coordinates and frames
 
@@ -228,7 +246,7 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
 | `npm run vendor:bundle` | Rebuild the vendored bundle (needs network: registry + `npx esbuild`). |
 | `npm run dev` / `start` | Serve the repository root on :8080 (no-cache, `/-/health`). |
 | `npm run serve -- --port N --print-url` | Same server on another port. `stop` / `status` subcommands. |
-| `npm run browser -- doctor` | Check the Chromium binary, WebGL2 and CDP end to end. |
+| `npm run browser -- doctor` | Check the Chromium binary, the vendored three.js, CDP and WebGL2 end to end. |
 | `npm run browser -- start|status|stop --name NAME` | Drive a persistent headless Chromium. |
 | `npm run browser -- eval "EXPR" --url URL` / `shot --out f.png` | One-shot page eval / screenshot. |
 | `npm run lint` | Architecture + hygiene rules (`--verbose`, `--json`). |
@@ -245,8 +263,11 @@ Screenshots in `docs/` come from the tool, not from a human pressing PrintScreen
 node tools/browser.js shot --url http://127.0.0.1:8080/ --out docs/screenshot.png --width 1440 --height 820
 ```
 
-It waits for `window.__sim.ready` before capturing, so it cannot write a blank
-frame - that vacuous-wait bug happened once, hence the explicit readiness check.
+`shot` waits for `window.__sim.ready` - which only exists once `boot()` has
+finished - and then **refuses to write the file** if that wait times out, naming
+the URL. A readiness check that cannot fail is worse than none: an earlier version
+swallowed the timeout and produced plausible, empty screenshots that were blamed
+on the app. Every budget in this tool comes from `TIMEOUTS` as well.
 
 The static server serves the repository root, is loopback-only, sends `no-store`,
 refuses path traversal, blocks `SERVE_DENY` directories, and answers
@@ -295,7 +316,11 @@ physics or state it as a hand-written constant with a comment saying where it
 comes from.
 
 - `tests/unit/*.test.js` - plain Node (`node --test`), no DOM, no three.js.
-  Cover maths, catalogue, terrain determinism, state patches, architecture.
+  Cover maths, catalogue, terrain determinism, state patches, architecture and
+  the CLI tools (`tooling.test.js` runs every tool for real: `--help`, the static
+  server end to end, process-group termination, orphan detection).
+- `node tools/test.js` with no flags runs the **unit suite only** - that is the
+  fast loop; `--browser` or `--all` adds the slow one.
 - `tests/browser/*.test.js` - headless Chromium via CDP; drive `window.__sim`.
 - `tests/harness/app.js` - server + browser + app session with guaranteed
   teardown (`createAppSession`, `withApp`).
@@ -310,6 +335,12 @@ Architecture is tested like physics: `tests/unit/architecture.test.js` reads the
 same `tools/lib/arch.js` table that lint uses, so the rules cannot drift from
 the tests that claim to check them.
 
+Test layout is lint-enforced too: files are `*.test.js`, every test file imports
+`node:test`, the unit suite may not be empty, and a unit test that mentions
+`startBrowser(`, `CdpConnection` or `createAppSession` is rejected with "move it
+to `tests/browser/`" - the split between the two suites is what keeps the fast
+loop fast.
+
 Run one file while iterating:
 
 ```bash
@@ -320,10 +351,14 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
 ### Browser test conventions
 
 - **Never scrape DOM ids or click at coordinates.** Drive the app through
-  `window.__sim` (`state`, `patch`, `action`, `settle`, `stats`, `scene`,
-  `antenna`, `coverage`, `rssiAt`, `terrain`, `heightAt`, `rf`, `pixelStats`,
-  `controls`, `camera`, `setCamera`, `dispose`). DOM layout may change; this API
-  is the contract.
+  `window.__sim`, installed by `src/app/testapi.js` and finished by `main.js`.
+  Methods: `state`, `patch`, `action`, `settle(frames)`, `step(frames)`, `stats`,
+  `scene`, `camera`, `setCamera`, `antenna`, `coverage`, `rssiAt(x, z)`,
+  `terrain`, `heightAt(x, z)`, `rf`, `pixelStats`, `controls`, `dispose`.
+  Properties: `boot` (`{status, ...}`), `ready` (true only once boot finished -
+  the tools wait on this), `errors`, `version`, `app`. DOM layout may change;
+  this API is the contract, so anything a test needs permanently gets added here
+  rather than scraped.
 - Use `withApp(async (session) => { ... })` so the Chromium instance and the
   server are always torn down, even on a failed assertion. The session uses
   `SIM_URL` (exported by `tools/test.js`, one shared server per suite) and falls

@@ -24,6 +24,8 @@ import { numFlag, parseArgs, usage } from './lib/args.js';
 import { PATHS, ensureDir, display } from './lib/paths.js';
 import { withTimeout } from './lib/timeout.js';
 import { exitAfterFlush } from './lib/proc.js';
+import { TIMEOUTS } from '../src/config.js';
+import { vendorProblems } from './vendor.js';
 import {
   findChrome,
   findOrphanPids,
@@ -56,7 +58,7 @@ browser.js - start / stop / drive a headless Chromium through CDP
 
 async function connect(options) {
   const record = await startBrowser({ name: options.name, headless: !options.headful });
-  const cdp = await CdpConnection.connect(record.wsEndpoint, { timeoutMs: 10_000 });
+  const cdp = await CdpConnection.connect(record.wsEndpoint, { timeoutMs: TIMEOUTS.cdpCall });
   return { record, cdp };
 }
 
@@ -102,7 +104,7 @@ async function commandStart(flags) {
   });
   if (flags.url) {
     const { cdp } = await connect({ name: String(flags.name ?? 'dev') });
-    const page = await openPage(cdp, String(flags.url), { timeoutMs: 25_000 });
+    const page = await openPage(cdp, String(flags.url), { timeoutMs: TIMEOUTS.pageNavigation });
     await cdp.close();
     process.stdout.write(`opened ${flags.url} in session ${page.sessionId}\n`);
   }
@@ -143,8 +145,8 @@ async function commandOpen(flags, url) {
   if (!url) usage('open needs a URL\n\n' + USAGE_TEXT, 2);
   const name = String(flags.name ?? 'dev');
   const { cdp } = await connect({ name });
-  const page = await openPage(cdp, url, { timeoutMs: 25_000 });
-  const title = await evaluate(cdp, page.sessionId, 'document.title', { timeoutMs: 5000 }).catch(() => '');
+  const page = await openPage(cdp, url, { timeoutMs: TIMEOUTS.pageNavigation });
+  const title = await evaluate(cdp, page.sessionId, 'document.title', { timeoutMs: TIMEOUTS.cdpCall }).catch(() => '');
   await cdp.close();
   process.stdout.write(`opened ${url}\n  target=${page.targetId}\n  title=${title}\n`);
   if (page.pageErrors.length > 0) {
@@ -161,14 +163,14 @@ async function commandEval(flags, expression) {
   const name = String(flags.name ?? 'dev');
   const { cdp } = await connect({ name });
   const url = flags.url ? String(flags.url) : 'about:blank';
-  const page = await openPage(cdp, url, { timeoutMs: numFlag(flags, 'timeout', 25_000) });
+  const page = await openPage(cdp, url, { timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.pageNavigation) });
   if (flags.wait) {
     await waitForExpression(cdp, page.sessionId, expr, {
-      timeoutMs: numFlag(flags, 'timeout', 15_000),
+      timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.cdpCall),
       label: `expression ${expr}`,
     });
   }
-  const value = await evaluate(cdp, page.sessionId, expr, { timeoutMs: numFlag(flags, 'timeout', 15_000) });
+  const value = await evaluate(cdp, page.sessionId, expr, { timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.cdpCall) });
   await page.close().catch(() => {});
   await cdp.close();
   process.stdout.write(`${JSON.stringify(value, null, 2) ?? 'undefined'}\n`);
@@ -181,7 +183,7 @@ async function commandShot(flags) {
   const out = flags.out ? String(flags.out) : join(PATHS.artifacts, `shot-${Date.now()}.png`);
   ensureDir(PATHS.artifacts);
   const { cdp } = await connect({ name });
-  const page = await openPage(cdp, url, { timeoutMs: 25_000 });
+  const page = await openPage(cdp, url, { timeoutMs: TIMEOUTS.pageNavigation });
   if (flags.width || flags.height) {
     await cdp.send(
       'Emulation.setDeviceMetricsOverride',
@@ -189,15 +191,22 @@ async function commandShot(flags) {
       { sessionId: page.sessionId },
     );
   }
-  // Wait for a real boot, then force a few frames. An expression that is
-  // vacuously true while `window.__sim` is still loading would capture a blank
-  // page, so the readiness check must be able to fail.
-  await waitForExpression(cdp, page.sessionId, 'Boolean(window.__sim && window.__sim.ready)', {
-    timeoutMs: 20_000,
-    label: 'app boot before screenshot',
-  }).catch(() => false);
+  // Wait for a real boot, then force a few frames. `__sim.ready` is only set
+  // when boot() finishes, so this can fail - and it must, because capturing a
+  // page that never booted produces a plausible-looking file. Swallowing the
+  // timeout here used to write blank screenshots and blame the app.
+  try {
+    await waitForExpression(cdp, page.sessionId, 'Boolean(window.__sim && window.__sim.ready)', {
+      timeoutMs: TIMEOUTS.pageSettle,
+      label: `app boot before screenshot (${url})`,
+    });
+  } catch (error) {
+    await page.close().catch(() => {});
+    await cdp.close().catch(() => {});
+    throw new Error(`refusing to write ${display(out)}: ${error.message}`);
+  }
   await evaluate(cdp, page.sessionId, 'window.__sim && window.__sim.settle(3)').catch(() => undefined);
-  const buffer = await screenshot(cdp, page.sessionId, { timeoutMs: 20_000 });
+  const buffer = await screenshot(cdp, page.sessionId, { timeoutMs: TIMEOUTS.screenshot });
   writeFileSync(out, buffer);
   await page.close().catch(() => {});
   await cdp.close();
@@ -216,9 +225,11 @@ async function commandDoctor(flags) {
   note('chromium binary', Boolean(binary), binary ?? 'set SIM_CHROME to override autodetection');
   if (!binary) return finish(report, flags);
 
-  const threeEntry = join(PATHS.vendorThree, 'three.module.js');
-  const fs = await import('node:fs');
-  note('vendored three.js', fs.existsSync(threeEntry), `${display(threeEntry)} (run: node tools/vendor.js)`);
+  // Ask the vendor tool rather than guessing a filename: it checks the manifest,
+  // the hashes and the licence, and it is the same check lint runs.
+  const vendorIssues = vendorProblems();
+  note('vendored three.js', vendorIssues.length === 0,
+    vendorIssues.length > 0 ? `${vendorIssues[0]} (run: node tools/vendor.js)` : `${display(PATHS.vendorThree)} matches its manifest`);
 
   let record = null;
   let cdp = null;
@@ -228,8 +239,8 @@ async function commandDoctor(flags) {
     const version = await versionInfo(record.port);
     note('cdp http', Boolean(version), version ? `${version.browser} protocol ${version.protocolVersion}` : 'no answer');
 
-    cdp = await CdpConnection.connect(record.wsEndpoint, { timeoutMs: 10_000 });
-    const page = await openPage(cdp, 'about:blank', { timeoutMs: 15_000 });
+    cdp = await CdpConnection.connect(record.wsEndpoint, { timeoutMs: TIMEOUTS.cdpCall });
+    const page = await openPage(cdp, 'about:blank', { timeoutMs: TIMEOUTS.pageNavigation });
     const probe = await evaluate(cdp, page.sessionId, `(() => {
       const canvas = document.createElement('canvas');
       const gl = canvas.getContext('webgl2');
@@ -241,7 +252,7 @@ async function commandDoctor(flags) {
         maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
         userAgent: navigator.userAgent,
       };
-    })()`, { timeoutMs: 15_000 });
+    })()`, { timeoutMs: TIMEOUTS.pageSettle });
     note('webgl2', Boolean(probe?.webgl2), probe?.renderer ?? 'no WebGL2 context');
     await page.close().catch(() => {});
     await cdp.close();
