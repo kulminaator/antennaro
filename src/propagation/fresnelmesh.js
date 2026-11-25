@@ -26,7 +26,7 @@ const UP = new THREE.Vector3(0, 0, 1);
 export function createFresnelMesh(scene) {
   const geometry = new THREE.BufferGeometry();
   const material = new THREE.MeshBasicMaterial({
-    colour: fresnelVolumeHex(),
+    color: fresnelVolumeHex(), // three.js spells material properties with an o
     transparent: true,
     opacity: FRESNEL.opacity,
     depthWrite: false,

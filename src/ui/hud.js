@@ -7,7 +7,7 @@
  * reinterpret anything.
  */
 
-import { coverageLegendItems } from '../palette.js';
+import { coverageLegendItems, fresnelZoneLegendItems } from '../palette.js';
 import { SECTOR_LABELS } from '../propagation/coverage.js';
 import { formatDb } from '../math/scalar.js';
 
@@ -26,6 +26,7 @@ const STAT_ROWS = Object.freeze([
   Object.freeze({ key: 'median', label: 'Median RSSI' }),
   Object.freeze({ key: 'worst', label: 'Worst RSSI' }),
   Object.freeze({ key: 'blocked', label: 'Shadowed cells' }),
+  Object.freeze({ key: 'fresnel', label: 'First Fresnel zone' }),
 ]);
 
 function el(tag, className, text) {
@@ -45,7 +46,8 @@ export function createHud(options) {
   const cells = new Map();
   /** @type {Map<string, HTMLElement>} */
   const sectors = new Map();
-  let legendList = null;
+  const legendList = el('ul', 'hud-legend');
+  let legendTitle = null;
 
   const headline = el('div', 'hud-headline', 'Ready');
   const subtitle = el('div', 'hud-subtitle', '');
@@ -74,7 +76,6 @@ export function createHud(options) {
     sectorTable.appendChild(tr);
   }
 
-  legendList = el('ul', 'hud-legend');
   const notes = el('p', 'hud-notes', '');
   const perf = el('p', 'hud-perf', '');
 
@@ -85,7 +86,8 @@ export function createHud(options) {
   card.appendChild(statsList);
   card.appendChild(el('h3', 'hud-subtitle', 'Link availability by direction'));
   card.appendChild(sectorTable);
-  card.appendChild(el('h3', 'hud-subtitle', 'Coverage legend'));
+  legendTitle = el('h3', 'hud-subtitle', 'Coverage legend');
+  card.appendChild(legendTitle);
   card.appendChild(legendList);
   card.appendChild(notes);
   card.appendChild(perf);
@@ -96,9 +98,12 @@ export function createHud(options) {
     if (node) node.textContent = text;
   }
 
-  function renderLegend(coverage) {
+  function renderLegend(coverage, zoneView) {
+    // The legend describes the pixels beneath it, so it changes when the drape does.
+    legendTitle.textContent = zoneView ? 'Fresnel zone legend' : 'Coverage legend';
+    const items = zoneView ? fresnelZoneLegendItems(coverage.stats) : coverageLegendItems(coverage);
     legendList.replaceChildren();
-    for (const item of coverageLegendItems(coverage)) {
+    for (const item of items) {
       const li = el('li', 'legend-item');
       const swatch = el('span', 'legend-swatch');
       swatch.style.background = item.colour;
@@ -139,6 +144,11 @@ export function createHud(options) {
     set('median', `${formatDb(cov.medianDbm)} dBm`);
     set('worst', `${formatDb(cov.worstDbm)} dBm`);
     set('blocked', `${cov.blockedPct.toFixed(1)} % (> 6 dB diffracted)`);
+    // The zone verdict next to the decibels, because that is the whole point of it:
+    // cells that make the budget with the zone cut are links that work on paper.
+    set('fresnel', `${cov.fresnelClearPct.toFixed(1)} % clear - `
+      + `${cov.fresnelObstructedLinkedCells} linked with the zone cut - `
+      + `worst ${cov.worstClearance.toFixed(1)} r1 @ ${cov.worstClearanceDistanceM.toFixed(0)} m`);
 
     for (const sector of cov.sectors) {
       const row = sectors.get(sector.label);
@@ -147,7 +157,7 @@ export function createHud(options) {
       row.range.textContent = sector.maxRangeM > 0 ? `${sector.maxRangeM.toFixed(0)} m` : '-';
     }
 
-    renderLegend(coverage);
+    renderLegend(coverage, state.display?.showFresnel === true);
     notes.textContent = 'Antenna hardware is drawn enlarged to stay visible; the mast is true scale. '
       + 'Free space + terrain diffraction only: no clutter, vegetation, multipath or receiver noise figure.';
     if (view) {

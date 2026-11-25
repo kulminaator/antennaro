@@ -97,6 +97,8 @@ export function computeCoverage(options) {
   let evaluatedCells = 0;
   let blockedCells = 0;
   let fresnelClearCells = 0;
+  let fresnelPartialCells = 0;
+  let fresnelCutCells = 0;
   let fresnelObstructedLinkedCells = 0;
   let worstClearance = Infinity;
   let worstClearanceDistanceM = 0;
@@ -152,6 +154,8 @@ export function computeCoverage(options) {
     if (value < worstDbm) worstDbm = value;
     if (obstruction > 6) blockedCells += 1;
     if (zoneClear) fresnelClearCells += 1;
+    else if (ratio > 0) fresnelPartialCells += 1;
+    else fresnelCutCells += 1;
     if (!zoneClear && value >= rxSensitivityDbm) fresnelObstructedLinkedCells += 1;
     if (ratio < worstClearance) {
       worstClearance = ratio;
@@ -186,6 +190,9 @@ export function computeCoverage(options) {
     /** Evaluated cells whose first Fresnel zone meets the clearance criterion. */
     fresnelClearCells,
     fresnelClearPct: evaluatedCells === 0 ? 0 : (100 * fresnelClearCells) / evaluatedCells,
+    /** The three buckets the zone colour ramp paints, mutually exclusive and total. */
+    fresnelPartialCells,
+    fresnelCutCells,
     /** Cells that make the link budget and still have the zone cut: links that work
         on paper and misbehave in the field. */
     fresnelObstructedLinkedCells,

@@ -103,20 +103,32 @@ export function fresnelZoneRgb(clearanceRatio, out = null) {
 
 /**
  * Legend rows for the zone view. The assumptions are part of the label: a clearance
- * figure without them is not a claim anyone can check.
+ * figure without them is not a claim anyone can check, and the receiver height is a
+ * slider, so the number shown is the one the counts were computed with.
  */
-export function fresnelZoneLegendItems() {
+export function fresnelZoneLegendItems(stats = {}) {
+  const rxHeightM = Number.isFinite(stats.fresnelRxHeightM)
+    ? stats.fresnelRxHeightM
+    : RF.fresnelRxHeightM;
+  const fraction = Number.isFinite(stats.fresnelClearFraction) ? stats.fresnelClearFraction : RF.fresnelClearFraction;
   return [
-    { band: 0, colour: rgbToHex(ZONE_CUT), label: 'zone cut: ground reaches the ray' },
+    {
+      band: 0,
+      colour: rgbToHex(ZONE_CUT),
+      label: 'zone cut: ground reaches the ray',
+      count: stats.fresnelCutCells ?? 0,
+    },
     {
       band: 1,
       colour: rgbToHex(ZONE_PARTIAL),
-      label: `partly cut: under ${Math.round(RF.fresnelClearFraction * 100)}% of the first zone clear`,
+      label: `partly cut: under ${Math.round(fraction * 100)}% of the first zone clear`,
+      count: stats.fresnelPartialCells ?? 0,
     },
     {
       band: 2,
       colour: rgbToHex(ZONE_CLEAR),
-      label: `clear: judged to a terminal ${RF.fresnelRxHeightM} m above the ground`,
+      label: `clear: judged to a terminal ${rxHeightM} m above the ground`,
+      count: stats.fresnelClearCells ?? 0,
     },
   ];
 }

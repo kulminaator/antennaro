@@ -104,6 +104,33 @@ export function installTestApi(options) {
         band: coverage.level[index],
         distanceM: coverage.distanceM[index],
         obstructionDb: coverage.obstructionDb[index],
+        fresnelClearanceRatio: coverage.fresnelClearance[index],
+        fresnelClear: coverage.fresnelClear[index] === 1,
+      };
+    },
+    /**
+     * The first Fresnel zone in one object: the criterion and the assumption the
+     * numbers are stated for, the three buckets the colour ramp paints, the worst
+     * offender, and what the drawn volume is doing. Same source as the HUD row.
+     */
+    fresnel: () => {
+      const stats = controller.coverageStats();
+      if (!stats) return null;
+      const info = controller.fresnelInfo();
+      return {
+        clearFraction: stats.fresnelClearFraction,
+        rxHeightM: stats.fresnelRxHeightM,
+        clearCells: stats.fresnelClearCells,
+        partialCells: stats.fresnelPartialCells,
+        cutCells: stats.fresnelCutCells,
+        evaluatedCells: stats.evaluatedCells,
+        clearPct: stats.fresnelClearPct,
+        linkedCells: stats.linkedCells,
+        obstructedLinkedCells: stats.fresnelObstructedLinkedCells,
+        worstClearance: stats.worstClearance,
+        worstClearanceDistanceM: stats.worstClearanceDistanceM,
+        volume: { visible: info.visible, vertices: info.vertices },
+        link: info.link,
       };
     },
     terrain: () => controller.terrainField().stats(),

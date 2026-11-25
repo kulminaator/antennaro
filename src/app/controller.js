@@ -289,6 +289,15 @@ export function createController(options) {
     coverageStats: reports.coverageStats,
     antennaSummary: reports.antennaSummary,
     rf: reports.rf,
+    /** What the drawn Fresnel volume is: visibility, vertex count, its reference link. */
+    fresnelInfo: () => {
+      const attribute = fresnel.mesh.geometry.getAttribute('position');
+      return {
+        visible: fresnel.mesh.visible,
+        vertices: attribute ? attribute.count : 0,
+        link: reports.fresnelLink(),
+      };
+    },
     cameraState: () => viewport.cameraState(),
     setCamera: (next) => viewport.setCamera(next),
     grabSite: () => relocator.beginAtSite(),
