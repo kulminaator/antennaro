@@ -56,3 +56,9 @@ into `STATE_FIELDS`, new tunables into `src/config.js`, new modules into
 
 <!-- Globally important findings discovered during execution are appended here
      as bullet points. This section starts empty and is append-only. -->
+
+- `tests/unit/state.test.js` holds a completeness invariant — *every key in
+  `STATE_FIELDS` must have a widget in `buildPanel()`*. So the field-table step,
+  the reducer step and the panel step cannot each end with a green unit suite:
+  the unit suite is expected to be red from step-002 until step-004 lands, and
+  only then is `npm run test:unit` the gate again.

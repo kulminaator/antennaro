@@ -42,3 +42,11 @@ from one table entry.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Adding the fields is enough for `npm run lint` (ok), but it turns the **unit
+  suite red** until step-004: `tests/unit/state.test.js`
+  `schema: the panel exposes every control declared in STATE_FIELDS` asserts that
+  every `STATE_FIELDS` key has a widget, and `site.x` / `site.z` get theirs in
+  step-004 (their values also need `state.site` from step-003). Verified the
+  failure is exactly that one assertion (16/17 tests in the file pass); nothing
+  else in the unit suite changed behaviour.

@@ -28,6 +28,18 @@ export const STATE_FIELDS = Object.freeze([
     hint: 'Height of the phase centre above the ground at the site.',
   }),
   Object.freeze({
+    key: 'site.x', path: ['site', 'x'], label: 'Site east offset', kind: 'range',
+    min: ANTENNA.siteLimitsM.min, max: ANTENNA.siteLimitsM.max, step: ANTENNA.siteStepM, unit: 'm',
+    group: 'Placement', impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
+    hint: 'Move the pad and the mast east (+X); negative is west. The flat pad and the coverage move with it.',
+  }),
+  Object.freeze({
+    key: 'site.z', path: ['site', 'z'], label: 'Site south offset', kind: 'range',
+    min: ANTENNA.siteLimitsM.min, max: ANTENNA.siteLimitsM.max, step: ANTENNA.siteStepM, unit: 'm',
+    group: 'Placement', impact: [RECOMPUTE.TERRAIN, RECOMPUTE.COVERAGE],
+    hint: 'Move the pad and the mast south (+Z); negative is north, towards the mountain.',
+  }),
+  Object.freeze({
     key: 'aim.azimuthDeg', path: ['aim', 'azimuthDeg'], label: 'Azimuth', kind: 'range',
     min: ANTENNA.azimuthLimitsDeg.min, max: ANTENNA.azimuthLimitsDeg.max, step: 1, unit: 'deg',
     group: 'Placement', impact: [RECOMPUTE.ANTENNA, RECOMPUTE.COVERAGE],
