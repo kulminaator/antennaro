@@ -53,8 +53,10 @@ export function createController(options) {
   });
   const orbit = createOrbitControls({ domElement: options.canvas, viewport });
 
-  let field = generateTerrain({ size: state.gridSize, worldSize: state.worldSize, seed: state.seed });
-  let fieldSignature = `${field.size}:${field.worldSize}:${state.seed}`;
+  let field = generateTerrain({
+    size: state.gridSize, worldSize: state.worldSize, seed: state.seed, siteX: state.site.x, siteZ: state.site.z,
+  });
+  let fieldSignature = terrainSignature();
   const mapObjects = createMapObjects(field, viewport);
   const rig = createAntennaRig();
   viewport.add(rig.group);
@@ -63,19 +65,31 @@ export function createController(options) {
   let model = null;
   /** @type {ReturnType<typeof computeCoverage>|null} */
   let coverage = null;
-  let site = resolveSite(field, { heightM: state.heightM });
+  let site = currentSite();
 
   const dirty = { terrain: true, antenna: true, coverage: true };
   let lastCoverageMs = 0;
 
+  /** Everything the height field depends on - including where the pad sits. */
+  function terrainSignature() {
+    return `${state.gridSize}:${state.worldSize}:${state.seed}:${state.site.x}:${state.site.z}`;
+  }
+
+  /** The mast's footprint: the state's site position on the current ground. */
+  function currentSite() {
+    return resolveSite(field, { x: state.site.x, z: state.site.z, heightM: state.heightM });
+  }
+
   function rebuildTerrain() {
-    const signature = `${state.gridSize}:${state.worldSize}:${state.seed}`;
+    const signature = terrainSignature();
     if (signature !== fieldSignature) {
-      field = generateTerrain({ size: state.gridSize, worldSize: state.worldSize, seed: state.seed });
+      field = generateTerrain({
+        size: state.gridSize, worldSize: state.worldSize, seed: state.seed, siteX: state.site.x, siteZ: state.site.z,
+      });
       fieldSignature = signature;
       mapObjects.refresh(field, viewport);
     }
-    site = resolveSite(field, { heightM: state.heightM });
+    site = currentSite();
     rig.place(model, site);
     bus.emit(EVENTS.TERRAIN_REBUILT, { size: field.size, stats: field.stats() });
   }
@@ -87,14 +101,14 @@ export function createController(options) {
       aim: state.aim,
       wavelength: wavelengthM(resolveFrequencyHz(state.frequencyKey)),
     });
-    site = resolveSite(field, { heightM: state.heightM });
+    site = currentSite();
     rig.setModel(model, site);
     bus.emit(EVENTS.ANTENNA_REBUILT, model.summary());
   }
 
   function recomputeCoverage() {
     if (!model) return;
-    site = resolveSite(field, { heightM: state.heightM });
+    site = currentSite();
     coverage = computeCoverage({
       field,
       site,
@@ -215,7 +229,7 @@ export function createController(options) {
         return { ok: true, seed };
       }
       case 'reset-view':
-        viewport.resetCamera();
+        viewport.resetCamera({ x: site.x, y: site.groundY, z: site.z });
         return { ok: true };
       case 'save-png':
         return savePng();
@@ -252,6 +266,7 @@ export function createController(options) {
       ...viewport.info(),
       terrainVertices: mapObjects.terrain.surface.geometry.attributes.position.count,
       terrainGrid: field.size,
+      sitePosition: [site.x, site.z],
       terrainStats: field.stats(),
       antennaParts: rigInfo.parts,
       antennaVisualScale: rigInfo.visualScale,

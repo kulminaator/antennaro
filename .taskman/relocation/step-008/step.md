@@ -79,3 +79,16 @@ mast, recomputes coverage, and `scene().sitePosition` reports it.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `node tools/staticserver.js start` (and therefore `npm run serve`) runs in the
+  **foreground**, so the verification snippet in this step must background it and
+  stop it afterwards:
+  `(setsid node tools/staticserver.js start --port 8123 --quiet >/dev/null 2>&1 &)` …
+  `node tools/staticserver.js stop`. Running it plainly just hangs the shell.
+- Per GUIDELINES.md §10, wrap every manual `tools/browser.js` / server invocation
+  in `node tools/timebox.js -t N -- …`; `tools/browser.js eval` otherwise keeps a
+  persistent browser (`--name dev`) alive — finish with `node tools/browser.js stop`
+  and confirm with `node tools/browser.js status --all`.
+- Measured on this machine: `generateTerrain` 161×161 ≈ 33 ms, `computeCoverage` ≈
+  69 ms — so a relocation commits in ~100 ms of work, which is the budget the drag
+  throttle in step-012 has to respect.

@@ -92,8 +92,17 @@ export function createViewport(options) {
     return { ...state };
   }
 
-  function resetCamera() {
-    state = { ...DEFAULT_STATE };
+  /**
+   * Back to the start view. `center` overrides the look-at point, so a view can
+   * be recentred on a relocated site; without it the map centre is used.
+   */
+  function resetCamera(center = {}) {
+    state = {
+      ...DEFAULT_STATE,
+      targetX: Number.isFinite(center.x) ? center.x : DEFAULT_STATE.targetX,
+      targetY: Number.isFinite(center.y) ? center.y : DEFAULT_STATE.targetY,
+      targetZ: Number.isFinite(center.z) ? center.z : DEFAULT_STATE.targetZ,
+    };
     applyCamera();
   }
 

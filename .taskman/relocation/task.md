@@ -62,3 +62,7 @@ into `STATE_FIELDS`, new tunables into `src/config.js`, new modules into
   the reducer step and the panel step cannot each end with a green unit suite:
   the unit suite is expected to be red from step-002 until step-004 lands, and
   only then is `npm run test:unit` the gate again.
+- `node tools/staticserver.js start` / `npm run serve` is **foreground**, and
+  `node tools/browser.js eval` leaves a persistent browser behind: every manual
+  verification in this task must background the server, stop both afterwards, and
+  run under `node tools/timebox.js -t N -- …` (see step-008 comments).
