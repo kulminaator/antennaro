@@ -1,0 +1,31 @@
+{
+  "package": "three",
+  "version": "0.187.0",
+  "artifact": {
+    "three.module.min.js": {
+      "bytes": 749104,
+      "sha256": "9f2d0c0657a75f4ddf9db1bffd9dc0bfcfe54aff890affc31826295e5e2790d4"
+    }
+  },
+  "license": {
+    "file": "LICENSE.txt",
+    "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc"
+  },
+  "sources": {
+    "build/three.module.js": {
+      "bytes": 658900,
+      "sha256": "104f56145899722094556490d787aae0617cc2fc3382f31df02d724ea1aee341"
+    },
+    "build/three.core.js": {
+      "bytes": 1474799,
+      "sha256": "613e370f76638fdef83926642bf256dc9615684922de1ce1f63a8583e5d78578"
+    }
+  },
+  "bundler": {
+    "name": "esbuild",
+    "version": "0.28.2",
+    "command": "npx --yes esbuild@0.28.2 build/three.module.js --bundle --format=esm --minify --legal-comments=none --target=es2020"
+  },
+  "importedAs": "three",
+  "builtAt": "2026-11-25T14:28:49.495Z"
+}

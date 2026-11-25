@@ -1,0 +1,25 @@
+{
+  "name": "antenna-terrain-sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-based simulator for exploring how different antenna designs radiate over 3D terrain.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "serve": "node tools/staticserver.js",
+    "dev": "node tools/staticserver.js --port 8080",
+    "start": "node tools/staticserver.js --port 8080",
+    "vendor": "node tools/vendor.js",
+    "vendor:bundle": "node tools/vendor.js bundle",
+    "lint": "node tools/lint.js",
+    "test": "node tools/test.js --all",
+    "test:unit": "node tools/test.js --unit",
+    "test:browser": "node tools/test.js --browser",
+    "verify": "node tools/vendor.js && node tools/lint.js && node tools/test.js --all",
+    "browser": "node tools/browser.js",
+    "timebox": "node tools/timebox.js"
+  }
+}

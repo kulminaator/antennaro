@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-app="antenna-terrain-sim">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Interactive 3D simulator: point a chosen antenna design at terrain and see where the link budget holds."
+    />
+    <title>Antenna &amp; Terrain Simulator</title>
+    <link rel="stylesheet" href="assets/app.css" />
+
+    <script>
+      // Boot guard: runs before any module is fetched so import/parse failures are
+      // still visible to a human and to the browser test harness.
+      window.__simBoot = { status: 'booting', startedAt: Date.now() };
+      window.__simErrors = [];
+      function reportBootError(message, source, lineno) {
+        window.__simErrors.push({ message: String(message), source: source || '', line: lineno || 0, at: Date.now() });
+        window.__simBoot = { status: 'error', message: String(message), at: Date.now() };
+        const banner = document.getElementById('boot-error');
+        if (banner) {
+          banner.hidden = false;
+          banner.textContent = 'Startup failed: ' + message;
+        }
+      }
+      window.addEventListener('error', (event) => {
+        reportBootError(event.message || event.error, event.filename, event.lineno);
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        reportBootError((event.reason && event.reason.message) || event.reason);
+      });
+    </script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.min.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="panel" class="panel" aria-label="Simulation controls"></aside>
+
+      <main class="stage">
+        <canvas id="scene" aria-label="3D terrain view"></canvas>
+        <header class="stage-head">
+          <h1>Antenna &amp; Terrain Simulator</h1>
+          <p>Five designs, four kinds of ground, one question: where does the link actually hold?</p>
+        </header>
+        <div id="hud" class="hud" aria-live="polite"></div>
+      </main>
+    </div>
+
+    <div id="boot-error" class="boot-error" hidden></div>
+
+    <noscript>
+      <p class="boot-error">This simulator needs JavaScript and WebGL. Nothing here works without them.</p>
+    </noscript>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

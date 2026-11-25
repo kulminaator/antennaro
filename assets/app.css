@@ -1,0 +1,322 @@
+/* Antenna & Terrain Simulator - presentation only.
+   No layout logic belongs in JS; no colours are hard-coded in JS except the
+   shared ramps in src/ui/colours.js. */
+
+:root {
+  --bg: #0d1117;
+  --bg-panel: #151b24;
+  --bg-card: rgba(21, 27, 36, 0.9);
+  --line: #253040;
+  --text: #e6edf3;
+  --text-dim: #9aa8b8;
+  --accent: #63b3ed;
+  --radius: 10px;
+  --panel-width: 330px;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#app {
+  display: grid;
+  grid-template-columns: var(--panel-width) 1fr;
+  height: 100%;
+  min-height: 100vh;
+}
+
+body.ui-hidden .panel,
+body.ui-hidden .hud,
+body.ui-hidden .stage-head {
+  visibility: hidden;
+}
+
+/* ---------- control panel ---------- */
+
+.panel {
+  border-right: 1px solid var(--line);
+  background: var(--bg-panel);
+  padding: 14px 14px 40px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 12px 14px;
+  margin-bottom: 14px;
+}
+
+.group-title {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.group-note {
+  margin: 0 0 12px;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.field {
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+}
+
+.field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.field-label {
+  color: var(--text);
+}
+
+.field-value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+input[type='range']:disabled {
+  opacity: 0.4;
+}
+
+select {
+  width: 100%;
+  background: #101620;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.field-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-toggle input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn {
+  background: #1b2531;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 6px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- stage ---------- */
+
+.stage {
+  position: relative;
+  overflow: hidden;
+}
+
+#scene {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+#scene:active {
+  cursor: grabbing;
+}
+
+.stage-head {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  pointer-events: none;
+}
+
+.stage-head h1 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.stage-head p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+
+/* ---------- hud ---------- */
+
+.hud {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: min(330px, 40vw);
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.hud-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  backdrop-filter: blur(3px);
+}
+
+.hud-headline {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.hud-subtitle {
+  margin: 2px 0 10px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.hud-stats {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  margin: 0 0 12px;
+  font-size: 0.76rem;
+}
+
+.hud-stats dt {
+  color: var(--text-dim);
+}
+
+.hud-stats dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-sectors {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  margin-bottom: 12px;
+}
+
+.hud-sectors th,
+.hud-sectors td {
+  padding: 1px 4px;
+  text-align: right;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-sectors th:first-child {
+  text-align: left;
+  color: var(--text-dim);
+}
+
+.hud-legend {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  font-size: 0.72rem;
+}
+
+.legend-item {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-count {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-notes,
+.hud-perf {
+  margin: 6px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.boot-error {
+  position: fixed;
+  inset: auto 16px 16px 16px;
+  background: #5a1e1e;
+  color: #ffe4e4;
+  border: 1px solid #a04040;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  z-index: 20;
+}
+
+@media (max-width: 880px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .panel {
+    order: 2;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    max-height: 45vh;
+  }
+
+  .hud {
+    width: min(320px, 60vw);
+  }
+}

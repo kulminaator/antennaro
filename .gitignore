@@ -1,0 +1,10 @@
+# Development-only artefacts. The application itself is committed whole:
+# index.html, assets/, src/ and vendor/ must be enough to serve a clone as it is.
+node_modules/
+.tmp/
+*.log
+.DS_Store
+
+# There is nothing to lock: the project has no dependencies, and third-party
+# code is vendored under vendor/ with its own manifest and hashes.
+package-lock.json
