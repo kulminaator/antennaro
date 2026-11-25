@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { TERRAIN, WORLD } from '../../src/config.js';
 import { approxEqual } from '../../src/math/scalar.js';
 import {
-  ZONES, ZONE_HEIGHT_FN, ZONE_LAYOUT, createTerrainContext, generateTerrain, heightAt, naturalHeightAt,
+  ZONES, ZONE_HEIGHT_FN, ZONE_LAYOUT, createTerrainContext, generateTerrain, heightAt,
   profileAlong, sectorWeights,
   zoneAt,
 } from '../../src/terrain/generators.js';
@@ -101,60 +101,61 @@ test('terrain: generation is deterministic and seed-sensitive', () => {
   assert.ok(Math.abs(direct - probe) < 3, `direct query ${direct.toFixed(2)} vs grid ${probe.toFixed(2)}`);
 });
 
-test('terrain: the site pad is flat so the mast does not float', () => {
-  const pad = WORLD.sitePadRadius;
-  const level = heightAt(0, 0, ctx);
-  for (const [x, z] of [[0, 0], [pad * 0.5, 0], [0, -pad * 0.7], [-pad * 0.9, pad * 0.2]]) {
-    assert.ok(approxEqual(heightAt(x, z, ctx), level, 1e-6), `pad point (${x}, ${z}) is level`);
+test('terrain: the mast foot is the drawn ground, wherever the ground is', () => {
+  // No graded platform, so the only promise is the important one: the foot of the
+  // mast is the surface the mesh draws and the grid samples, at the map centre and
+  // in the roughest places alike, and the phase centre sits heightM above it.
+  const spots = [
+    { label: 'map centre', x: 0, z: 0 },
+    { label: 'ridge shoulder', x: 365, z: -400 },
+    { label: 'mountain', x: 0, z: -900 },
+    { label: 'valley floor', x: 0, z: 900 },
+    { label: 'corner', x: -800, z: -800 },
+    { label: 'east edge', x: 1100, z: 200 },
+  ];
+  for (const spot of spots) {
+    const site = resolveSite(field, { x: spot.x, z: spot.z, heightM: 10 });
+    assert.ok(approxEqual(site.groundY, field.sample(spot.x, spot.z), 1e-9),
+      `${spot.label}: the mast floats ${site.groundY - field.sample(spot.x, spot.z)} m off the grid`);
+    assert.ok(approxEqual(site.groundY, heightAt(spot.x, spot.z, ctx), 2),
+      `${spot.label}: the grid's bilinear sample drifts from the analytic surface`);
+    assert.ok(approxEqual(site.y, site.groundY + 10, 1e-9), `${spot.label}: the mast is not 10 m tall`);
   }
-  const outside = heightAt(pad * 3, 0, ctx);
-  assert.ok(Math.abs(outside - level) > 0.5, `outside the pad the real ground takes over (${outside} m)`);
-  // Continuity: crossing the pad edge must not create a step bigger than the
-  // local gradient over the same distance.
-  const inner = heightAt(pad * 0.98, 0, ctx);
-  const outer = heightAt(pad * 1.02, 0, ctx);
-  assert.ok(Math.abs(inner - outer) < 1, `pad edge step is ${(outer - inner).toFixed(3)} m`);
+  // Relief is real: the same map holds ground 200 m apart by hundreds of metres.
+  const high = resolveSite(field, { x: 0, z: -900 });
+  const low = resolveSite(field, { x: 0, z: 900 });
+  assert.ok(high.groundY > low.groundY + 100,
+    `the mountain (${high.groundY.toFixed(0)} m) and the valley floor (${low.groundY.toFixed(0)} m) collapsed into each other`);
 });
 
-test('terrain: the pad is cut level with the ground the mast stands on', () => {
-  // Two bugs this pins, both from grading the pad to something other than the
-  // ground under the mast: a fixed datum buries the mast on a hilltop and puts it
-  // on a pedestal in the valley; averaging the surrounding ground (worse over the
-  // wide blend reach) lets a ridge flank lift the platform tens of metres above
-  // the ground beside it, so the hillside appears to grow sideways under it.
-  const pad = WORLD.sitePadRadius;
-  const spots = Object.entries({
-    'ridge corner': { x: 500, z: -600 },
-    'ridge corner W': { x: -500, z: -600 },
-    'high ground': { x: 0, z: -900 },
-    'valley floor': { x: 0, z: 900 },
-    'map centre': { x: 0, z: 0 },
+test('terrain: the ground does not depend on where the mast stands', () => {
+  // The regression this pins: a flattened site pad under the antenna reshaped the
+  // map, so dragging the mast lifted a hillside by up to 99.7 m next to a ridge and
+  // the coverage shadow moved with it. The height field is the four zones and
+  // nothing else, so a site position must not be able to enter it at all.
+  const withMastOnTheRidge = generateTerrain({ seed: TERRAIN.seed, siteX: 365, siteZ: -400 });
+  const withMastAtTheCentre = generateTerrain({ seed: TERRAIN.seed });
+  let worst = 0;
+  withMastOnTheRidge.forEachCell((x, z, h, i) => {
+    worst = Math.max(worst, Math.abs(h - withMastAtTheCentre.heights[i]));
   });
-  for (const [label, spot] of spots) {
-    const placed = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: spot.x, siteZ: spot.z });
-    const ground = naturalHeightAt(spot.x, spot.z, placed);
-    assert.ok(approxEqual(placed.padElevation, ground, 1e-9), `${label}: pad sits ${placed.padElevation - ground} m off the ground`);
-    assert.ok(approxEqual(heightAt(spot.x, spot.z, placed), ground, 1e-9), `${label}: the mast is not on the ground`);
-    assert.ok(approxEqual(heightAt(spot.x + pad * 0.9, spot.z - pad * 0.4, placed), ground, 1e-9), `${label}: the platform is not level`);
+  assert.equal(worst, 0, 'placing the mast changed the ground');
 
-    // A bench, not a landform: within the flat disc the pad may only differ from
-    // the natural surface by the relief that is already there.
-    let low = Infinity;
-    let high = -Infinity;
-    for (let a = 0; a < 16; a += 1) {
-      for (const r of [pad * 0.5, pad]) {
-        const ring = naturalHeightAt(spot.x + r * Math.cos((a / 16) * Math.PI * 2),
-          spot.z + r * Math.sin((a / 16) * Math.PI * 2), placed);
-        low = Math.min(low, ring);
-        high = Math.max(high, ring);
-      }
-    }
-    assert.ok(ground >= low - 1e-9 && ground <= high + 1e-9,
-      `${label}: ground at the mast ${ground.toFixed(0)} m, ground around it ${low.toFixed(0)}..${high.toFixed(0)} m`);
+  // Same through the pure function, on any spot: the ridge keeps its cliff.
+  const ridge = { x: 365, z: -400 };
+  for (const site of [{ siteX: 0, siteZ: 0 }, ridge]) {
+    const placed = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, ...site });
+    assert.ok(approxEqual(heightAt(ridge.x, ridge.z, placed), heightAt(ridge.x, ridge.z, ctx), 1e-9));
   }
-  // High ground stays high: one fixed number for every pad is a valley number.
-  const hill = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: 0, siteZ: -900 });
-  assert.ok(hill.padElevation > 100, `a mountaintop pad should be up the mountain, got ${hill.padElevation.toFixed(0)} m`);
+  const shoulder = heightAt(ridge.x, ridge.z, ctx);
+  const below = heightAt(ridge.x + 60, ridge.z, ctx);
+  assert.ok(below < shoulder - 40,
+    `the ridge flattened itself: mast ground ${shoulder.toFixed(0)} m, ground 60 m east ${below.toFixed(0)} m`);
+
+  // Relocating the antenna does not relocate the mountain.
+  const moved = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: 400, siteZ: -260 });
+  assert.equal(zoneAt(0, -700, moved), ZONES.MOUNTAIN, 'the zones stay keyed to the map centre');
+  assert.equal(zoneAt(400 + 700, -260, moved), ZONES.FLAT, 'east of the old centre is still the flat field');
 });
 
 test('terrain: the valley channel stays south of the site instead of cutting the map', () => {
@@ -169,20 +170,23 @@ test('terrain: the valley channel stays south of the site instead of cutting the
   // And in the south it is still the valley the README describes: a floor with
   // raised rims either side of it.
   assert.ok(valley(0, 900, ctx) < valley(500, 900, ctx) - 20, 'the southern valley stopped being a valley');
-  const floor = naturalHeightAt(0, 900, ctx);
-  const rim = Math.max(naturalHeightAt(350, 900, ctx), naturalHeightAt(-350, 900, ctx));
-  const outside = naturalHeightAt(900, 900, ctx);
+  const floor = heightAt(0, 900, ctx);
+  const rim = Math.max(heightAt(350, 900, ctx), heightAt(-350, 900, ctx));
+  const outside = heightAt(900, 900, ctx);
   assert.ok(rim > floor + 20, `valley floor ${floor.toFixed(0)} m should be well below its rim ${rim.toFixed(0)} m`);
   assert.ok(rim > outside, `the rim (${rim.toFixed(0)} m) should stand above the ground beyond it (${outside.toFixed(0)} m)`);
-  // The site at the centre no longer sits in a pothole that has to be filled in.
-  assert.ok(Math.abs(ctx.padElevation) < 20, `the pad at the map centre needs a ${ctx.padElevation.toFixed(0)} m fill`);
+  // North of the centre there is no trench to grade away: the channel fades out
+  // before it reaches the middle of the map.
+  const northOfCentre = heightAt(0, -400, ctx);
+  assert.ok(northOfCentre > floor + 20,
+    `the valley still cuts ${(-400).toFixed(0)} m north of the centre: ${northOfCentre.toFixed(0)} m vs a ${floor.toFixed(0)} m floor`);
 });
 
 test('terrain: profileAlong walks outward from the origin', () => {
   const profile = profileAlong(field, 45, { steps: 10 });
   assert.equal(profile.length, 11);
   assert.equal(profile[0].distance, 0);
-  assert.ok(approxEqual(profile[0].y, heightAt(0, 0, ctx), 1e-4), 'the profile starts on the pad the grid baked');
+  assert.ok(approxEqual(profile[0].y, heightAt(0, 0, ctx), 1e-4), 'the profile starts on the ground the grid baked');
   for (let i = 1; i < profile.length; i += 1) {
     assert.ok(profile[i].distance > profile[i - 1].distance, 'distances increase');
     assert.equal(profile[i].y, field.sample(profile[i].x, profile[i].z), 'samples agree with the grid');
@@ -227,28 +231,4 @@ test('site: rangeFromSite reports metres and compass bearing', () => {
   assert.ok(approxEqual(rangeFromSite(site, 0, -500).azimuthDeg, 0), 'north is -Z');
   assert.ok(approxEqual(rangeFromSite(site, 0, 500).azimuthDeg, 180));
   assert.ok(approxEqual(rangeFromSite(site, -500, 0).azimuthDeg, -90), 'west is reported as -90');
-});
-
-test('terrain: the flattened pad travels with the site', () => {
-  const pad = WORLD.sitePadRadius / 2;
-  const moved = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: 400, siteZ: -260 });
-
-  // Level wherever the mast lands, so relocating never leaves it floating or buried.
-  const level = heightAt(400, -260, moved);
-  for (const [x, z] of [[400, -260], [400 + pad, -260], [400, -260 - pad]]) {
-    assert.ok(approxEqual(heightAt(x, z, moved), level, 1e-6), `pad point (${x}, ${z}) is level`);
-  }
-
-  // The pad is a property of the site, not of the map: with the site gone, the
-  // ground it used to flatten is natural ground again.
-  assert.ok(approxEqual(heightAt(0, 0, moved), naturalHeightAt(0, 0, moved), 1e-6),
-    `the abandoned centre is still a pad (${heightAt(0, 0, moved).toFixed(2)} m)`);
-  assert.ok(approxEqual(heightAt(30, 0, ctx), heightAt(0, 0, ctx), 1e-6),
-    'the default context keeps its pad over the centre');
-  assert.ok(!approxEqual(heightAt(30, 0, moved), heightAt(0, 0, moved), 1e-6),
-    'the moved pad still flattens ground it no longer owns');
-
-  // Relocating the antenna does not relocate the mountain.
-  assert.equal(zoneAt(0, -700, moved), ZONES.MOUNTAIN, 'the zones stay keyed to the map centre');
-  assert.equal(zoneAt(400 + 700, -260, moved), ZONES.FLAT, 'east of the old centre is still the flat field');
 });

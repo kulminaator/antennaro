@@ -45,3 +45,19 @@ of ground, and the mast foot is exactly the drawn surface.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `site.groundY` is the grid's **bilinear** sample, `heightAt()` is the analytic
+  surface: they agree exactly only on cell centres, so the new mast-foot test compares
+  them with a 2 m tolerance and compares `groundY` to `field.sample()` exactly.
+  (The browser probe looked exact because `window.__sim.heightAt()` is
+  `field.sample()`, not the analytic function.)
+- `generateTerrain({ seed, siteX: 365, siteZ: -400 })` still accepts the ignored
+  options, which is what makes the "placing the mast changed the ground" assertion
+  meaningful: it proves the options cannot reach the field.
+- The old pad tests were deleted, not weakened; their surviving concerns live on as
+  "the mast foot is the drawn ground" (floating/buried), "the ground does not depend on
+  where the mast stands" (pad landform + zones anchored to the map centre) and a new
+  valley assertion (`heightAt(0, -400)` stands > 20 m above the southern floor, i.e. no
+  trench across the map).
+- `roughnessAlong(90, 400) < 6` (east is smooth) still passes with no pad, so the flat
+  zone is smooth on its own merits.

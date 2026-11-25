@@ -295,11 +295,13 @@ test('state: the site can be relocated, and the offset stays inside the map', ()
   assert.equal(stray.changed.length, 0, 'a rejected sub-key must not move anything');
 });
 
-test('state: moving the site dirties the ground and the coverage', () => {
-  // The flattened pad is baked into the height field, so the terrain stage is real work.
+test('state: moving the site dirties the rig and the coverage, not the ground', () => {
+  // The ground belongs to the map: relocating the mast moves the rig and re-runs the
+  // ray grid, and must never regenerate a height field that did not change.
   const stages = impactedStages(['site.x', 'site.z']);
-  assert.ok(stages.includes(RECOMPUTE.TERRAIN), `stages: ${stages}`);
+  assert.ok(stages.includes(RECOMPUTE.ANTENNA), `stages: ${stages}`);
   assert.ok(stages.includes(RECOMPUTE.COVERAGE), `stages: ${stages}`);
+  assert.ok(!stages.includes(RECOMPUTE.TERRAIN), `the site still dirties the terrain: ${stages}`);
 });
 
 test('panel: the placement group exposes both site offsets', () => {
