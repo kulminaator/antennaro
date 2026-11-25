@@ -58,18 +58,28 @@ an edited import map, and `npm run vendor` tells you which.
   below the peak. It shows the shape of the antenna, not its range.
 - **The coverage overlay**: signal level painted onto the ground, measured where
   the terrain actually is - so the far side of a ridge goes dark.
+- **The first Fresnel zone** (optional, off by default): switch on *Fresnel zone*
+  in the Display group and two things happen. A semi-transparent tube appears along
+  the boresight - the first Fresnel zone of a reference link from the mast to where
+  the beam lands. And the coverage overlay switches from signal bands to zone
+  clearance: green where the ground leaves the zone clear, amber where it eats into
+  it, purple where it stands above the ray. The legend changes with it, because a
+  legend that does not describe the colours under it is a bug.
 
 The read-out panel on the right reports what the current configuration delivers:
 peak gain, the −3 dB beamwidths, front-to-back ratio, EIRP at boresight,
 wavelength, the free-space range limit, how many map cells have a link, the best /
-median / worst signal, how many cells are shadowed, and a per-direction table
+median / worst signal, how many cells are shadowed, how many keep their first
+Fresnel zone clear, and a per-direction table
 across the eight compass sectors (N, NE, E, SE, S, SW, W, NW) showing how much of
 each sector has a link and how far that link reaches.
 
 Below the numbers is the legend: five colour bands, keyed to your receiver
 sensitivity (for example `>= -40 dBm` down to `< -85 dBm (no link)`). Changing
 sensitivity moves the boundaries - the colours mean "margin over what the client
-can hear", not "signal quality" in the abstract.
+can hear", not "signal quality" in the abstract. In the Fresnel-zone view the
+legend becomes three rows - cut, partly cut, clear - and quotes the receiver height
+the verdict was computed for.
 
 ## Controls
 
@@ -80,9 +90,9 @@ Left panel, top to bottom:
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
 | **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground the pad is cut to), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
-| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, evaluation range, clutter loss, and a switch for terrain shadowing. |
+| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, evaluation range, clutter loss, and a switch for terrain shadowing. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
-| **Display** | Coverage overlay, radiation pattern, terrain mesh, zone labels. |
+| **Display** | Coverage overlay, radiation pattern, Fresnel zone, terrain mesh, zone labels. |
 
 Buttons: **New terrain** (fresh random seed), **Reset view** (camera back to
 start, centred on the site), **Reset placement** (site back to the middle of the
@@ -129,6 +139,7 @@ http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&siteX
 | `siteX`, `siteZ` | site position east / south, metres | off the map centre; both default to 0 |
 | `frequency` | band in MHz | `433`, `868`, `915`, `2400`, `5800` |
 | `sensitivity`, `range` | receiver sensitivity (dBm), evaluation range (m) | |
+| `fresnel` | start in the Fresnel-zone view | `fresnel=1` (volume on, zone colours) |
 | `manual`, `nohud` | testing aids: no animation loop, no read-out panel | |
 
 ![Yagi aimed south down the valley: the beam reaches 1.5 km while the mountain side stays dark.](docs/screenshot-valley.png)
@@ -170,13 +181,67 @@ about 6 dB. Terrain shadowing is modelled as knife-edge diffraction along the
 actual ground profile, using standard-atmosphere Earth curvature - which is why a
 ridge can cost 2 dB on one path and 25 dB on another.
 
+### Decibels are not the same as a working link
+
+Diffraction loss answers "how much does that hill cost?". It does not answer "is
+this a link I trust?". For the second question the tool also checks the **first
+Fresnel zone**: the ellipsoidal bubble of active space between the two antennas,
+whose radius halfway along a path of length `D` is
+
+```
+r1 = sqrt(lambda * D / 4)      (at 1.4 km: 11 m at 868 MHz, 4.3 m at 5.8 GHz)
+```
+
+Anything standing inside that bubble disturbs the wave even when the straight ray
+between the antennas is clear. The rule of thumb used here is the usual one: a path
+is **clear** when the ground stays at least 60 % of `r1` below the ray everywhere
+along it. The two measures are one physics seen twice - the diffraction parameter
+this app charges decibels with is exactly `v = sqrt(2) * h / r1`, where `h` is the
+height of the ray above the ground - so the zone flag is deliberately **not** an
+extra loss term. Charging the same ridge twice would be a bug, not a model.
+
+The point of reporting both is the population where they disagree: cells that make
+their link budget with the zone cut. On the default map at 868 MHz that is 1018 of
+5816 linked cells - links that work on paper and misbehave in the field.
+
+Two things follow from the criterion being a *ratio*, and both are visible in the
+app rather than hidden in a constant:
+
+- **It depends on the band.** A longer wavelength is a fatter zone, so more of it to
+  cut: 17 % of the default map is zone-clear at 433 MHz, 25 % at 868 MHz, 44 % at
+  5.8 GHz, with the same ground and the same study area.
+- **It depends on how high the receiving terminal is.** Measured against a receiver
+  lying on the ground, the zone closes to nothing at the receiver and the criterion
+  is always failed - over flat ground a 10 m mast is only zone-clear inside
+  `2.2 * (h1 + h2) / lambda`, which is 89 m at 868 MHz and not much better anywhere
+  else. So the app asks for a *zone receiver height* (default 4 m: a client on a
+  roof or a short pole) and prints that number in the legend and in
+  `window.__sim.fresnel()`. Move the slider and the map changes; the decibels do
+  not, because the diffraction loss is still charged for the ray that ends on the
+  cell's own ground.
+
+The drawn volume is the zone of one reference link - the boresight out to where it
+reaches the ground, at a terminal one receiver-height above it - because that is the
+largest zone the antenna has to keep clear anywhere it is looking. Its radius is
+widened by a fixed factor so it is visible next to a kilometre-wide map; at
+`FRESNEL.radialExaggeration: 1` you would see the truth, which is a hairline.
+
+![The same valley scenario in the Fresnel-zone view: the drape is painted by zone clearance instead of signal level, and the pale tube is the first zone of the boresight link.](docs/screenshot-fresnel.png)
+
+Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
+cut outright - the ground stands above the ray. The read-out panel puts the same
+numbers in words: how much of the map is clear, how many cells have the budget but
+not the zone, and the worst clearance on the map with the distance it happened at.
+
 ### What this does not model
 
 It is a planning toy, not a propagation site survey. Deliberately left out:
-reflections and multipath fading, building and tree clutter (approximated by one
-flat "clutter loss" slider), rain and vegetation loss, antenna noise and
+reflections and multipath fading (the zone flag hints at where ground reflection
+would matter, it does not compute it), building and tree clutter (approximated by
+one flat "clutter loss" slider), rain and vegetation loss, antenna noise and
 interference, receiver desensitisation, terrain-pipe losses inside the valley
-beyond diffraction, and everything about the return path (this is one-way RSSI).
+beyond diffraction, multi-point and terrain-reflected propagation models beyond the
+single knife edge, and everything about the return path (this is one-way RSSI).
 The hardware geometry is drawn to be recognisable, not to scale.
 
 ## Development

@@ -46,8 +46,10 @@ src/             application source, layered (see §3)
   core/          eventbus, frame loop
   terrain/       height field, generators, site pad, terrain mesh
   antenna/       catalogue, pattern maths, aim frames, model, meshes
-  propagation/   rf algebra, line-of-sight/diffraction, coverage, coverage mesh
-  app/           state reducer, presets, controller, viewport, camera, pointer
+  propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, coverage,
+                 coverage mesh, Fresnel zone mesh
+  app/           state reducer, presets, controller, reports (coverage + summaries),
+                 actions, viewport, camera, pointer
                  picking, site dragging, test API
   ui/            control panel, HUD, schema (schema is pure, the rest is DOM)
   palette.js     shared colours (renderer + DOM legend read the same table)
@@ -114,7 +116,7 @@ declaration is checked against `LAYER_TABLE` in `tools/lib/arch.js`.
 | L2 | domain services (`antenna/model`, `propagation/coverage`), `app/state`, `app/presets`, `ui/schema` | L0–L1 |
 | L3 | `core/loop.js` (frame loop) | L0–L2 |
 | L4 | render adapters (`*mesh.js`, `app/viewport`, `app/labels`, `app/orbit`, `app/relocate`) | L0–L3 |
-| L5 | `ui/`, `app/` composition, `main.js` | anything below |
+| L5 | `ui/`, `app/` composition (`controller`, `reports`, `actions`, `testapi`), `main.js` | anything below |
 
 Rules, enforced by lint:
 
@@ -145,17 +147,23 @@ Node. They may not contain: `document`, `window`, `navigator`,
 `console.*` call. Lint reports each with the offending line.
 
 One exception, deliberately kept in one place: the **`new-seed` user action** in
-`src/app/controller.js` is allowed to call `Math.random()` to roll a terrain
+`src/app/actions.js` is allowed to call `Math.random()` to roll a terrain
 seed. It immediately hands the number to the seeded generator, so the resulting
 terrain is reproducible. No other randomness anywhere - all terrain features
-come from `math/noise.js` seeded by `terrain.seed`.
+come from `math/noise.js` seeded by `terrain.seed`. The architecture test pins
+exactly one `Math.random()` in `src/` and that it sits next to `case 'new-seed'`.
 
 ### Hygiene
 
 No `console.log`/`console.debug`, no `debugger`, no bare `TODO` (must be
 `TODO(name): ...`), no `FIXME`. Line budgets: 350 lines in `src/`, 430 in
 `tools/`, 320 in `tests/` - if a module hits its budget it is time to split it
-(that is how `rigmesh.js` and `mapmesh.js` came to exist).
+(that is how `rigmesh.js` and `mapmesh.js` came to exist). `app/controller.js`
+reached the budget during the Fresnel work and was split: the coverage recompute
+and the summary objects went to `app/reports.js`, the `action()` switch to
+`app/actions.js`. What is left is the stage machine and the meshes - which is its
+job. Split on a seam, not at a line count: `reports.js` is the code that answers
+"what does the scene contain", which was never the controller's.
 
 ## 4. Configuration centrality
 
@@ -164,7 +172,11 @@ world size, terrain amplitudes and blend band, RF constants (including
 `RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, where the
 mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
 `siteStepM`, shared by the sliders and the drag), how far the site pad reaches
-(`WORLD.sitePadRadius`, `WORLD.sitePadBlendFactor`), camera
+(`WORLD.sitePadRadius`, `WORLD.sitePadBlendFactor`), the Fresnel criterion
+(`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
+is stated for - and `RF.fresnelEndpointGuard`), the `FRESNEL` block (mesh density,
+opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`) and the
+`COLOURS.fresnel*` stops of the zone ramp, camera
 defaults, colours, path names and every timeout. The UI schema and the state
 reducer read the same ranges, so a slider can never disagree with the physics.
 `VIEW.cameraFovDeg` is here for the same reason: `app/pick.js` needs the vertical
@@ -265,6 +277,34 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   free-space loss, minus knife-edge diffraction over the sampled ground profile
   (with `kFactor` Earth bulge), minus clutter. Levels are **margin over the
   receiver sensitivity**, so the legend moves when the user changes sensitivity.
+- **The first Fresnel zone is a flag, not a loss term.** `propagation/los.js`
+  samples the same ground profile the diffraction loss uses and reports the worst
+  height of the ray above the ground along the path, in units of the first-zone
+  radius `r1 = sqrt(lambda * d1 * d2 / (d1 + d2))`; the cell is *clear* when that
+  stays above `RF.fresnelClearFraction`. Write the relationship down once: the
+  Kirchhoff/Lee parameter the loss is computed from **is** `v = sqrt(2) * h / r1`, so
+  charging a second penalty for the same ground would be double counting, and the
+  zone answer is the reliability reading of the same walk, not new physics.
+  Because the zone closes to nothing at either antenna, clearance is judged for a
+  terminal `RF.fresnelRxHeightM` above the cell and outside
+  `RF.fresnelEndpointGuard` of both ends: against a receiver lying on the ground the
+  criterion always fails, and over flat ground it is met only inside
+  `2.2 * (h1 + h2) / lambda` (89 m at 868 MHz with a 10 m mast), which is why the
+  assumption is a slider whose value the legend and `fresnel()` both print.
+  So `coverage.js` walks each path twice when diffraction is on - once to the cell's
+  own ground, which is what the decibels are charged against (the receiver height
+  must not move the RSSI: pinned by a unit test and a browser test), once to the
+  raised terminal for the zone. A cell can be badly diffracted *and* zone-clear, and
+  that is geography, not a bug to reconcile.
+- **The zone has its own colour view.** `propagation/coveragemesh.js` paints either
+  the signal bands or the zone ramp (`palette.fresnelZoneRgb`), switched by
+  `display.showFresnel`; it is a mode rather than a marking laid over the bands
+  because only a minority of cells meet the criterion, and a flag painted on the RSSI
+  colours would be one hue over the whole map. `app/reports.js` computes the
+  reference link the volume is drawn around - the boresight out to where it meets the
+  ground, one receiver height above it - and `propagation/fresnelmesh.js` (L4) turns
+  that link into a tube. `FRESNEL.radialExaggeration` is the only reason it is
+  visible next to a 2.4 km map; at 1 it is a hairline, and the docs say so.
 - **Layout follows the window:** `app/controller.js` watches the canvas with a
   `ResizeObserver`, and `settle()` syncs the drawing buffer before painting, so
   headless captures and resized windows both get a correctly sized frame.
@@ -394,9 +434,14 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   `window.__sim`, installed by `src/app/testapi.js` and finished by `main.js`.
   Methods: `state`, `patch`, `action`, `settle(frames)`, `step(frames)`, `stats`,
   `scene`, `camera`, `setCamera`, `antenna`, `coverage`, `rssiAt(x, z)`,
-  `terrain`, `heightAt(x, z)`, `rf`, `pixelStats`, `controls`, `pick(ndcX, ndcY)`,
+  `fresnel`, `terrain`, `heightAt(x, z)`, `rf`, `pixelStats`, `controls`,
+  `pick(ndcX, ndcY)`,
   `site`, `grabSite`, `dragSiteTo(ndcX, ndcY)`, `releaseSite`, `dragState`,
   `dispose`.
+  `rssiAt()` reports the cell's `fresnelClearanceRatio` and `fresnelClear`; `fresnel()`
+  is the aggregate - criterion, receiver height, the three buckets the ramp paints,
+  worst clearance and its distance, and `volume: {visible, vertices}` plus the `link`
+  the volume is drawn around.
   Properties: `boot` (`{status, ...}`), `ready` (true only once boot finished -
   the tools wait on this), `errors`, `version`, `app`. DOM layout may change;
   this API is the contract, so anything a test needs permanently gets added here

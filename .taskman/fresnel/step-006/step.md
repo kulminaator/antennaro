@@ -36,3 +36,23 @@ the antenna to the reference range, updated from the current aim, frequency and 
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `src/propagation/fresnelmesh.js` (105 lines): a tube of revolution around a straight
+  link, `FRESNEL.steps` slices along it and `FRESNEL.rings` around it, each circle's
+  radius taken from `fresnelRadiusM()` in `propagation/rf.js` so the drawn volume and
+  the per-cell criterion cannot drift apart. `MeshBasicMaterial` (unlit, `depthWrite:
+  false`, `DoubleSide`, `FRESNEL.opacity`), `renderOrder 3`, starts hidden, disposed
+  with the controller.
+- No `tools/lib/arch.js` change was needed: `/mesh\.js$/` already classifies it as L4
+  and already allows `import 'three'`.
+- **It could not be committed on its own.** Lint's reachability rule fails any `src/`
+  module that `main.js` cannot reach, so the step's real end state is "mesh exists and
+  something imports it", which needed the controller to have room for the wiring - see
+  the order swap recorded in task Comments. Step-007 happened first; this step closed
+  with the wiring in step-008.
+- `new THREE.MeshBasicMaterial({ colour })` is silently wrong: three.js material
+  properties are spelled `color`. It logs one warning and paints anyway; the boot
+  browser test fails the run on any console warning, which is the only reason it was
+  noticed.
+- Verified from the page: `(steps+1) * (rings+1)` = 49 * 29 = 1421 vertices, geometry
+  rebuilt only with the link, `visible` driven by the display flag.

@@ -43,3 +43,31 @@ Docs explain the criterion and the visuals in the same voice as the rest of the 
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- README: new "Decibels are not the same as a working link" section under *What the
+  numbers mean* (r1 formula with real numbers, `v = sqrt(2) * h / r1` stated once, the
+  band dependence 17 % / 25 % / 44 %, the receiver-height dependence with the
+  `2.2 * (h1 + h2) / lambda` horizon, why the drawn volume is exaggerated), a *What you
+  see* bullet, panel/URL/legend updates, and the "does not model" list extended with
+  multi-point and terrain-reflected propagation (multipath was already there, now with
+  the note that the zone flag only *hints* at reflection).
+- New illustration `docs/screenshot-fresnel.png` (valley-reach + `?fresnel=1`, 1440x820
+  to match the others) rather than replacing `docs/screenshot.png`: the default picture
+  should show the default view, and the zone view is opt-in.
+- GUIDELINES: §2 layout (propagation gains the zone mesh, `app/` gains `reports` and
+  `actions`), §3 layer table L5 row, the `Math.random` exception re-pinned to
+  `app/actions.js`, §3 hygiene recording where the controller was split and why a seam
+  beats a line count, §4 the new RF/FRESNEL/COLOURS names, §7 two new domain notes
+  (flag-not-loss with the two-ray explanation; the zone as its own colour view), §9 the
+  `fresnel()` method and the extended `rssiAt()` shape.
+- Every number in the docs was re-derived before it was written down. Two were wrong:
+  "a third of the linked area" (measured: 1018 of 5816) and "r1 = 3.2 m at 5.8 GHz"
+  (it is 4.3 m; the 3.2 came from using a quarter of the *radius* instead of the
+  distance). `node -e` with the real `fresnelRadiusM` costs one second and beats a
+  plausible figure.
+- Known, untouched inconsistency: GUIDELINES §4 still names config blocks that do not
+  exist (`RENDER`, `COVERAGE`, `ANALYSIS`, `UI`). Pre-dates this task; the new text
+  names only real blocks (`RF.*`, `FRESNEL`, `COLOURS.fresnel*`).
+- Gates: `node tools/browser.js status --all` and `staticserver status` clean first,
+  then `npm run verify` -> vendor ok, lint ok (41 src, 15 tools, 15 tests), all
+  14 test files passed in 37 s.
