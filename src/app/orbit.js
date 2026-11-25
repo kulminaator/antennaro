@@ -6,6 +6,11 @@
  * three.js as its only dependency, and camera control is ~100 lines of maths.
  * All the maths lives in the viewport's spherical camera state, so this module
  * only translates input events into changes of that state.
+ *
+ * An optional `intercept` gate lets another pointer tool (see `app/relocate.js`)
+ * claim a gesture first: orbit asks it once per `pointerdown`, before it touches
+ * any state, and when the gate answers true orbit ignores the event entirely - no
+ * pointer capture, no dragging flag, no `preventDefault`.
  */
 
 import { VIEW } from '../config.js';
@@ -19,7 +24,8 @@ const KEY_STEP = 6;
 
 /**
  * @param {{domElement:HTMLElement, viewport:ReturnType<import('./viewport.js').createViewport>,
- *   limits?:{minDistance?:number,maxDistance?:number,minElevationDeg?:number,maxElevationDeg?:number}}} options
+ *   limits?:{minDistance?:number,maxDistance?:number,minElevationDeg?:number,maxElevationDeg?:number},
+ *   intercept?:(event:Event)=>boolean}} options
  * @returns {{dispose:()=>void, state:()=>object, enabled:(value:boolean)=>void}}
  */
 export function createOrbitControls(options) {
@@ -31,6 +37,8 @@ export function createOrbitControls(options) {
     maxElevationDeg: VIEW.cameraLimits.maxElevationDeg,
     ...options.limits,
   };
+  /** Asked once per pointerdown: true means another tool owns that gesture. */
+  const intercept = options.intercept ?? (() => false);
 
   let dragging = false;
   let panning = false;
@@ -48,7 +56,7 @@ export function createOrbitControls(options) {
   }
 
   function onPointerDown(event) {
-    if (!active) return;
+    if (!active || intercept(event)) return;
     dragging = true;
     panning = event.button === 2 || event.shiftKey;
     lastX = event.clientX;
