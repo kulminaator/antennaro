@@ -43,3 +43,18 @@ Config alone describes the bigger world; nothing else knows about it yet.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Reused the dead knob `RF.coverageResolutionDivisor` (declared, used by nothing) as
+  `RF.coverageStride: 2` instead of adding a parallel `WORLD.coverageStride`.
+- `ANTENNA.siteLimitsM` is derived from `WORLD.worldSize`, so it became +/-2500 m by
+  itself once the world grew; the step's "about +/-2500" is now expressed as
+  `worldSize/2 - 100` so a future resize keeps the margin.
+- Verified in Node: world 5200 m, grid 349, cell 14.94 m, half 2600, study 3800 m,
+  stride 2, halo 12 dB, ring `#8f9bb0`, relief 302 m (min -34, max 268).
+- Screenshot `.tmp/reach-config.png`, before any coverage work: the whole map is
+  evaluated (`Cells with link 6.0 % (7336/121800)`) and the omni dipole's drape ends in
+  terrain at 936 m — the cap is already gone for a budget-limited design. Two known
+  in-between states for later steps: the landscape reads flat at this scale (step-002),
+  and the below-sensitivity wash still varnishes the map (step-005).
+- Camera: `cameraStart.distance` 4600 frames the whole 5.2 km map at the default 52°
+  FOV; `maxDistance` 9200 and fog 3300/10100 keep the same look as before.

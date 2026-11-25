@@ -11,12 +11,17 @@ export const APP = Object.freeze({
   version: '0.1.0',
 });
 
-/** World / terrain grid. `gridSize` must be odd so the map centre is a cell. */
+/** World / terrain grid. `gridSize` must be odd so the map centre is a vertex. */
 export const WORLD = Object.freeze({
-  gridSize: 161,
-  worldSize: 2400, // metres, square domain centred on the map origin
+  gridSize: 349,
+  // 5.2 km of ground, about 15 m per cell. The size is set by the radio, not by
+  // taste: with a 2.4 km map and a client at -80 dBm, every design but the omni
+  // dipole outranges the map, so the coverage you saw ended at the map edge or at
+  // the study range and looked like an antenna limit. A link must die inside the
+  // picture, or the app has to say which of its own limits cut it off first.
+  worldSize: 5200, // metres, square domain centred on the map origin
   minGridSize: 17,
-  maxGridSize: 321,
+  maxGridSize: 401,
 });
 
 /** Terrain feature parameters. All amplitudes are metres. */
@@ -68,8 +73,15 @@ export const RF = Object.freeze({
   defaultTxPowerDbm: 10,
   /** Typical WiFi-ish client; the coverage ramp is drawn relative to this. */
   defaultRxSensitivityDbm: -80,
-  defaultMaxRangeM: 1400,
-  maxRangeLimitsM: Object.freeze({ min: 100, max: 2400 }),
+  /**
+   * The study range: how much of the map the coverage is evaluated over. The
+   * default is at least the map's half-diagonal (5200/sqrt(2) = 3677 m), so by
+   * default the whole map is evaluated and the edge of the painted coverage is the
+   * link's own maximum. Lower it and it becomes a declared limit: step-008 draws
+   * the ring, step-009 names it in the read-out.
+   */
+  defaultMaxRangeM: 3800,
+  maxRangeLimitsM: Object.freeze({ min: 100, max: 3800 }),
   clutterLossDb: 0,
   earthRadiusM: 6_371_000,
   kFactor: 1.413, // standard atmosphere refraction model for the terrain LOS bulge
@@ -96,7 +108,20 @@ export const RF = Object.freeze({
    * ground, decides the answer, so only obstacles well inside the path count.
    */
   fresnelEndpointGuard: 0.1,
-  coverageResolutionDivisor: 1, // 1 = evaluate coverage on the full terrain grid
+  /**
+   * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex.
+   * The ground needs ~15 m cells to look like land; a ray walk over every one of
+   * 121 801 of them measured 734 ms in Node, which is far too slow to re-run while
+   * a slider is dragged. Stride 2 (about 30 m cells) keeps the coverage shape - a
+   * link boundary is kilometres wide - at a fraction of the cost.
+   */
+  coverageStride: 2,
+  /**
+   * How far below sensitivity the coverage drape still hints at a failed link, dB.
+   * It is the difference between "the link ends here" and "the map ends here";
+   * weaker cells than this are not painted at all and the terrain speaks for itself.
+   */
+  noLinkHaloDb: 12,
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
 });
@@ -110,7 +135,11 @@ export const ANTENNA = Object.freeze({
   defaultSiteXm: 0,
   defaultSiteZm: 0,
   /** How far the site may be relocated on each axis, metres from the centre. */
-  siteLimitsM: Object.freeze({ min: -WORLD.worldSize / 2, max: WORLD.worldSize / 2 }),
+  /**
+   * How far the site may be relocated on each axis, metres from the centre. The
+   * margin keeps the mast on the map with ground all round it even at the limit.
+   */
+  siteLimitsM: Object.freeze({ min: -WORLD.worldSize / 2 + 100, max: WORLD.worldSize / 2 - 100 }),
   /** Step of the two placement sliders. */
   siteStepM: 5,
   azimuthLimitsDeg: Object.freeze({ min: 0, max: 360 }),
@@ -148,12 +177,12 @@ export const FRESNEL = Object.freeze({
 export const VIEW = Object.freeze({
   background: 0x0d1117,
   fogColour: 0x0d1117,
-  fogNear: 1500,
-  fogFar: 4600,
+  fogNear: 3300,
+  fogFar: 10100,
   /** Vertical field of view of the perspective camera. */
   cameraFovDeg: 52,
-  cameraStart: Object.freeze({ azimuthDeg: 38, elevationDeg: 44, distance: 2100 }),
-  cameraLimits: Object.freeze({ minDistance: 60, maxDistance: 4200, minElevationDeg: 2, maxElevationDeg: 88 }),
+  cameraStart: Object.freeze({ azimuthDeg: 38, elevationDeg: 44, distance: 4600 }),
+  cameraLimits: Object.freeze({ minDistance: 60, maxDistance: 9200, minElevationDeg: 2, maxElevationDeg: 88 }),
   terrainHeightExaggeration: 1,
   coverageOffsetM: 0.8, // drape the coverage overlay this far above the terrain
   /**
@@ -222,4 +251,9 @@ export const COLOURS = Object.freeze({
    */
   fresnelPartial: Object.freeze('#e8c33c'),
   fresnelClear: Object.freeze('#3fd07a'),
+  /**
+   * The study-range ring: the app's own work-area boundary. Deliberately outside
+   * the coverage ramp, so a circle we chose can never be read as signal.
+   */
+  rangeLimit: Object.freeze('#8f9bb0'),
 });

@@ -60,3 +60,8 @@ suites green at every step boundary.
 14. step-014 — full `npm run verify` and closing commit
 
 ## Comments
+
+- Execution note from step-001: `evaluatedCells` with whole-map evaluation is 121 800
+  on the 349^2 grid, so every "cells with link / % clear" denominator in the HUD and the
+  docs is a different quantity than before - it must be re-expressed (linked cells as a
+  count, zone percentages of linked cells), not just re-measured.
