@@ -66,3 +66,12 @@ browser tests drive `window.__sim`; `src/` files stay under 350 lines
 - `src/app/fields.js` gives `site.x`/`site.z` the impact `[ANTENNA, COVERAGE]`;
   `markDirty` cascades ANTENNA -> COVERAGE, and `rebuildAntenna()` is what re-resolves
   the site and re-places the rig, so dropping the TERRAIN edge loses nothing.
+
+- Result, after all seven steps: `heightAt()` is the four zones only, the generators
+  take no site, and `state.site` is out of the terrain cache key. A relocation costs a
+  coverage rebuild (~110-120 ms live) instead of terrain + coverage (~126 ms for a new
+  seed, terrain itself 13.9 ms in Node).
+- Consequence worth remembering: statistics that involve near-site rays moved with the
+  pad's removal - default-map 868 MHz coverage is 5470 linked cells with 945 zone-cut
+  (was 5816 / 1018 while the pad existed). Any doc number of that kind is a measurement
+  of the ground as much as of the model.

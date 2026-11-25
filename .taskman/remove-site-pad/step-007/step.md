@@ -30,3 +30,15 @@
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `npm run verify`: `vendor ok - three 0.187.0`, `lint ok - 41 src, 15 tools, 15 tests
+  file(s)`, `all 14 test file(s) passed in 37 s`. Started from a clean process table
+  (`browser.js status --all` exit 0, static server stopped).
+- Sweep `grep -rn "sitePad|padElevation|naturalHeightAt|padBlendFactor" src/ tests/
+  README.md GUIDELINES.md` → nothing (exit 1).
+- Cost of the change, measured (port 8137): `generateTerrain()` on the default
+  161 x 161 grid is **13.9 ms in Node**, and that is what a relocation no longer pays.
+  Live wall time of patch + settle: **moving the mast 109-121 ms**, **a new seed
+  (terrain + coverage) 126 ms** - i.e. a relocation is now the coverage rebuild plus
+  the rig, with the terrain stage off the path.
+- `tmp/` (the user's two screenshots) was left untracked on purpose.
