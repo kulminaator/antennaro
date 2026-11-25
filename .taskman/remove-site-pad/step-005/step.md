@@ -49,3 +49,15 @@ everything that belongs to the antenna and nothing that belongs to the map.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- 7/7 in this file, 9.5 s wall. `tests/browser/relocate.test.js` is 239 lines, inside
+  the test-file budget.
+- The two new regression assertions are the ones that failed with the pad present:
+  "moving the antenna changed the ground" (seven probes across the map, bit-identical
+  before/after a relocation) and "the ground 40 m from the mast was levelled to it"
+  (the ridge shoulder keeps a > 1 m drop next to the mast foot).
+- The old hilltop test asserted the ground *beside* the mast was level; that assertion
+  was deleted rather than loosened — with no pad the ground beside a mast on a slope is
+  deliberately not level.
+- `session.sim('heightAt', x, z)` reads the grid, so it is the right probe for "did the
+  map change"; `site().groundY` is the same bilinear sample, hence 1e-6 tolerances.

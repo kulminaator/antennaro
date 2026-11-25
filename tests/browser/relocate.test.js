@@ -1,11 +1,11 @@
 /**
  * Browser tests: relocating the antenna.
  *
- * The unit suite pins the maths (pad follows the site, picking round-trips);
- * these tests pin the wiring a user actually experiences: a patch or a drag moves
- * the flattened ground, the mast, the coverage grid and the pixels together, the
- * drag cycle works through the test surface (never by clicking at coordinates,
- * GUIDELINES.md §9), and both resets bring the mast home.
+ * The unit suite pins the maths (the ground ignores the site, picking round-trips);
+ * these tests pin the wiring a user actually experiences: a patch or a drag moves the
+ * mast, the coverage grid and the pixels together while the ground under the mountain
+ * does not move at all, the drag cycle works through the test surface (never by
+ * clicking at coordinates, GUIDELINES.md §9), and both resets bring the mast home.
  */
 
 import test from 'node:test';
@@ -17,13 +17,23 @@ import { withApp } from '../harness/app.js';
 const YAGI_PARAMS = Object.freeze({ directors: 8, spacingLambda: 0.3, beamTiltDeg: 0 });
 const almost = (value, expected, tolerance) => Math.abs(value - expected) < tolerance;
 
-test('browser: relocating the site moves the pad, the rig and the coverage', async () => {
+test('browser: relocating moves the rig and the coverage, and not one metre of ground', async () => {
   await withApp(async (session) => {
     await session.settle();
-    const padAtCentre = await session.sim('heightAt', 0, 0);
-    assert.ok(almost(padAtCentre, (await session.sim('site')).groundY, 1e-6),
-      `the mast starts on the surface it stands on (${padAtCentre})`);
+    const groundAtCentre = await session.sim('heightAt', 0, 0);
+    assert.ok(almost(groundAtCentre, (await session.sim('site')).groundY, 1e-6),
+      `the mast starts off the surface it stands on (${groundAtCentre})`);
     const before = await session.sim('pixelStats');
+    // Ground all over the map, including where the mast stands now and where it is
+    // about to stand. Relocation must leave every one of them exactly as it was.
+    const probe = async () => {
+      const out = [];
+      for (const [x, z] of [[0, 0], [0, -900], [0, 900], [400, 200], [900, 200], [-700, -700], [1100, 200]]) {
+        out.push(await session.sim('heightAt', x, z));
+      }
+      return out;
+    };
+    const groundBefore = await probe();
 
     const patched = await session.patch({ site: { x: 400, z: 200 } });
     assert.deepEqual(patched.rejected, [], 'a valid relocation was rejected');
@@ -34,13 +44,15 @@ test('browser: relocating the site moves the pad, the rig and the coverage', asy
     assert.equal(site.x, 400);
     assert.equal(site.z, 200);
     assert.deepEqual((await session.sim('scene')).sitePosition, [400, 200], 'the rig did not follow the state');
+    assert.ok(almost(site.groundY, await session.sim('heightAt', 400, 200), 1e-6),
+      'the mast base is not on the ground it was placed on');
 
-    // The flattened pad belongs to the site: it travelled, and the abandoned
-    // centre is natural ground again.
-    const newPad = await session.sim('heightAt', 400, 200);
-    assert.ok(almost(newPad, site.groundY, 1e-6), 'the mast base is not on the pad under it');
-    assert.ok(Math.abs((await session.sim('heightAt', 0, 0)) - newPad) > 0.5,
-      'the old centre is still flattened');
+    // The map is the map: moving the antenna changed the map nowhere.
+    const groundAfter = await probe();
+    for (let i = 0; i < groundBefore.length; i += 1) {
+      assert.ok(almost(groundBefore[i], groundAfter[i], 1e-6),
+        `moving the antenna changed the ground: ${groundBefore[i]} -> ${groundAfter[i]} m`);
+    }
 
     const after = await session.sim('pixelStats');
     assert.notDeepEqual(
@@ -79,25 +91,22 @@ test('browser: the beam and the link budget follow the mast to its new home', as
   });
 });
 
-test('browser: the mast stays on the surface on high ground and in the valley', async () => {
+test('browser: the mast stands on the surface on high ground and in the valley', async () => {
   await withApp(async (session) => {
-    // Regression: the pad used to be flattened to one fixed elevation, so a
-    // relocated mast ended up at the bottom of a pit on a hilltop - and on a
-    // pedestal in the valley. The platform must ride with the ground under it.
+    // The mast foot is the ground wherever it is put: up the mountain, down in the
+    // channel, without anything being graded to make that true.
     await session.patch({ site: { x: 0, z: -900 } });
     await session.settle();
     const hilltop = await session.sim('site');
-    assert.ok(hilltop.groundY > 100, `the pad did not ride up the mountain: ${hilltop.groundY} m`);
+    assert.ok(hilltop.groundY > 100, `the mast did not ride up the mountain: ${hilltop.groundY} m`);
     assert.ok(almost(await session.sim('heightAt', hilltop.x, hilltop.z), hilltop.groundY, 1e-6),
       'the mast base is not standing on the ground');
-    assert.ok(almost(await session.sim('heightAt', hilltop.x + 30, hilltop.z - 25), hilltop.groundY, 1e-6),
-      'the platform under a hilltop mast is not level');
 
     await session.patch({ site: { x: 0, z: 900 } });
     await session.settle();
     const valley = await session.sim('site');
     assert.ok(valley.groundY < hilltop.groundY - 100,
-      `the pad is not terrain-driven: hilltop ${hilltop.groundY} m vs valley floor ${valley.groundY} m`);
+      `the mast foot is not terrain-driven: hilltop ${hilltop.groundY} m vs valley floor ${valley.groundY} m`);
     assert.ok(almost(await session.sim('heightAt', 0, 900), valley.groundY, 1e-6),
       'the valley mast is not standing on the ground');
     // Either way the hardware is above the surface it stands on.
@@ -106,12 +115,12 @@ test('browser: the mast stays on the surface on high ground and in the valley', 
   });
 });
 
-test('browser: the site pad stops at its own reach', async () => {
+test('browser: the ridge keeps its shape when the mast stands on its shoulder', async () => {
   await withApp(async (session) => {
-    // Regression: with the pad graded to the average of the ground around it, a
-    // mast on a ridge flank lifted the surface tens of metres above the valley
-    // beside it - the mountain appeared to grow sideways under the antenna. The
-    // pad may level the ground it stands on, nothing beyond its blend reach.
+    // Regression, and the reason the pad is gone: with a flattened platform under
+    // the mast, putting the antenna on a ridge flank filled the slope by tens of
+    // metres, the plateau travelled with the mast, and the mountain looked like it
+    // grew sideways.
     const probes = [[0, -200], [0, 200], [200, 0], [-200, 0], [140, -140], [-140, 140]];
     const probe = async () => {
       const out = [];
@@ -122,23 +131,21 @@ test('browser: the site pad stops at its own reach', async () => {
     await session.patch({ site: { x: 500, z: -600 } });
     await session.settle();
     const site = await session.sim('site');
-    assert.ok(almost(site.groundY, await session.sim('heightAt', 500, -600), 1e-6), 'the mast is not on its pad');
-    // Flat across the platform: the grid is sampled between cells, so allow half a
-    // metre - the relief this is measured against is tens of metres.
-    for (const [px, pz] of [[515, -610], [530, -625], [478, -583]]) {
-      assert.ok(almost(site.groundY, await session.sim('heightAt', px, pz), 0.5),
-        `the platform is not level at (${px}, ${pz})`);
-    }
-    const withPadHere = await probe();
+    assert.ok(almost(site.groundY, await session.sim('heightAt', 500, -600), 1e-6), 'the mast is not on the ground');
+    const withMastHere = await probe();
+    // The slope next to the mast is still a slope: nothing was filled in to make a
+    // plateau. Half a metre tolerance because the grid is sampled between cells.
+    const downhill = await session.sim('heightAt', 500, -560);
+    assert.ok(downhill < site.groundY - 1,
+      `the ground 40 m from the mast was levelled to it: ${downhill} m vs a mast foot at ${site.groundY} m`);
 
     await session.patch({ site: { x: -900, z: 900 } });
     await session.settle();
     const afterItLeft = await probe();
     for (let i = 0; i < probes.length; i += 1) {
-      assert.ok(almost(withPadHere[i], afterItLeft[i], 1e-6),
-        `the pad still shapes ground 200 m from the mast: ${withPadHere[i]} vs ${afterItLeft[i]}`);
+      assert.ok(almost(withMastHere[i], afterItLeft[i], 1e-6),
+        `the mast shaped ground 200 m away: ${withMastHere[i]} vs ${afterItLeft[i]}`);
     }
-    // And the platform itself was real: flat, and at the mast's own ground level.
     assert.deepEqual(session.errors(), []);
   });
 });
@@ -150,7 +157,7 @@ test('browser: grabbing the mast and dragging moves the site', async () => {
 
     const grab = await session.sim('grabSite');
     assert.equal(grab.ok, true, 'the drag adapter refused the grab');
-    assert.ok(almost(grab.planeY, (await session.sim('site')).groundY, 1e-6), 'the drag slides on the pad plane');
+    assert.ok(almost(grab.planeY, (await session.sim('site')).groundY, 1e-6), 'the drag slides on the plane of the ground it grabbed');
 
     const moved = await session.sim('dragSiteTo', 0.45, 0);
     assert.equal(moved.ok, true, JSON.stringify(moved));
@@ -170,9 +177,9 @@ test('browser: grabbing the mast and dragging moves the site', async () => {
 
     const site = await session.sim('site');
     assert.deepEqual((await session.sim('scene')).sitePosition, [site.x, site.z], 'the rig is not where the site is');
-    // The drag slides on a horizontal plane at the height the grab happened at,
-    // but the pad is graded to the ground where it lands: the mast ends up on the
-    // surface there, not on the plane it was dragged along.
+    // The drag slides on a horizontal plane at the height the grab happened at, but
+    // the mast is placed on the ground where it lands - not on the plane it was
+    // dragged along.
     assert.ok(almost(site.groundY, await session.sim('heightAt', site.x, site.z), 1e-6),
       `after the drag the mast floats ${site.groundY} m above the ground`);
     assert.deepEqual(session.errors(), []);
@@ -185,7 +192,7 @@ test('browser: picking at the mast returns the site footprint', async () => {
     await session.settle();
     const site = await session.sim('site');
     // Aim the camera at the site itself: then the centre of the screen is exactly
-    // the mast's footprint on the pad plane, with no framing ambiguity left.
+    // the mast's footprint, with no framing ambiguity left.
     await session.sim('setCamera', { targetX: site.x, targetY: site.groundY, targetZ: site.z });
     await session.settle();
 
@@ -212,7 +219,7 @@ test('browser: reset placement and reset all both bring the mast home', async ()
     assert.equal(site.x, ANTENNA.defaultSiteXm);
     assert.equal(site.z, ANTENNA.defaultSiteZm);
     assert.ok(almost(await session.sim('heightAt', 0, 0), (await session.sim('site')).groundY, 1e-6),
-      'the pad is not under the reset mast');
+      'the mast is not on the ground after the reset');
 
     await session.patch({ designId: 'yagi', params: YAGI_PARAMS, site: { x: -800, z: 600 } });
     await session.settle();
