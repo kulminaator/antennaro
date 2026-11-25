@@ -58,6 +58,7 @@ export function createReports(accessors) {
       maxRangeM: state.maxRangeM,
       clutterLossDb: state.clutterLossDb,
       useDiffraction: state.useDiffraction,
+      rxHeightM: state.zoneRxHeightM,
     });
     onCoverage(coverage);
     return coverage;

@@ -37,3 +37,22 @@ claim, with no page errors.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- 6 tests, all through `window.__sim`. Measured on the default map (868 MHz, receiver
+  4 m): east over the flat field keeps 0.90 r1 at 405 m, north into the mountain is at
+  -19.05 r1 at 705 m, the western bumps cut at -5.14 r1 at 405 m. Clear share by band:
+  433 MHz 17.4 %, 868 25.0 %, 2400 40.1 %, 5800 43.5 % - strictly increasing, asserted
+  with a 1-point margin, on a study area that provably did not move.
+- The band test asserts `evaluatedCells` is identical across bands first: without that,
+  a rising percentage could just mean the study area changed shape.
+- Caught a real wiring bug the unit suite could not: `reports.js` had dropped the
+  `rxHeightM` argument when the controller was split (step-007), so the
+  `Zone receiver height` slider moved the drawn volume and *nothing else* - clearPct,
+  the bucket counts and even three individual cells' ratios were byte-identical for
+  0 m and 10 m. Fixed by passing `state.zoneRxHeightM` into `computeCoverage`; the new
+  test is the regression guard.
+- A cell can be diffracted *and* zone-clear (the northern ridge at 405 m costs 13.9 dB
+  while keeping 0.65 r1) and that is not a contradiction: the dB are charged for the ray
+  that ends on the cell's own ground over the whole path, the zone for the ray that ends
+  at a terminal above it, judged outside the end guards. The test says so out loud, so
+  nobody "fixes" it by making the two measures identical.
