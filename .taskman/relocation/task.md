@@ -74,3 +74,11 @@ into `STATE_FIELDS`, new tunables into `src/config.js`, new modules into
   `pointerdown` must not assume it owns it on `pointerup` — orbit's unconditional
   `releasePointerCapture()` threw on every relocation drag until step-012 guarded
   it (recorded in step-012 comments).
+- **`state()` is instant, `site()`/`scene()` are one frame behind.** A patch (or a
+  drag commit) updates reducer state immediately, but the ground, rig and coverage
+  rebuild in the next frame, so any browser assertion about the *physical* site
+  must `await session.settle()` first — or it compares a half-moved world
+  (recorded in step-014 comments). Dragged points are additionally snapped to
+  `ANTENNA.siteStepM` by the reducer, so compare them with a one-step tolerance.
+- `src/app/controller.js` finished the task at **349 of 350 lines**: the next
+  feature that wants to grow the controller must split it first (GUIDELINES.md §3).

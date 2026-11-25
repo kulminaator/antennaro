@@ -40,3 +40,20 @@ tree is clean, and the relocation feature is committed.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `npm run verify` (under `node tools/timebox.js -t 800`): vendor check ok, `lint ok
+  - 38 src, 15 tools, 13 tests file(s)`, **all 12 test file(s) passed in 25458 ms**
+  (10 unit files + 5-file browser suite; relocate contributes 5 browser tests).
+- `node tools/browser.js status --all` and `node tools/staticserver.js status` both
+  reported nothing alive before and after the gate (exit 0 = no orphans), so no
+  `stop --all` was needed.
+- Change set is exactly the 21 code/doc/test files the task planned plus
+  `.taskman/relocation/**`: 58 files, +2160/−45. `git diff --stat vendor` empty;
+  `docs/` untouched — both README screenshots still show the default view (site at
+  the map centre), which is still what the app boots to.
+- Visual confirmation (`.tmp/artifacts/relocated-site.png`, `?design=yagi&azimuth=90
+  &siteX=400&siteZ=-200`): the pad, mast, lobe and painted coverage sit 400 m east /
+  200 m north of the map centre with the camera centred on them; the HUD reads
+  `Site position 400 m E / 200 m N`, both offset sliders show 400 / −200, and the
+  east row of *Link availability by direction* is the strong one (100 %, 863 m) —
+  the beam is aimed east from the new site, over the flat field.
