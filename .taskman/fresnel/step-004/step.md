@@ -34,3 +34,17 @@ buried" case that motivated the task.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Three assertions were wrong about the physics before they were wrong about the
+  code, all worth remembering:
+  - comparing a 41-cell flat field against an 81-cell ridged field did not compare
+    anything: `fresnelStatus` picks its sample count from `field.cellSize`, so the two
+    minima come from different sample sets. Baselines must share a grid.
+  - a low ridge does *not* lower the worst clearance: on a 900 m path from a 20 m mast
+    the worst point is near the far guard edge (~1.0 r1), so ridges only become the
+    worst point once they approach the ray (~12 m up here). The ladder now starts
+    where the ridge starts biting.
+  - a 9 m ridge "inside the zone" was still 3 m below the ray, i.e. ratio 0.34, not
+    negative. Negative clearance means the ground is above the ray, full stop.
+- The threshold test is written around the *measured* ratio (`ratio +/- 0.01`) rather
+  than fixed fractions, so it tests the threshold and not a golden number.
