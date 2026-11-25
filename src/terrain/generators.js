@@ -13,6 +13,9 @@
  *
  * The zones belong to the map; the flattened **site pad** belongs to the antenna
  * and is centred on `siteX`/`siteZ` (the map centre unless the user relocates it).
+ * The pad is graded to the *average natural ground under it*, never to a fixed
+ * elevation: move the mast onto a hill and the platform rides up with the hill,
+ * so the mast always stands on the surface rather than at the bottom of a pit.
  *
  * Zone heights cross-fade over `TERRAIN.blendBand` of the angular sector, which
  * keeps the surface C0-continuous without hard seams.
@@ -41,17 +44,18 @@ export const ZONE_LAYOUT = Object.freeze([
 /** Build the immutable evaluation context passed to every height function. */
 export function createTerrainContext({ seed = TERRAIN.seed, worldSize = WORLD.worldSize, siteX = 0, siteZ = 0 } = {}) {
   const half = worldSize / 2;
-  return Object.freeze({
+  const base = {
     seed: seed | 0,
     worldSize,
     half,
-    siteElevation: WORLD.siteElevation,
     padRadius: WORLD.sitePadRadius,
+    padBlendFactor: WORLD.sitePadBlendFactor,
     // The flattened pad is centred on the site; the four zones are centred on the map.
     siteX,
     siteZ,
     blendHalfDeg: clamp(TERRAIN.blendBand, 0.02, 0.45) * 45,
-  });
+  };
+  return Object.freeze({ ...base, padElevation: gradePadLevel(base) });
 }
 
 /** Normalised angular weights for the four zones. Always sums to 1. */
@@ -175,19 +179,55 @@ export const ZONE_HEIGHT_FN = Object.freeze({
 });
 
 /**
- * Elevation in metres above the datum at a world position, with the flattened
- * site pad blended in around the site (`ctx.siteX`, `ctx.siteZ`).
+ * Elevation in metres above the datum at a world position, **without** the site
+ * pad: the four zone heights cross-faded by their sector weights. `heightAt` is
+ * this plus the flattened pad; the pad's grading needs the untouched surface.
  */
-export function heightAt(x, z, ctx) {
+export function naturalHeightAt(x, z, ctx) {
   const weights = sectorWeights(x, z, ctx);
   let h = 0;
   for (const zone of ZONE_LAYOUT) {
     const w = weights[zone.id];
     if (w > 0) h += w * ZONE_HEIGHT_FN[zone.id](x, z, ctx);
   }
-  const radialBlend = smoothstep(ctx.padRadius, ctx.padRadius * 2.4,
+  return h;
+}
+
+/**
+ * The level the pad is cut and filled to: the average natural ground over the
+ * disc the pad blends into. Averaging is what keeps the platform honest in both
+ * directions - a point sample would drop a mast on a slope into a trench, and a
+ * fixed datum would bury it on high ground and put it on a pedestal in a valley.
+ * Computed once per context (a handful of samples), never per query.
+ */
+function gradePadLevel(ctx) {
+  const reach = ctx.padRadius * ctx.padBlendFactor;
+  const step = reach / 3;
+  let sum = 0;
+  let samples = 0;
+  for (let iz = -3; iz <= 3; iz += 1) {
+    for (let ix = -3; ix <= 3; ix += 1) {
+      const dx = ix * step;
+      const dz = iz * step;
+      if (Math.hypot(dx, dz) > reach) continue;
+      sum += naturalHeightAt(ctx.siteX + dx, ctx.siteZ + dz, ctx);
+      samples += 1;
+    }
+  }
+  return samples > 0 ? sum / samples : naturalHeightAt(ctx.siteX, ctx.siteZ, ctx);
+}
+
+/**
+ * Elevation in metres above the datum at a world position, with the flattened
+ * site pad blended in around the site (`ctx.siteX`, `ctx.siteZ`). Inside
+ * `padRadius` this is exactly `ctx.padElevation` - flat ground graded to the
+ * terrain there - and the natural surface takes over by `padRadius * padBlendFactor`.
+ */
+export function heightAt(x, z, ctx) {
+  const natural = naturalHeightAt(x, z, ctx);
+  const blend = smoothstep(ctx.padRadius, ctx.padRadius * ctx.padBlendFactor,
     Math.hypot(x - ctx.siteX, z - ctx.siteZ));
-  return lerp(ctx.siteElevation, h, radialBlend);
+  return lerp(ctx.padElevation, natural, blend);
 }
 
 /**

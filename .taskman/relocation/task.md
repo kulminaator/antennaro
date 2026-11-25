@@ -82,3 +82,16 @@ into `STATE_FIELDS`, new tunables into `src/config.js`, new modules into
   `ANTENNA.siteStepM` by the reducer, so compare them with a one-step tolerance.
 - `src/app/controller.js` finished the task at **349 of 350 lines**: the next
   feature that wants to grow the controller must split it first (GUIDELINES.md §3).
+- **After completion, follow-up fix:** a fixed pad elevation was wrong whatever the
+  number — `heightAt` flattened to `WORLD.siteElevation = 8` everywhere, so a
+  relocated mast stood at the bottom of a 250 m pit on the mountain and on a 39 m
+  pedestal in the valley (it read as "the antenna burrows underground"). The pad is
+  now graded to the *average natural ground within its blend reach*
+  (`ctx.padElevation`, computed once per context from the new exported
+  `naturalHeightAt`), so `site.groundY` is always the surface the mast stands on and
+  `heightM` is genuinely metres above ground. `WORLD.siteElevation` is gone;
+  `WORLD.sitePadBlendFactor` replaced the inline `2.4`. Rule of thumb for anything
+  derived from "the ground under the antenna": never bake in an absolute elevation,
+  grade it against the terrain it blends into — and note the height field stores
+  Float32, so comparing `field.sample` with an analytic `heightAt` needs a
+  ~1e-4 tolerance, not `assert.equal`.

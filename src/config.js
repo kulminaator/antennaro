@@ -18,7 +18,10 @@ export const WORLD = Object.freeze({
   minGridSize: 17,
   maxGridSize: 321,
   sitePadRadius: 45, // metres of flattened ground directly under the antenna
-  siteElevation: 8, // metres above the datum
+  // How far beyond that radius the flattened ground cross-fades back into the
+  // natural surface. The pad is graded to the average natural ground inside this
+  // reach, so it follows the terrain instead of sitting at a fixed datum.
+  sitePadBlendFactor: 2.4,
 });
 
 /** Terrain feature parameters. All amplitudes are metres. */

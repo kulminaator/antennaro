@@ -163,7 +163,8 @@ Every tunable that describes the **world or the radio** lives in `src/config.js`
 world size, terrain amplitudes and blend band, RF constants (including
 `RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, where the
 mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
-`siteStepM`, shared by the sliders and the drag), camera
+`siteStepM`, shared by the sliders and the drag), how far the site pad reaches
+(`WORLD.sitePadRadius`, `WORLD.sitePadBlendFactor`), camera
 defaults, colours, path names and every timeout. The UI schema and the state
 reducer read the same ranges, so a slider can never disagree with the physics.
 `VIEW.cameraFovDeg` is here for the same reason: `app/pick.js` needs the vertical
@@ -240,8 +241,13 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   on a cell centre), built from four angular zones - mountain (N) with a taller
   distant range, flat field (E), valley (S), bumps (W) - blended across
   `TERRAIN.blendBand`. The **site pad** is flattened within
-  `WORLD.sitePadRadius` *around the site*, so the mast never floats or buries -
-  and because the pad is baked into the height field, `state.site` is part of the
+  `WORLD.sitePadRadius` *around the site* and cross-fades back to the natural
+  surface by `WORLD.sitePadRadius * WORLD.sitePadBlendFactor`, so the mast never
+  floats or buries. The pad is **graded to the average natural ground inside that
+  reach** (`ctx.padElevation`, sampled once per context) and never to a fixed
+  elevation - a fixed datum buries the mast on a hilltop and puts it on a pedestal
+  in a valley, which is exactly the bug this rule prevents. Because the pad is
+  baked into the height field, `state.site` is part of the
   terrain cache key: relocating the mast re-runs the terrain stage (and therefore
   coverage and scene) even though the zones and the noise did not change.
 - **Antenna pattern** is separable azimuth × elevation, evaluated per direction.

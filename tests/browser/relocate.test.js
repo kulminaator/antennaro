@@ -11,7 +11,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ANTENNA, WORLD } from '../../src/config.js';
+import { ANTENNA } from '../../src/config.js';
 import { withApp } from '../harness/app.js';
 
 const YAGI_PARAMS = Object.freeze({ directors: 8, spacingLambda: 0.3, beamTiltDeg: 0 });
@@ -21,7 +21,8 @@ test('browser: relocating the site moves the pad, the rig and the coverage', asy
   await withApp(async (session) => {
     await session.settle();
     const padAtCentre = await session.sim('heightAt', 0, 0);
-    assert.ok(almost(padAtCentre, WORLD.siteElevation, 1e-6), `the pad starts level at ${padAtCentre}`);
+    assert.ok(almost(padAtCentre, (await session.sim('site')).groundY, 1e-6),
+      `the mast starts on the surface it stands on (${padAtCentre})`);
     const before = await session.sim('pixelStats');
 
     const patched = await session.patch({ site: { x: 400, z: 200 } });
@@ -36,8 +37,10 @@ test('browser: relocating the site moves the pad, the rig and the coverage', asy
 
     // The flattened pad belongs to the site: it travelled, and the abandoned
     // centre is natural ground again.
-    assert.ok(almost(await session.sim('heightAt', 400, 200), WORLD.siteElevation, 1e-6), 'no pad under the moved mast');
-    assert.ok(!almost(await session.sim('heightAt', 0, 0), WORLD.siteElevation, 0.5), 'the old centre is still flattened');
+    const newPad = await session.sim('heightAt', 400, 200);
+    assert.ok(almost(newPad, site.groundY, 1e-6), 'the mast base is not on the pad under it');
+    assert.ok(Math.abs((await session.sim('heightAt', 0, 0)) - newPad) > 0.5,
+      'the old centre is still flattened');
 
     const after = await session.sim('pixelStats');
     assert.notDeepEqual(
@@ -76,6 +79,33 @@ test('browser: the beam and the link budget follow the mast to its new home', as
   });
 });
 
+test('browser: the mast stays on the surface on high ground and in the valley', async () => {
+  await withApp(async (session) => {
+    // Regression: the pad used to be flattened to one fixed elevation, so a
+    // relocated mast ended up at the bottom of a pit on a hilltop - and on a
+    // pedestal in the valley. The platform must ride with the ground under it.
+    await session.patch({ site: { x: 0, z: -900 } });
+    await session.settle();
+    const hilltop = await session.sim('site');
+    assert.ok(hilltop.groundY > 100, `the pad did not ride up the mountain: ${hilltop.groundY} m`);
+    assert.ok(almost(await session.sim('heightAt', hilltop.x, hilltop.z), hilltop.groundY, 1e-6),
+      'the mast base is not standing on the ground');
+    assert.ok(almost(await session.sim('heightAt', hilltop.x + 30, hilltop.z - 25), hilltop.groundY, 1e-6),
+      'the platform under a hilltop mast is not level');
+
+    await session.patch({ site: { x: 0, z: 900 } });
+    await session.settle();
+    const valley = await session.sim('site');
+    assert.ok(valley.groundY < hilltop.groundY - 100,
+      `the pad is not terrain-driven: hilltop ${hilltop.groundY} m vs valley floor ${valley.groundY} m`);
+    assert.ok(almost(await session.sim('heightAt', 0, 900), valley.groundY, 1e-6),
+      'the valley mast is not standing on the ground');
+    // Either way the hardware is above the surface it stands on.
+    assert.ok((await session.sim('scene')).antennaY > valley.groundY, 'the hardware sits below the ground');
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
 test('browser: grabbing the mast and dragging moves the site', async () => {
   await withApp(async (session) => {
     await session.settle();
@@ -103,7 +133,11 @@ test('browser: grabbing the mast and dragging moves the site', async () => {
 
     const site = await session.sim('site');
     assert.deepEqual((await session.sim('scene')).sitePosition, [site.x, site.z], 'the rig is not where the site is');
-    assert.ok(almost(site.groundY, grab.planeY, 1e-6), 'the mast should stay on the plane it was grabbed at');
+    // The drag slides on a horizontal plane at the height the grab happened at,
+    // but the pad is graded to the ground where it lands: the mast ends up on the
+    // surface there, not on the plane it was dragged along.
+    assert.ok(almost(site.groundY, await session.sim('heightAt', site.x, site.z), 1e-6),
+      `after the drag the mast floats ${site.groundY} m above the ground`);
     assert.deepEqual(session.errors(), []);
   });
 });
@@ -140,7 +174,8 @@ test('browser: reset placement and reset all both bring the mast home', async ()
     let site = await session.sim('site');
     assert.equal(site.x, ANTENNA.defaultSiteXm);
     assert.equal(site.z, ANTENNA.defaultSiteZm);
-    assert.ok(almost(await session.sim('heightAt', 0, 0), WORLD.siteElevation, 1e-6), 'the pad is not back at the centre');
+    assert.ok(almost(await session.sim('heightAt', 0, 0), (await session.sim('site')).groundY, 1e-6),
+      'the pad is not under the reset mast');
 
     await session.patch({ designId: 'yagi', params: YAGI_PARAMS, site: { x: -800, z: 600 } });
     await session.settle();

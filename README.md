@@ -10,7 +10,8 @@ design, set the height and aim, and the simulator draws the radiation lobe and
 paints the predicted signal level onto the terrain. The pad is part of the site,
 not of the map: drag the mast (or use the two placement sliders) and the pad moves
 with it, while the mountain, the valley and the other zones stay exactly where
-they are.
+they are. The pad is graded to the height of the ground it lands on, so the mast
+stays on the surface wherever you put it.
 
 ![Omni dipole on the site pad: coverage painted over the flat field, the valley and the shadow of the northern mountain.](docs/screenshot.png)
 
@@ -49,7 +50,9 @@ an edited import map, and `npm run vendor` tells you which.
   not the middle of it. The mast is drawn at true height;
   the antenna body is enlarged so you can see what it is - treat the hardware as
   "not to scale". The ground is flattened into a pad around wherever the site
-  stands, so moving the site moves the flat ground with it.
+  stands, and that pad is graded level with the ground around it - up on a hilltop,
+  down on a valley floor - so the mast always stands on the surface and the
+  *Antenna height* you set is always measured from the ground it stands on.
 - **The radiation lobe**: a 3D surface of the antenna's own gain, cut off 30 dB
   below the peak. It shows the shape of the antenna, not its range.
 - **The coverage overlay**: signal level painted onto the ground, measured where
@@ -75,7 +78,7 @@ Left panel, top to bottom:
 | --- | --- |
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
-| **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
+| **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground the pad is graded to), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
 | **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, evaluation range, clutter loss, and a switch for terrain shadowing. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
 | **Display** | Coverage overlay, radiation pattern, terrain mesh, zone labels. |
