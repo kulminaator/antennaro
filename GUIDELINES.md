@@ -554,6 +554,16 @@ Those flags are already in `baseFlags()`. Profiles and logs live in
 `.tmp/browser/<name>/`; each test session uses its own name so a crash cannot
 poison another test.
 
+### The harness does not rebuild for you
+
+`window.__sim.patch()` returns the reducer's report and **returns before anything is
+rebuilt**: the sweep and the meshes happen on the next frame. A test that patches and then
+reads a derived result - `coverage()`, `site()`, `fresnel()`, `scene()` - is therefore
+reading the *previous* sweep unless it `await session.settle()` in between; `state()` is
+the exception, being the instant answer. This is easy to miss because a CDP round trip
+usually outlasts a frame, so the stale read looks correct right up until it does not.
+`tests/browser/reach.test.js` shows the pattern to follow: patch, settle, read.
+
 ## 10. Timeouts
 
 Every budget is a named entry in `TIMEOUTS` (`src/config.js`) - per test, per
@@ -585,12 +595,3 @@ Also expected of a change:
 - New physics covered by an invariant test with a comment explaining the maths.
 - User-visible behaviour change reflected in README.md; structural change
   reflected here. Third-party code stays in `vendor/three/` with its licence.
-
-## 10. One more thing the harness will not tell you
-
-`window.__sim.patch()` returns the reducer's report and **returns before anything is
-rebuilt**; the sweep and the meshes happen on the next frame. So a test that patches and
-then reads a derived result - `coverage()`, `site()`, `fresnel()`, `scene()` - is reading
-the *previous* sweep unless it `await session.settle()` in between. `state()` is the
-exception: it is the instant answer. This is easy to miss because a CDP round trip usually
-outlasts a frame, so the stale read looks correct right up until it does not.
