@@ -139,6 +139,12 @@ export const FRESNEL = Object.freeze({
   // The true zone is thin next to a kilometre-wide map (r1 is a few metres at
   // 868 MHz); exaggerate radially so it is actually visible, and say so in the docs.
   radialExaggeration: 6,
+  /**
+   * Clearance ratio that tops the zone colour ramp, in first-zone radii: below the
+   * criterion the ramp runs cut -> partly cut, above it partly cut -> comfortably
+   * clear. Ramped because a binary flag would paint ~90 % of the map one colour.
+   */
+  rampMaxRatio: 2,
 });
 
 /** Rendering defaults (three.js side only). */
@@ -212,4 +218,11 @@ export const COLOURS = Object.freeze({
   fresnelObstructed: Object.freeze('#a24bd0'),
   /** The semi-transparent first-Fresnel-zone volume of the antenna. */
   fresnelVolume: Object.freeze('#79d6ff'),
+  /**
+   * The other two stops of the zone ramp, between `fresnelObstructed` (cut) and a
+   * criterion met with room. Named rather than borrowed from `levels`: a zone state
+   * is not a signal level, and the two must never be confused for one another.
+   */
+  fresnelPartial: Object.freeze('#e8c33c'),
+  fresnelClear: Object.freeze('#3fd07a'),
 });

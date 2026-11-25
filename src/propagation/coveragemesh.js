@@ -7,8 +7,8 @@
  */
 
 import * as THREE from 'three';
-import { VIEW } from '../config.js';
-import { coverageRgb } from '../palette.js';
+import { FRESNEL, VIEW } from '../config.js';
+import { coverageRgb, fresnelZoneRgb } from '../palette.js';
 
 /** Cells that miss the link budget are painted faintly, so the ground still shows. */
 const NO_LINK_ALPHA = 0.22;
@@ -90,20 +90,32 @@ export function createCoverageOverlay(field) {
     geometry.computeBoundingSphere();
   }
 
-  /** Repaint from a coverage result. Requires the same field as at construction. */
-  function update(sourceField, coverage) {
+  /**
+   * Repaint from a coverage result. Requires the same field as at construction.
+   * @param {object} sourceField
+   * @param {object} coverage
+   * @param {{zoneView?:boolean}} [options] `zoneView` paints first-Fresnel-zone state
+   *   instead of signal bands. A mode rather than a marking laid over the bands: only
+   *   a small share of the map meets the clearance criterion, so painting the flag on
+   *   top of the RSSI colours would wash the drape in one hue.
+   */
+  function update(sourceField, coverage, options = {}) {
     if (sourceField.size !== coverage.size) {
       throw new RangeError(`coverage grid ${coverage.size} does not match terrain ${sourceField.size}`);
     }
     const target = colour.array;
     const lastBand = coverage.margins.length;
+    const zoneView = options.zoneView === true;
+    const rgb = [0, 0, 0];
     for (let i = 0; i < sourceField.size * sourceField.size; i += 1) {
       if (coverage.evaluated[i] === 1) {
         const band = coverage.level[i];
-        const rgb = coverageRgb(band);
-        target[i * 4] = rgb[0];
-        target[i * 4 + 1] = rgb[1];
-        target[i * 4 + 2] = rgb[2];
+        const source = zoneView
+          ? fresnelZoneRgb(coverage.fresnelClearance[i])
+          : coverageRgb(band);
+        target[i * 4] = source[0];
+        target[i * 4 + 1] = source[1];
+        target[i * 4 + 2] = source[2];
         target[i * 4 + 3] = band >= lastBand ? NO_LINK_ALPHA : 1;
       } else {
         // Outside the study area: fully transparent, the terrain speaks for itself.

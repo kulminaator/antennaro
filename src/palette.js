@@ -6,7 +6,7 @@
  * for CSS. Centralising them keeps the 3D view and the legend in agreement.
  */
 
-import { COLOURS } from './config.js';
+import { COLOURS, FRESNEL, RF } from './config.js';
 import { clamp, clamp01, lerp } from './math/scalar.js';
 
 /** '#rrggbb' -> [r, g, b] floats. */
@@ -67,6 +67,58 @@ export function fresnelVolumeRgb() {
 /** ...and the same as a CSS hex string, for the material. */
 export function fresnelVolumeHex() {
   return COLOURS.fresnelVolume;
+}
+
+const ZONE_CUT = hexToRgb(COLOURS.fresnelObstructed);
+const ZONE_PARTIAL = hexToRgb(COLOURS.fresnelPartial);
+const ZONE_CLEAR = hexToRgb(COLOURS.fresnelClear);
+
+/**
+ * Colour for the first-Fresnel-zone view, from a clearance ratio in zone radii.
+ *
+ * The scale runs from "ground above the ray" (the zone is fully cut) to
+ * `FRESNEL.rampMaxRatio` radii of clearance, with the `RF.fresnelClearFraction`
+ * criterion at the amber/green junction. Ramped rather than binary on purpose: on a
+ * real map only about one cell in ten meets the criterion, so painting the flag
+ * would wash the drape in one hue. The warm-to-cool language matches the signal ramp
+ * so both overlays read the same way; only the "cut" hue is new, and it never
+ * appears among the signal bands.
+ *
+ * @param {number} clearanceRatio worst clearance along the path, in first-zone radii
+ * @param {number[]} [out] written to, when given (the drape loops over 25k cells)
+ * @returns {number[]} rgb triple, 0..1
+ */
+export function fresnelZoneRgb(clearanceRatio, out = null) {
+  const fraction = RF.fresnelClearFraction;
+  const ratio = Number.isFinite(clearanceRatio) ? clearanceRatio : FRESNEL.rampMaxRatio;
+  const rgb = ratio <= 0
+    ? ZONE_CUT
+    : ratio < fraction
+      ? mixRgb(ZONE_CUT, ZONE_PARTIAL, ratio / fraction)
+      : mixRgb(ZONE_PARTIAL, ZONE_CLEAR, clamp((ratio - fraction) / Math.max(0.001, FRESNEL.rampMaxRatio - fraction), 0, 1));
+  if (!out) return rgb.slice();
+  out[0] = rgb[0]; out[1] = rgb[1]; out[2] = rgb[2];
+  return out;
+}
+
+/**
+ * Legend rows for the zone view. The assumptions are part of the label: a clearance
+ * figure without them is not a claim anyone can check.
+ */
+export function fresnelZoneLegendItems() {
+  return [
+    { band: 0, colour: rgbToHex(ZONE_CUT), label: 'zone cut: ground reaches the ray' },
+    {
+      band: 1,
+      colour: rgbToHex(ZONE_PARTIAL),
+      label: `partly cut: under ${Math.round(RF.fresnelClearFraction * 100)}% of the first zone clear`,
+    },
+    {
+      band: 2,
+      colour: rgbToHex(ZONE_CLEAR),
+      label: `clear: judged to a terminal ${RF.fresnelRxHeightM} m above the ground`,
+    },
+  ];
 }
 
 /**

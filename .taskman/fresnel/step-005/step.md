@@ -27,3 +27,15 @@ legend explains it.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- The drape is per **vertex** (one slot per terrain grid point, RGBA), not per quad:
+  `update()` writes `target[i*4 .. i*4+3]`, with `NO_LINK_ALPHA` for cells that miss
+  the budget and alpha 0 outside the study area. Both of those behaviours are kept
+  untouched; the zone view only replaces the RGB.
+- `COLOURS` turned out to hold only `levels`, `noLink` and the two fresnel entries
+  added in step-001 - there is no `coverageWeak`/`coverageStrong`, so the step text
+  that said "reuse the coverage colours" was wrong about the code. The ramp got its
+  own named stops (`fresnelPartial`, `fresnelClear`) instead, which is better anyway:
+  a zone state is not a signal level and must not share their identity.
+- Ramp measured end to end: -1 and 0 -> `#a24bd0` (cut), 0.3 -> `#c58786`,
+  0.6 (the criterion) -> `#e8c33c`, 1.3 -> `#93ca5b`, 2 and above -> `#3fd07a`.
