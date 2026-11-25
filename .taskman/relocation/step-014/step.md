@@ -51,3 +51,14 @@ synthetic mouse coordinates.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `site()` returns the site the **pipeline last built**, not the live state: a drag
+  patches state immediately but the ground/rig rebuild happens in the next frame.
+  Measured: right after `dragSiteTo` the state said `{-390,-315}` while `site()`
+  still said `{0,0}`; after `settle()` both agree. The step comment on the method
+  now says "call settle() first", and step-015's tests must follow that.
+- `dragSiteTo()` commits a raw ground point; the reducer snaps it to
+  `ANTENNA.siteStepM` (5 m), so expect `{x,z}` to be the nearest multiple of 5, not
+  the exact pick. Compare with a tolerance of one step.
+- Filtering `Object.keys(window.__sim)` for `site|drag|pick` misses `grabSite` and
+  `releaseSite` (capital S). Use `/(site|drag|pick|Site)/` when listing the surface.

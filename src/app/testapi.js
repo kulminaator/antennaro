@@ -6,7 +6,8 @@
  * not break tests, and the controller API must not change under them.
  *
  * Everything exposed here is read-only snapshots plus a handful of deterministic
- * commands (`patch`, `settle`, `step`). No timers, no randomness.
+ * commands (`patch`, `settle`, `step`, and the `grabSite`/`dragSiteTo`/`releaseSite`
+ * drag cycle). No timers, no randomness, no synthetic mouse events.
  */
 
 import { APP } from '../config.js';
@@ -119,6 +120,20 @@ export function installTestApi(options) {
       });
       return pickGround(pose, ndcX, ndcY, controller.site().groundY);
     },
+    /**
+     * Where the mast stands: {x, z, groundY, heightM, y}. This is the site the
+     * pipeline last built, so after a patch or a drag call `settle()` first -
+     * `state().site` is the instant answer, `site()` is the physical one.
+     */
+    site: () => structuredClone(controller.site()),
+    /** Start a relocation drag as if the pointer were on the mast. */
+    grabSite: () => controller.grabSite(),
+    /** Move the grabbed site to a pointer position in NDC (-1..1, y up). */
+    dragSiteTo: (ndcX, ndcY) => controller.dragSiteTo(ndcX, ndcY),
+    /** Finish the drag; the site patch has been committed by then. */
+    releaseSite: () => controller.releaseSite(),
+    /** {active, planeY, last} of the drag adapter. */
+    dragState: () => controller.dragState(),
     rf: () => controller.rf(),
     pixelStats,
     /** Control-panel widget keys currently rendered. */
