@@ -53,3 +53,9 @@ split before anything new is wired into it**.
 
 <!-- Globally important findings discovered during execution are appended here
      as bullet points. This section starts empty and is append-only. -->
+
+- `GUIDELINES.md` §4 lists config blocks that `src/config.js` does not export
+  (`RENDER.*`, `COVERAGE.*`, `ANALYSIS.*`, `UI.*`). Anything written against that
+  prose lands in the wrong place; the real exports are `APP, WORLD, TERRAIN, RF,
+  ANTENNA, VIEW, TIMEOUTS, PATHS, COLOURS` (+ `FRESNEL` from step-001). Corrected in
+  step-011.

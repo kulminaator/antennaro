@@ -52,6 +52,24 @@ export function coverageRgb(band) {
 }
 
 /**
+ * A cell that meets the link budget but has the first Fresnel zone cut reads as
+ * this, so "the budget says yes, the zone says no" is visible on the map.
+ */
+export function fresnelObstructedRgb() {
+  return hexToRgb(COLOURS.fresnelObstructed);
+}
+
+/** Colour of the semi-transparent Fresnel-zone volume. */
+export function fresnelVolumeRgb() {
+  return hexToRgb(COLOURS.fresnelVolume);
+}
+
+/** ...and the same as a CSS hex string, for the material. */
+export function fresnelVolumeHex() {
+  return COLOURS.fresnelVolume;
+}
+
+/**
  * Radiation-pattern colour: hot at the peak lobe, cold in the nulls.
  * @param {number} db absolute gain in dBi
  * @param {number} peakDbi peak gain of the design

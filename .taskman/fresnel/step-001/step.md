@@ -34,3 +34,14 @@ and reachable through `src/palette.js`; nothing else changes yet.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- The step text said `RENDER` and `COLOURS.fresnel*`; there is **no `RENDER` export in
+  `src/config.js`** - the render defaults live in `VIEW`, the lobe knobs in `ANTENNA`.
+  The Fresnel visual knobs therefore got their own `FRESNEL` export (radio criterion
+  stayed in `RF`), which reads better than dumping four more keys into `VIEW`.
+- **`GUIDELINES.md` §4 names four config blocks that do not exist**: `RENDER.*`,
+  `COVERAGE.*`, `ANALYSIS.*`, `UI.*`. The real exports are `APP, WORLD, TERRAIN, RF,
+  ANTENNA, VIEW, TIMEOUTS, PATHS, COLOURS` (+ now `FRESNEL`). Fix the prose in
+  step-011 - the guideline that tells you where numbers live is itself out of date.
+- `fresnelLegendRow()` is deferred to step-005 on purpose: a legend marker row wants
+  `stats.fresnelObstructedLinkedCells`, which only exists after step-003.

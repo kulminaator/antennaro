@@ -79,6 +79,13 @@ export const RF = Object.freeze({
   earthRadiusM: 6_371_000,
   kFactor: 1.413, // standard atmosphere refraction model for the terrain LOS bulge
   profileSamples: 96,
+  /**
+   * A path is only reliable when at least this fraction of the *first Fresnel zone*
+   * is clear of the ground. 0.6 (60 % of r1) is the conventional engineering
+   * criterion; it is a flag on the link, not an extra loss term - the dB already
+   * come from the Fresnel/Kirchhoff diffraction parameter.
+   */
+  fresnelClearFraction: 0.6,
   coverageResolutionDivisor: 1, // 1 = evaluate coverage on the full terrain grid
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
@@ -103,6 +110,20 @@ export const ANTENNA = Object.freeze({
   lobeColumns: 72,
   lobeDynamicRangeDb: 30, // pattern surface is clipped to peak-30 dB
   lobeScale: 110, // metres: drawn radius of the peak-gain lobe (a visual aid, not a range)
+});
+
+/**
+ * First-Fresnel-zone visuals. The volume is the ellipsoid of revolution of a
+ * reference link (phase centre to the far edge of the study range), which is the
+ * largest zone the antenna has to keep clear.
+ */
+export const FRESNEL = Object.freeze({
+  rings: 28, // segments around the zone
+  steps: 48, // samples along the link
+  opacity: 0.2,
+  // The true zone is thin next to a kilometre-wide map (r1 is a few metres at
+  // 868 MHz); exaggerate radially so it is actually visible, and say so in the docs.
+  radialExaggeration: 6,
 });
 
 /** Rendering defaults (three.js side only). */
@@ -172,4 +193,8 @@ export const PATHS = Object.freeze({
 export const COLOURS = Object.freeze({
   levels: Object.freeze(['#1b7f4d', '#5fb85f', '#e8c33c', '#e08b2f']),
   noLink: Object.freeze('#2a2f38'),
+  /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */
+  fresnelObstructed: Object.freeze('#a24bd0'),
+  /** The semi-transparent first-Fresnel-zone volume of the antenna. */
+  fresnelVolume: Object.freeze('#79d6ff'),
 });
