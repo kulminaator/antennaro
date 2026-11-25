@@ -17,7 +17,7 @@ import { clamp, wrapDeg360 } from '../math/scalar.js';
 import { RECOMPUTE, STATE_FIELDS, STATE_FIELD_BY_KEY, getPath, withPath } from './fields.js';
 
 /** Keys that are not user-facing sliders but still live in state. */
-const STRUCTURAL_KEYS = Object.freeze(['designId', 'params', 'aim', 'display']);
+const STRUCTURAL_KEYS = Object.freeze(['designId', 'params', 'aim', 'display', 'site']);
 
 /**
  * Build the initial state. Antenna-specific fields come from the catalogue so a
@@ -38,6 +38,7 @@ function baseState(designId) {
     params: createDefaultParams(designId),
     aim: { ...createDefaultAim(designId) },
     heightM: ANTENNA.defaultHeightM,
+    site: { x: ANTENNA.defaultSiteXm, z: ANTENNA.defaultSiteZm },
     frequencyKey: RF.defaultFrequencyKey,
     txPowerDbm: RF.defaultTxPowerDbm,
     feederLossDb: 1.5,
@@ -209,6 +210,21 @@ export function applyPatch(state, patch) {
       const displayPatch = {};
       for (const [name, value] of Object.entries(rawValue)) displayPatch[`display.${name}`] = value;
       const nested = applyPatch(next, displayPatch);
+      next = nested.state;
+      changed.push(...nested.changed);
+      rejected.push(...nested.rejected);
+      clamped.push(...nested.clamped);
+      continue;
+    }
+
+    if (key === 'site') {
+      if (!rawValue || typeof rawValue !== 'object') {
+        rejected.push({ key, reason: 'site must be an object' });
+        continue;
+      }
+      const sitePatch = {};
+      for (const [name, value] of Object.entries(rawValue)) sitePatch[`site.${name}`] = value;
+      const nested = applyPatch(next, sitePatch);
       next = nested.state;
       changed.push(...nested.changed);
       rejected.push(...nested.rejected);
