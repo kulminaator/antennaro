@@ -145,6 +145,8 @@ export const FRESNEL = Object.freeze({
    * clear. Ramped because a binary flag would paint ~90 % of the map one colour.
    */
   rampMaxRatio: 2,
+  /** Step used to walk the boresight until it meets the ground, in metres. */
+  groundSearchStepM: 20,
 });
 
 /** Rendering defaults (three.js side only). */

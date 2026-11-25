@@ -71,6 +71,14 @@ export const STATE_FIELDS = Object.freeze([
     hint: 'The coverage ramp and "linked" counts are measured against this level.',
   }),
   Object.freeze({
+    key: 'zoneRxHeightM', path: ['zoneRxHeightM'], label: 'Zone receiver height', kind: 'range',
+    min: 0, max: 10, step: 0.5, unit: 'm', group: 'Radio', impact: [RECOMPUTE.COVERAGE],
+    hint: 'How high the receiving terminal is assumed to be when asking whether the '
+      + 'first Fresnel zone is clear. It moves the zone verdict only, never the signal '
+      + 'level: judged against a terminal lying on the ground, the criterion is always '
+      + 'failed and says nothing.',
+  }),
+  Object.freeze({
     key: 'maxRangeM', path: ['maxRangeM'], label: 'Evaluation range', kind: 'range',
     min: RF.maxRangeLimitsM.min, max: RF.maxRangeLimitsM.max, step: 50, unit: 'm',
     group: 'Radio', impact: [RECOMPUTE.COVERAGE],
@@ -96,6 +104,12 @@ export const STATE_FIELDS = Object.freeze([
   Object.freeze({
     key: 'display.showPattern', path: ['display', 'showPattern'], label: 'Radiation pattern', kind: 'toggle',
     group: 'Display', impact: [RECOMPUTE.DISPLAY],
+  }),
+  Object.freeze({
+    key: 'display.showFresnel', path: ['display', 'showFresnel'], label: 'Fresnel zone', kind: 'toggle',
+    group: 'Display', impact: [RECOMPUTE.DISPLAY],
+    hint: 'Draw the first Fresnel zone of a reference link and colour the coverage by '
+      + 'zone clearance instead of by signal level.',
   }),
   Object.freeze({
     key: 'display.showWireframe', path: ['display', 'showWireframe'], label: 'Terrain mesh', kind: 'toggle',

@@ -35,3 +35,31 @@ object.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Wiring lives in `reports.js`, not the controller: `fresnelLink()` walks the boresight
+  in `FRESNEL.groundSearchStepM` steps until the ray reaches the ground and puts the
+  far end one receiver-height above it (or at `maxRangeM` if the beam never lands, e.g.
+  uptilt). That is the biggest zone the antenna has to keep clear, and it is the same
+  link the per-cell criterion uses, so the volume and the map cannot disagree.
+- The volume is rebuilt in `onCoverage`, the same callback that repaints the drape:
+  every input that moves the zone (site, aim, tilt, height, frequency, range, receiver
+  assumption) already dirties coverage, so there is nothing else to track.
+- The zone *shares* the coverage drape instead of adding a second one, so
+  `applyVisibility()` keeps a `lastZoneView` flag and repaints the drape when the mode
+  flips - a display-only change does not recompute 25k cells.
+- `?fresnel=1` was added to the URL parameters (next to `siteX`/`range`/...), because
+  `tools/browser.js shot --url` can only shoot a freshly loaded page: without a URL
+  switch there is no way to screenshot a toggle from the CLI. `createInitialState` runs
+  `applyPatch`, so `{ display: { showFresnel: true } }` merges instead of wiping the
+  other display flags.
+- Live, default map: `distinctColours` 51 (RSSI view) -> 82 (zone view) -> 51, and the
+  third pixel histogram is *identical* to the first, so the mode switch is reversible
+  and does not drift. Zone stats: 24.96 % of evaluated cells clear, 1018 of 5816 linked
+  cells have the zone cut, worst clearance -21.6 r1.
+- Screenshots `.tmp/artifacts/fz-*.png`: the omni at the centre shows a stubby lens
+  (the boresight hits rising ground a couple of hundred metres out), the `valley-reach`
+  yagi shows a long slim lens. Orientation is asserted numerically in step-010, not by
+  squinting at a picture.
+- Seen and to fix in step-009: the legend still lists dBm bands while the drape is
+  painted in zone colours, and the HUD has no zone row. A legend that does not describe
+  the pixels below it is a bug.

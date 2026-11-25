@@ -8,6 +8,7 @@
  *
  * URL parameters (all optional, meant for testing and shareable links):
  *   ?design=yagi&seed=1234&azimuth=90&tilt=-4&height=12&siteX=400&preset=valley-reach
+ *   &fresnel=1       start with the Fresnel-zone view on
  *   &manual=1        do not auto-start the animation loop (headless tests)
  *   &nohud=1         do not create the read-out panel
  */
@@ -42,6 +43,7 @@ function readInitialState(params) {
   if (params.get('frequency')) initialState.frequencyKey = String(params.get('frequency'));
   if (params.get('sensitivity')) initialState.rxSensitivityDbm = Number(params.get('sensitivity'));
   if (params.get('range')) initialState.maxRangeM = Number(params.get('range'));
+  if (params.has('fresnel')) initialState.display = { showFresnel: params.get('fresnel') !== '0' };
   return initialState;
 }
 

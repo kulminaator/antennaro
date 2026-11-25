@@ -22,6 +22,7 @@ import { createAntennaRig } from '../antenna/rigmesh.js';
 import { generateTerrain } from '../terrain/generators.js';
 import { resolveSite } from '../terrain/site.js';
 import { createMapObjects } from './mapmesh.js';
+import { createFresnelMesh } from '../propagation/fresnelmesh.js';
 import { resolveFrequencyHz, wavelengthM } from '../propagation/rf.js';
 import { applyPatch, createInitialState, impactedStages, RECOMPUTE } from './state.js';
 import { createActions } from './actions.js';
@@ -72,6 +73,7 @@ export function createController(options) {
   const mapObjects = createMapObjects(field, viewport);
   const rig = createAntennaRig();
   viewport.add(rig.group);
+  const fresnel = createFresnelMesh(viewport.scene);
 
   /** @type {import('../antenna/model.js').AntennaModel|null} */
   let model = null;
@@ -89,6 +91,9 @@ export function createController(options) {
     getCameraState: () => viewport.cameraState(),
     onCoverage: (coverage) => {
       mapObjects.overlay.update(field, coverage, { zoneView: state.display.showFresnel === true });
+      // The volume rides the same inputs as the grid - site, aim, height, frequency,
+      // range and receiver assumption - so it is rebuilt here rather than tracked.
+      fresnel.update(reports.fresnelLink());
       lastCoverageMs = now();
       bus.emit(EVENTS.COVERAGE_READY, coverage);
     },
@@ -96,6 +101,7 @@ export function createController(options) {
 
   const dirty = { terrain: true, antenna: true, coverage: true };
   let lastCoverageMs = 0;
+  let lastZoneView = false;
 
   /** Everything the height field depends on - including where the pad sits. */
   function terrainSignature() {
@@ -138,6 +144,15 @@ export function createController(options) {
     rig.setPatternVisible(state.display.showPattern);
     mapObjects.terrain.setWireframe(state.display.showWireframe);
     mapObjects.labels.group.visible = state.display.showSectors;
+    fresnel.setVisible(state.display.showFresnel === true);
+    // The zone shares the coverage drape rather than adding a second one, so turning
+    // it over means repainting the drape in the other language.
+    const zoneView = state.display.showFresnel === true;
+    if (zoneView !== lastZoneView) {
+      lastZoneView = zoneView;
+      const coverage = reports.coverage();
+      if (coverage) mapObjects.overlay.update(field, coverage, { zoneView });
+    }
   }
 
   /** One staged pass. `force` disables the coverage throttle. */
@@ -288,6 +303,7 @@ export function createController(options) {
       orbit.dispose();
       relocator.dispose();
       rig.dispose();
+      fresnel.dispose();
       mapObjects.dispose();
       viewport.dispose();
     },

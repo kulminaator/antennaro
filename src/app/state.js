@@ -43,6 +43,7 @@ function baseState(designId) {
     txPowerDbm: RF.defaultTxPowerDbm,
     feederLossDb: 1.5,
     rxSensitivityDbm: RF.defaultRxSensitivityDbm,
+    zoneRxHeightM: RF.fresnelRxHeightM,
     maxRangeM: RF.defaultMaxRangeM,
     clutterLossDb: RF.clutterLossDb,
     useDiffraction: true,
@@ -52,6 +53,7 @@ function baseState(designId) {
     display: {
       showCoverage: true,
       showPattern: true,
+      showFresnel: false,
       showWireframe: false,
       showSectors: true,
     },

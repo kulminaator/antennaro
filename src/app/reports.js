@@ -11,6 +11,8 @@
  * No DOM, no three.js: the accessors hand over plain data or already-built objects.
  */
 
+import { boresightDirection } from '../antenna/aim.js';
+import { FRESNEL } from '../config.js';
 import { computeCoverage } from '../propagation/coverage.js';
 import { resolveFrequencyHz, rfSummary } from '../propagation/rf.js';
 
@@ -74,6 +76,44 @@ export function createReports(accessors) {
     });
   }
 
+  /**
+   * The reference link the Fresnel volume is drawn around: the boresight, out to the
+   * point where it reaches the ground (or to the edge of the study range if it never
+   * does), with a terminal `zoneRxHeightM` above that point. This is the largest zone
+   * the antenna has to keep clear anywhere it is looking, so it is the one worth
+   * drawing - and it is the same link the per-cell criterion uses, so the volume and
+   * the map cannot disagree about what "clear" means.
+   */
+  function fresnelLink() {
+    const state = getState();
+    const model = getModel();
+    const site = getSite();
+    const aim = model ? model.summary().aim : state.aim;
+    const dir = boresightDirection(aim);
+    const field = getField();
+    const rxHeightM = state.zoneRxHeightM;
+    const stepM = FRESNEL.groundSearchStepM;
+    const rangeM = state.maxRangeM;
+    let distanceM = rangeM;
+    for (let d = stepM; d <= rangeM; d += stepM) {
+      const y = site.y + dir.y * d;
+      if (y - rxHeightM <= field.sample(site.x + dir.x * d, site.z + dir.z * d)) {
+        distanceM = d - stepM;
+        break;
+      }
+    }
+    return {
+      from: { x: site.x, y: site.y, z: site.z },
+      to: {
+        x: site.x + dir.x * distanceM,
+        y: site.y + dir.y * distanceM + rxHeightM,
+        z: site.z + dir.z * distanceM,
+      },
+      freqHz: resolveFrequencyHz(state.frequencyKey),
+      distanceM,
+    };
+  }
+
   /** What the scene is made of: geometry counts, placement, visibility. */
   function sceneInfo() {
     const field = getField();
@@ -106,6 +146,7 @@ export function createReports(accessors) {
       return model ? model.summary() : null;
     },
     rf,
+    fresnelLink,
     sceneInfo,
   };
 }

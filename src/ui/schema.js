@@ -93,6 +93,7 @@ export function buildPanel(state) {
         fieldByKey(state, 'txPowerDbm'),
         fieldByKey(state, 'feederLossDb'),
         fieldByKey(state, 'rxSensitivityDbm'),
+        fieldByKey(state, 'zoneRxHeightM'),
         fieldByKey(state, 'maxRangeM'),
         fieldByKey(state, 'clutterLossDb'),
         fieldByKey(state, 'useDiffraction'),
@@ -110,6 +111,7 @@ export function buildPanel(state) {
       fields: [
         fieldByKey(state, 'display.showCoverage'),
         fieldByKey(state, 'display.showPattern'),
+        fieldByKey(state, 'display.showFresnel'),
         fieldByKey(state, 'display.showWireframe'),
         fieldByKey(state, 'display.showSectors'),
       ],
