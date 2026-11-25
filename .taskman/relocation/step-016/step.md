@@ -56,3 +56,8 @@ site position in metres east/north-south.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Verified with `?siteX=400&siteZ=-150`: `state().site` `{x:400,z:-150}`,
+  `heightAt(400,-150)` = 8 (pad there), `heightAt(0,0)` = -30.2 (natural ground at
+  the abandoned centre), HUD row reads `400 m E / 150 m N` — the compass words come
+  out right because +Z is south, so a negative z is North.

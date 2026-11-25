@@ -7,7 +7,7 @@
  * without a browser; this file just wires those pieces together.
  *
  * URL parameters (all optional, meant for testing and shareable links):
- *   ?design=yagi&seed=1234&azimuth=90&tilt=-4&height=12&preset=valley-reach
+ *   ?design=yagi&seed=1234&azimuth=90&tilt=-4&height=12&siteX=400&preset=valley-reach
  *   &manual=1        do not auto-start the animation loop (headless tests)
  *   &nohud=1         do not create the read-out panel
  */
@@ -27,6 +27,12 @@ function readInitialState(params) {
   if (params.get('design')) initialState.designId = String(params.get('design'));
   if (params.get('seed')) initialState.seed = Number(params.get('seed'));
   if (params.get('height')) initialState.heightM = Number(params.get('height'));
+  if (params.get('siteX') || params.get('siteZ')) {
+    initialState.site = {
+      x: Number(params.get('siteX') ?? 0),
+      z: Number(params.get('siteZ') ?? 0),
+    };
+  }
   if (params.get('azimuth') || params.get('tilt')) {
     initialState.aim = {
       azimuthDeg: Number(params.get('azimuth') ?? 0),

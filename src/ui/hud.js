@@ -12,6 +12,7 @@ import { SECTOR_LABELS } from '../propagation/coverage.js';
 import { formatDb } from '../math/scalar.js';
 
 const STAT_ROWS = Object.freeze([
+  Object.freeze({ key: 'site', label: 'Site position' }),
   Object.freeze({ key: 'peakGain', label: 'Peak gain' }),
   Object.freeze({ key: 'beamH', label: 'Azimuth -3 dB' }),
   Object.freeze({ key: 'beamV', label: 'Elevation -3 dB' }),
@@ -114,6 +115,12 @@ export function createHud(options) {
 
     headline.textContent = antenna.label;
     subtitle.textContent = `${antenna.aimText} - ${state.heightM.toFixed(1)} m above ground`;
+
+    // Spelled out in compass words, because the frame is +X east / +Z south and a
+    // bare pair of numbers invites the wrong reading.
+    const place = state.site ?? { x: 0, z: 0 };
+    set('site', `${Math.abs(place.x).toFixed(0)} m ${place.x >= 0 ? 'E' : 'W'} / `
+      + `${Math.abs(place.z).toFixed(0)} m ${place.z >= 0 ? 'S' : 'N'}`);
 
     set('peakGain', `${antenna.peakGainDbi.toFixed(2)} dBi`);
     set('beamH', antenna.hBeamwidthDeg >= 359 ? 'omnidirectional' : `${antenna.hBeamwidthDeg.toFixed(0)} deg`);
