@@ -46,3 +46,7 @@ The unit suite proves the reducer + panel contract for the relocated site.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `tests/unit/state.test.js` is now **315 of 320 allowed lines** (tests/ budget).
+  The next test added to this file must trigger the split GUIDELINES.md §3 calls
+  for (e.g. a separate `tests/unit/schema.test.js`), not a squeezed assertion.

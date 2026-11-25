@@ -272,3 +272,44 @@ function specFromPanel(designId, key) {
     .fields.find((field) => field.key === `params.${key}`);
   return { max: entry.max, step: entry.step };
 }
+
+test('state: the site can be relocated, and the offset stays inside the map', () => {
+  assert.deepEqual(createInitialState().site, { x: ANTENNA.defaultSiteXm, z: ANTENNA.defaultSiteZm });
+
+  const moved = applyPatch(initial, { site: { x: 300, z: -200 } });
+  assert.equal(moved.ok, true);
+  assert.deepEqual(moved.changed, ['site.x', 'site.z']);
+  assert.deepEqual(moved.state.site, { x: 300, z: -200 });
+
+  // Limits come from ANTENNA.siteLimitsM (+/- half the world), never from a literal here.
+  const over = applyPatch(initial, { site: { x: 1e6, z: -1e6 } });
+  assert.equal(over.state.site.x, ANTENNA.siteLimitsM.max);
+  assert.equal(over.state.site.z, ANTENNA.siteLimitsM.min);
+  assert.deepEqual(over.clamped.map((entry) => entry.key).sort(), ['site.x', 'site.z']);
+
+  const junk = applyPatch(initial, { site: 'nowhere' });
+  assert.equal(junk.ok, false);
+  assert.deepEqual(junk.rejected.map((entry) => entry.key), ['site']);
+  const stray = applyPatch(initial, { site: { y: 5 } });
+  assert.deepEqual(stray.rejected.map((entry) => entry.key), ['site.y']);
+  assert.equal(stray.changed.length, 0, 'a rejected sub-key must not move anything');
+});
+
+test('state: moving the site dirties the ground and the coverage', () => {
+  // The flattened pad is baked into the height field, so the terrain stage is real work.
+  const stages = impactedStages(['site.x', 'site.z']);
+  assert.ok(stages.includes(RECOMPUTE.TERRAIN), `stages: ${stages}`);
+  assert.ok(stages.includes(RECOMPUTE.COVERAGE), `stages: ${stages}`);
+});
+
+test('panel: the placement group exposes both site offsets', () => {
+  const group = buildPanel(createInitialState()).find((section) => section.id === 'placement');
+  const keys = group.fields.map((field) => field.key);
+  assert.deepEqual(keys.slice(0, 2), ['site.x', 'site.z'], 'the offsets lead the placement group');
+  for (const key of ['site.x', 'site.z']) {
+    const field = group.fields.find((candidate) => candidate.key === key);
+    assert.equal(field.min, ANTENNA.siteLimitsM.min, 'the slider limit IS the reducer limit');
+    assert.equal(field.max, ANTENNA.siteLimitsM.max);
+    assert.equal(field.step, ANTENNA.siteStepM);
+  }
+});
