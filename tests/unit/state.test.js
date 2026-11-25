@@ -131,8 +131,8 @@ test('state: world and grid requests stay on the odd-cell lattice', () => {
   assert.ok(grid.changed.includes('gridSize'));
   assert.equal(applyPatch(initial, { gridSize: 3 }).state.gridSize, WORLD.minGridSize);
   assert.equal(applyPatch(initial, { gridSize: 100000 }).state.gridSize, WORLD.maxGridSize);
-  assert.equal(applyPatch(initial, { worldSize: 10 }).state.worldSize, 400);
-  assert.equal(applyPatch(initial, { worldSize: 1e9 }).state.worldSize, 8000);
+  assert.equal(applyPatch(initial, { worldSize: 10 }).state.worldSize, WORLD.minWorldSize);
+  assert.equal(applyPatch(initial, { worldSize: 1e9 }).state.worldSize, WORLD.maxWorldSize);
   assert.deepEqual(applyPatch(initial, { worldSize: 'wide' }).rejected, [{ key: 'worldSize', reason: 'must be a number' }]);
 });
 

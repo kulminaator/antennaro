@@ -27,3 +27,30 @@ resize does not cost a day.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Most of the geography damage had to be repaired in step-006 to get a green gate at
+  all; this step is the audit the plan asked for: what is left that encodes the old map.
+- `tests/unit/terrain.test.js` gained an `at(fractionX, fractionZ)` helper that turns a
+  fraction of the map's half-extent into a probe, and every geography probe went
+  through it: the four-zone quadrant test (`0.3 x half`), the zone-weight blend
+  (`0.4 x half`), the mast-foot spots (centre, ridge shoulder `0.30,-0.33`, mountain
+  `0,-0.35`, valley floor `0,0.35`, far corner `-0.67`, east edge `0.92`), the relief
+  pair, the ridge-cliff probe and the "zones do not move with the mast" anchors.
+  Heights, slopes and the 40 m cliff threshold stay in metres - those are the physical
+  promises the README makes, and they are what a resize must not silently break.
+- Re-measured at the new probes: the ridge shoulder is (780, -858) at 332 m and the
+  ground 130 m east is 150 m, so the cliff is 182 m of drop - steeper than the probe it
+  replaced, so the ridge test got stronger rather than looser. Mountain probe (0, -910)
+  is 455 m; valley floor (0, 910) is -70 m.
+- One magic number left the reducer: `state.js` clamped `worldSize` to a literal
+  `{ min: 400, max: 8000 }`. Now `WORLD.minWorldSize` / `WORLD.maxWorldSize` in config,
+  with the reason for each bound, and `tests/unit/state.test.js` asserts against those
+  keys - so the slider limit *is* the reducer limit, as it already was for site
+  placement.
+- `tests/unit/fresnel.test.js` needed no geography work: its fixtures are their own
+  `HeightField`s (2000 m, 81 vertices) built in the file, so its 900 m paths and
+  1200 m envelopes are statements about the fixture, not about the application map.
+- No test was deleted. The only assertion removed outright was the hard-coded "north is
+  obstructed" claim, replaced in step-006 by best/worst sector comparison plus a
+  flat-ground pattern test - see that step's notes for what it was protecting.
+- `npm run lint` ok, `npm run test:unit` green: all 12 files, 2.8 s.

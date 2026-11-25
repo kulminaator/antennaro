@@ -20,6 +20,11 @@ export const WORLD = Object.freeze({
   // the study range and looked like an antenna limit. A link must die inside the
   // picture, or the app has to say which of its own limits cut it off first.
   worldSize: 5200, // metres, square domain centred on the map origin
+  /** What the world-size slider may be asked for. The lower bound is where the terrain
+      features stop making sense; the upper is where the coverage sweep stops being
+      interactive even with the stride and the pre-filter. */
+  minWorldSize: 400,
+  maxWorldSize: 8000,
   minGridSize: 17,
   maxGridSize: 401,
 });

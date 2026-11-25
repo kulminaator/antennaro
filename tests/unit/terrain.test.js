@@ -23,6 +23,16 @@ import { rangeFromSite, resolveSite } from '../../src/terrain/site.js';
 const ctx = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize });
 const field = generateTerrain();
 
+/**
+ * A place on the map, given as a fraction of the half-extent. Geography in this file
+ * is stated relative to the map so that resizing the world moves the probes with it;
+ * heights and slopes below are still quoted in metres, because those are the physical
+ * promises the README makes.
+ */
+function at(fractionX, fractionZ) {
+  return { x: Math.round(fractionX * ctx.half), z: Math.round(fractionZ * ctx.half) };
+}
+
 /** Mean absolute height difference between neighbouring samples: a roughness proxy. */
 function roughnessAlong(azimuthDeg, distance) {
   const profile = profileAlong(field, azimuthDeg, { from: distance, to: distance + 300, steps: 60 });
@@ -45,7 +55,9 @@ test('terrain: default world matches the configuration', () => {
 });
 
 test('terrain: the four zones sit where the README says they do', () => {
-  const probe = 700;
+  // Which zone a point belongs to is a bearing question; the distance only has to be
+  // far enough out to be clearly inside a quadrant.
+  const probe = Math.round(0.3 * ctx.half);
   assert.equal(zoneAt(0, -probe, ctx), ZONES.MOUNTAIN, 'north of the site: mountain');
   assert.equal(zoneAt(probe, 0, ctx), ZONES.FLAT, 'east of the site: flat field');
   assert.equal(zoneAt(0, probe, ctx), ZONES.VALLEY, 'south of the site: valley');
@@ -54,8 +66,8 @@ test('terrain: the four zones sit where the README says they do', () => {
 });
 
 test('terrain: zone weights are a normalised blend everywhere', () => {
+  const scale = Math.round(0.4 * ctx.half);
   for (const [x, z] of [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0.3, -0.7]]) {
-    const scale = 900;
     const weights = sectorWeights(x * scale, z * scale, ctx);
     const total = Object.values(weights).reduce((acc, value) => acc + value, 0);
     assert.ok(approxEqual(total, 1, 1e-9), `weights must sum to 1 (got ${total})`);
@@ -106,12 +118,12 @@ test('terrain: the mast foot is the drawn ground, wherever the ground is', () =>
   // mast is the surface the mesh draws and the grid samples, at the map centre and
   // in the roughest places alike, and the phase centre sits heightM above it.
   const spots = [
-    { label: 'map centre', x: 0, z: 0 },
-    { label: 'ridge shoulder', x: 365, z: -400 },
-    { label: 'mountain', x: 0, z: -900 },
-    { label: 'valley floor', x: 0, z: 900 },
-    { label: 'corner', x: -800, z: -800 },
-    { label: 'east edge', x: 1100, z: 200 },
+    { label: 'map centre', ...at(0, 0) },
+    { label: 'ridge shoulder', ...at(0.3, -0.33) },
+    { label: 'mountain', ...at(0, -0.35) },
+    { label: 'valley floor', ...at(0, 0.35) },
+    { label: 'far corner', ...at(-0.67, -0.67) },
+    { label: 'east edge', ...at(0.92, 0.08) },
   ];
   for (const spot of spots) {
     const site = resolveSite(field, { x: spot.x, z: spot.z, heightM: 10 });
@@ -121,9 +133,10 @@ test('terrain: the mast foot is the drawn ground, wherever the ground is', () =>
       `${spot.label}: the grid's bilinear sample drifts from the analytic surface`);
     assert.ok(approxEqual(site.y, site.groundY + 10, 1e-9), `${spot.label}: the mast is not 10 m tall`);
   }
-  // Relief is real: the same map holds ground 200 m apart by hundreds of metres.
-  const high = resolveSite(field, { x: 0, z: -900 });
-  const low = resolveSite(field, { x: 0, z: 900 });
+  // Relief is real: the same map holds ground a third of its width apart by hundreds
+  // of metres.
+  const high = resolveSite(field, at(0, -0.35));
+  const low = resolveSite(field, at(0, 0.35));
   assert.ok(high.groundY > low.groundY + 100,
     `the mountain (${high.groundY.toFixed(0)} m) and the valley floor (${low.groundY.toFixed(0)} m) collapsed into each other`);
 });
@@ -133,7 +146,8 @@ test('terrain: the ground does not depend on where the mast stands', () => {
   // map, so dragging the mast lifted a hillside by up to 99.7 m next to a ridge and
   // the coverage shadow moved with it. The height field is the four zones and
   // nothing else, so a site position must not be able to enter it at all.
-  const withMastOnTheRidge = generateTerrain({ seed: TERRAIN.seed, siteX: 365, siteZ: -400 });
+  const ridge = at(0.3, -0.33);
+  const withMastOnTheRidge = generateTerrain({ seed: TERRAIN.seed, siteX: ridge.x, siteZ: ridge.z });
   const withMastAtTheCentre = generateTerrain({ seed: TERRAIN.seed });
   let worst = 0;
   withMastOnTheRidge.forEachCell((x, z, h, i) => {
@@ -142,20 +156,23 @@ test('terrain: the ground does not depend on where the mast stands', () => {
   assert.equal(worst, 0, 'placing the mast changed the ground');
 
   // Same through the pure function, on any spot: the ridge keeps its cliff.
-  const ridge = { x: 365, z: -400 };
   for (const site of [{ siteX: 0, siteZ: 0 }, ridge]) {
     const placed = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, ...site });
     assert.ok(approxEqual(heightAt(ridge.x, ridge.z, placed), heightAt(ridge.x, ridge.z, ctx), 1e-9));
   }
   const shoulder = heightAt(ridge.x, ridge.z, ctx);
-  const below = heightAt(ridge.x + 60, ridge.z, ctx);
+  const below = heightAt(ridge.x + 130, ridge.z, ctx);
   assert.ok(below < shoulder - 40,
-    `the ridge flattened itself: mast ground ${shoulder.toFixed(0)} m, ground 60 m east ${below.toFixed(0)} m`);
+    `the ridge flattened itself: mast ground ${shoulder.toFixed(0)} m, ground 130 m east ${below.toFixed(0)} m`);
 
   // Relocating the antenna does not relocate the mountain.
-  const moved = createTerrainContext({ seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: 400, siteZ: -260 });
-  assert.equal(zoneAt(0, -700, moved), ZONES.MOUNTAIN, 'the zones stay keyed to the map centre');
-  assert.equal(zoneAt(400 + 700, -260, moved), ZONES.FLAT, 'east of the old centre is still the flat field');
+  const movedTo = at(0.15, -0.1);
+  const moved = createTerrainContext({
+    seed: TERRAIN.seed, worldSize: WORLD.worldSize, siteX: movedTo.x, siteZ: movedTo.z,
+  });
+  assert.equal(zoneAt(0, -Math.round(0.3 * ctx.half), moved), ZONES.MOUNTAIN, 'the zones stay keyed to the map centre');
+  assert.equal(zoneAt(movedTo.x + Math.round(0.3 * ctx.half), movedTo.z, moved), ZONES.FLAT,
+    'east of the new site is the flat field the old site had');
 });
 
 test('terrain: the valley channel stays south of the site instead of cutting the map', () => {

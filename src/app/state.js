@@ -235,7 +235,9 @@ export function applyPatch(state, patch) {
     }
 
     if (key === 'worldSize' || key === 'gridSize') {
-      const limits = key === 'worldSize' ? { min: 400, max: 8000 } : { min: WORLD.minGridSize, max: WORLD.maxGridSize };
+      const limits = key === 'worldSize'
+        ? { min: WORLD.minWorldSize, max: WORLD.maxWorldSize }
+        : { min: WORLD.minGridSize, max: WORLD.maxGridSize };
       const value = toNumber(rawValue);
       if (value === undefined) {
         rejected.push({ key, reason: 'must be a number' });
