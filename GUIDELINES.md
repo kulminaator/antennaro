@@ -47,7 +47,8 @@ src/             application source, layered (see §3)
   terrain/       height field, generators, site pad, terrain mesh
   antenna/       catalogue, pattern maths, aim frames, model, meshes
   propagation/   rf algebra, line-of-sight/diffraction, coverage, coverage mesh
-  app/           state reducer, presets, controller, viewport, camera, test API
+  app/           state reducer, presets, controller, viewport, camera, pointer
+                 picking, site dragging, test API
   ui/            control panel, HUD, schema (schema is pure, the rest is DOM)
   palette.js     shared colours (renderer + DOM legend read the same table)
   main.js        composition root: build it, wire it, mount it
@@ -109,10 +110,10 @@ declaration is checked against `LAYER_TABLE` in `tools/lib/arch.js`.
 | Layer | Contents | May import |
 | --- | --- | --- |
 | L0 | `config.js`, `math/scalar.js`, `math/vec3.js` | nothing |
-| L1 | noise, event bus, palette, terrain/antenna/propagation domain, `app/fields.js` | L0 |
+| L1 | noise, event bus, palette, terrain/antenna/propagation domain, `app/fields.js`, `app/pick.js` (pointer↔world maths) | L0 |
 | L2 | domain services (`antenna/model`, `propagation/coverage`), `app/state`, `app/presets`, `ui/schema` | L0–L1 |
 | L3 | `core/loop.js` (frame loop) | L0–L2 |
-| L4 | render adapters (`*mesh.js`, `app/viewport`, `app/labels`, `app/orbit`) | L0–L3 |
+| L4 | render adapters (`*mesh.js`, `app/viewport`, `app/labels`, `app/orbit`, `app/relocate`) | L0–L3 |
 | L5 | `ui/`, `app/` composition, `main.js` | anything below |
 
 Rules, enforced by lint:
@@ -160,9 +161,14 @@ No `console.log`/`console.debug`, no `debugger`, no bare `TODO` (must be
 
 Every tunable that describes the **world or the radio** lives in `src/config.js`:
 world size, terrain amplitudes and blend band, RF constants (including
-`RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, camera
+`RF.speedOfLightMps`, `RF.kFactor` and the band table), antenna limits, where the
+mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
+`siteStepM`, shared by the sliders and the drag), camera
 defaults, colours, path names and every timeout. The UI schema and the state
 reducer read the same ranges, so a slider can never disagree with the physics.
+`VIEW.cameraFovDeg` is here for the same reason: `app/pick.js` needs the vertical
+FOV to unproject a pointer, and a FOV that only the renderer knows would let the
+mouse and the picture disagree.
 
 A module may keep a local numeric constant only when it is not a knob:
 a mathematical identity (`DEG_PER_RAD`), a structural count (`SECTOR_COUNT`), a
@@ -191,6 +197,17 @@ Antenna orientation is built by `antenna/aim.js`:
 wrong silently mirrors the pattern - the mesh and the coverage maths would then
 disagree about which way the Yagi points. `antennamesh.js` builds its matrix
 from those three basis columns; tests pin the handedness.
+
+The **site is a position, not the origin**: `state.site.x` / `state.site.z` say
+where the mast stands, and `terrain/site.js` is a pure function of
+`(x, z, siteX, siteZ)`. The height field, the mast transform, the coverage source,
+the picking plane and *Reset view* all read that resolved position; the four
+terrain zones belong to the map and never move with the site.
+
+`app/pick.js` turns a pointer position into a world point by reproducing three.js'
+`lookAt` basis (`right = up × forward`, `trueUp = forward × right`) - the same
+handedness trap as `axisX = -right` above: grab the sign of `right` and every
+east-west drag mirrors, silently, exactly like a mirrored pattern would.
 
 ## 6. Data flow
 
@@ -223,7 +240,10 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   on a cell centre), built from four angular zones - mountain (N) with a taller
   distant range, flat field (E), valley (S), bumps (W) - blended across
   `TERRAIN.blendBand`. The **site pad** is flattened within
-  `WORLD.sitePadRadius` so the mast never floats or buries.
+  `WORLD.sitePadRadius` *around the site*, so the mast never floats or buries -
+  and because the pad is baked into the height field, `state.site` is part of the
+  terrain cache key: relocating the mast re-runs the terrain stage (and therefore
+  coverage and scene) even though the zones and the noise did not change.
 - **Antenna pattern** is separable azimuth × elevation, evaluated per direction.
   Catalogue entries carry `gainDbi(params)` and `pattern(params)`; the model
   adds aim, tilt and electrical downtilt, and clamps to `PATTERN_FLOOR_DB`.
@@ -234,6 +254,12 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
 - **Layout follows the window:** `app/controller.js` watches the canvas with a
   `ResizeObserver`, and `settle()` syncs the drawing buffer before painting, so
   headless captures and resized windows both get a correctly sized frame.
+- **Two gestures, one canvas:** `app/orbit.js` owns camera gestures and
+  `app/relocate.js` owns moving the site. Orbit asks `relocate.intercept(event)`
+  before it captures a pointer, so grabbing the hardware never doubles as an
+  orbit - and anything that captures a pointer must remember it may not own it at
+  `pointerup` (releasing a capture that was never taken throws `NotFoundError`).
+  A drag commits an ordinary `{site:{x,z}}` patch; nothing mutates state directly.
 - **Scale honesty:** hardware is drawn enlarged (`VIEW.antennaVisualSpanM`) so
   it is visible on a kilometre-wide map; the mast height is always true. The
   lobe is a shape, not a range ring.
@@ -354,7 +380,9 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   `window.__sim`, installed by `src/app/testapi.js` and finished by `main.js`.
   Methods: `state`, `patch`, `action`, `settle(frames)`, `step(frames)`, `stats`,
   `scene`, `camera`, `setCamera`, `antenna`, `coverage`, `rssiAt(x, z)`,
-  `terrain`, `heightAt(x, z)`, `rf`, `pixelStats`, `controls`, `dispose`.
+  `terrain`, `heightAt(x, z)`, `rf`, `pixelStats`, `controls`, `pick(ndcX, ndcY)`,
+  `site`, `grabSite`, `dragSiteTo(ndcX, ndcY)`, `releaseSite`, `dragState`,
+  `dispose`.
   Properties: `boot` (`{status, ...}`), `ready` (true only once boot finished -
   the tools wait on this), `errors`, `version`, `app`. DOM layout may change;
   this API is the contract, so anything a test needs permanently gets added here

@@ -52,3 +52,18 @@ owns it (GUIDELINES).
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Wording checked against the code before writing: *Reset view* re-centres the
+  camera **on the site** (`viewport.resetCamera({x: site.x, y: site.groundY, z:
+  site.z})`) but does not move the site; **Reset placement** moves the site and
+  leaves the camera; **Reset all** does both. The README says exactly that.
+- Only the left button, without shift, grabs the mast (`relocate.js`), so the
+  existing *Right-drag or shift-drag | Pan* row is still true.
+- GUIDELINES gained the two traps this task actually hit, next to the modules that
+  own them: the `NotFoundError` from releasing a pointer capture that an
+  intercepted gesture never took (§7), and the `lookAt` basis sign in `pick.js`
+  written next to the existing `axisX = -right` handedness warning (§5).
+- The plan's wording for §2/§3 assumed a finer directory tree and a per-file layer
+  table than the file has; the real §2 tree describes `app/` in one line and §3
+  lists directories, so `pick.js` went into the L1 row and `relocate.js` into the
+  L4 row (which is also what `tools/lib/arch.js` enforces).

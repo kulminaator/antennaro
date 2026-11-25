@@ -2,11 +2,15 @@
 
 A browser-based 3D sandbox for one question: **where does the link actually hold?**
 
-An antenna stands on a flattened pad in the middle of a map. Around it, four kinds
+An antenna stands on a flattened pad on a map, and where it stands is up to you.
+Around it, four kinds
 of ground: a mountain to the north with a taller range behind it, an open flat
 field to the east, a valley to the south, and rolling bumps to the west. Pick a
 design, set the height and aim, and the simulator draws the radiation lobe and
-paints the predicted signal level onto the terrain.
+paints the predicted signal level onto the terrain. The pad is part of the site,
+not of the map: drag the mast (or use the two placement sliders) and the pad moves
+with it, while the mountain, the valley and the other zones stay exactly where
+they are.
 
 ![Omni dipole on the site pad: coverage painted over the flat field, the valley and the shadow of the northern mountain.](docs/screenshot.png)
 
@@ -41,9 +45,11 @@ an edited import map, and `npm run vendor` tells you which.
 - **The ground**, coloured by height, with the four zones labelled on the map:
   `MOUNTAIN + DISTANT RANGE` (north), `FLAT FIELD` (east), `VALLEY` (south),
   `BUMPY LAND` (west).
-- **The mast and antenna hardware** at the site. The mast is drawn at true height;
+- **The mast and antenna hardware** at the site, which is a position on the map and
+  not the middle of it. The mast is drawn at true height;
   the antenna body is enlarged so you can see what it is - treat the hardware as
-  "not to scale".
+  "not to scale". The ground is flattened into a pad around wherever the site
+  stands, so moving the site moves the flat ground with it.
 - **The radiation lobe**: a 3D surface of the antenna's own gain, cut off 30 dB
   below the peak. It shows the shape of the antenna, not its range.
 - **The coverage overlay**: signal level painted onto the ground, measured where
@@ -69,13 +75,15 @@ Left panel, top to bottom:
 | --- | --- |
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
-| **Placement and aim** | Height above ground (0.5–40 m), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
+| **Placement and aim** | Site position: east offset and south offset, −1200 to +1200 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
 | **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, evaluation range, clutter loss, and a switch for terrain shadowing. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
 | **Display** | Coverage overlay, radiation pattern, terrain mesh, zone labels. |
 
 Buttons: **New terrain** (fresh random seed), **Reset view** (camera back to
-start), **Save PNG** (download the current view), **Reset all**.
+start, centred on the site), **Reset placement** (site back to the middle of the
+map), **Save PNG** (download the current view), **Reset all** (everything, the site
+included).
 
 Some designs (Yagi, biquad, patch) also offer **electrical downtilt**: the beam
 tips down while the hardware stays level, which is how a real sector panel is
@@ -86,11 +94,18 @@ often tilted.
 | Input | Effect |
 | --- | --- |
 | Drag | Orbit around the site |
+| Drag the mast | Move the site: the pad, mast, hardware, lobe and coverage go with it |
 | Wheel | Zoom in / out |
 | Right-drag or shift-drag | Pan |
 | Arrow keys | Orbit |
 | `+` / `-` | Zoom |
 | `h` | Hide the interface (press again to bring it back) |
+
+The cursor turns into a grab hand over the hardware, and grabs take priority over
+orbiting, so you can always move the mast instead of swinging the camera - even
+when the site has been moved off the middle of the map. Dragging and the two
+placement sliders write the same state, so a drag can be undone with **Reset
+placement** and shared with a link.
 
 ### Shareable links
 
@@ -98,7 +113,7 @@ Everything on the panel can be set from the URL, which makes a configuration eas
 to paste into a bug report:
 
 ```
-http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&frequency=2400&sensitivity=-95&range=1600
+http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&siteX=400&siteZ=-200&frequency=2400&sensitivity=-95&range=1600
 ```
 
 | Parameter | Sets | |
@@ -107,6 +122,7 @@ http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&frequ
 | `design` | antenna design | `omni-dipole`, `omni-collinear`, `yagi`, `biquad-reflector`, `patch` |
 | `seed` | terrain seed | same number, same ground |
 | `height`, `azimuth`, `tilt` | mast height (m), azimuth and tilt (deg) | |
+| `siteX`, `siteZ` | site position east / south, metres | off the map centre; both default to 0 |
 | `frequency` | band in MHz | `433`, `868`, `915`, `2400`, `5800` |
 | `sensitivity`, `range` | receiver sensitivity (dBm), evaluation range (m) | |
 | `manual`, `nohud` | testing aids: no animation loop, no read-out panel | |
