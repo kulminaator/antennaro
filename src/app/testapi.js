@@ -11,6 +11,7 @@
  */
 
 import { APP } from '../config.js';
+import { sampleCoverage } from '../propagation/coverage.js';
 import { cameraPose, pickGround } from './pick.js';
 
 /**
@@ -93,20 +94,7 @@ export function installTestApi(options) {
     rssiAt: (x, z) => {
       const coverage = controller.coverage();
       if (!coverage) return null;
-      const field = controller.terrainField();
-      const ix = Math.round(field.cellX(x));
-      const iz = Math.round(field.cellZ(z));
-      if (!field.inBounds(ix, iz)) return null;
-      const index = field.index(ix, iz);
-      if (!coverage.evaluated[index]) return null;
-      return {
-        rssiDbm: coverage.rssi[index],
-        band: coverage.level[index],
-        distanceM: coverage.distanceM[index],
-        obstructionDb: coverage.obstructionDb[index],
-        fresnelClearanceRatio: coverage.fresnelClearance[index],
-        fresnelClear: coverage.fresnelClear[index] === 1,
-      };
+      return sampleCoverage(coverage, controller.terrainField(), x, z);
     },
     /**
      * The first Fresnel zone in one object: the criterion and the assumption the

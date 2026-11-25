@@ -1,65 +1,38 @@
 /**
  * Coverage grid -> draped translucent overlay.
  *
- * Layer: L4 (render adapter). The overlay reuses the terrain vertex layout and
- * writes RGBA vertex colours: band colour with alpha 1, "not evaluated" with
- * alpha 0 so the terrain shows through instead of lying to the user.
+ * Layer: L4 (render adapter). The overlay is built on the **coverage** grid, which
+ * may be a decimation of the terrain grid (`coverage.stride`): the ground is
+ * resolved at ~15 m because it has to look like land, while a link boundary is
+ * kilometres wide and its ray walks are far too expensive to run per ground vertex.
+ * Each coverage vertex is draped onto the terrain height *underneath it*, so the
+ * coarser overlay still hugs the real surface.
+ *
+ * Vertex colours carry the message: RGBA, with alpha 0 where there is nothing to say
+ * (outside the study area) so the terrain shows through instead of being lied about.
+ * What the alpha means for a failed link is step-owned by the painting rules below.
  */
 
 import * as THREE from 'three';
-import { FRESNEL, VIEW } from '../config.js';
+import { RF, VIEW } from '../config.js';
 import { coverageRgb, fresnelZoneRgb } from '../palette.js';
 
 /** Cells that miss the link budget are painted faintly, so the ground still shows. */
 const NO_LINK_ALPHA = 0.22;
 
-function buildGeometry(field) {
-  const vertexCount = field.size * field.size;
-  const geometry = new THREE.BufferGeometry();
-  const position = new Float32Array(vertexCount * 3);
-  const colour = new Float32Array(vertexCount * 4);
-  const index = vertexCount > 65535 ? new Uint32Array((field.size - 1) * (field.size - 1) * 6)
-    : new Uint16Array((field.size - 1) * (field.size - 1) * 6);
-
-  let p = 0;
-  for (let iz = 0; iz < field.size; iz += 1) {
-    const z = field.worldZ(iz);
-    for (let ix = 0; ix < field.size; ix += 1) {
-      position[p] = field.worldX(ix);
-      position[p + 1] = field.heights[field.index(ix, iz)] + VIEW.coverageOffsetM;
-      position[p + 2] = z;
-      p += 3;
-    }
-  }
-  let q = 0;
-  for (let iz = 0; iz < field.size - 1; iz += 1) {
-    for (let ix = 0; ix < field.size - 1; ix += 1) {
-      const a = field.index(ix, iz);
-      const b = field.index(ix + 1, iz);
-      const c = field.index(ix, iz + 1);
-      const d = field.index(ix + 1, iz + 1);
-      index[q] = a;
-      index[q + 1] = c;
-      index[q + 2] = b;
-      index[q + 3] = b;
-      index[q + 4] = c;
-      index[q + 5] = d;
-      q += 6;
-    }
-  }
-
-  geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colour, 4));
-  geometry.setIndex(new THREE.BufferAttribute(index, 1));
-  return geometry;
+/** Terrain vertex index a coverage vertex sits on, clamped to the last row/column. */
+function terrainIndex(field, stride, gx, gz) {
+  const tx = Math.min(gx * stride, field.size - 1);
+  const tz = Math.min(gz * stride, field.size - 1);
+  return field.index(tx, tz);
 }
 
 /**
  * @param {import('../terrain/heightfield.js').HeightField} field
- * @returns {{mesh:THREE.Mesh, update:(field:object, coverage:object)=>void, dispose:()=>void}}
+ * @returns {{mesh:THREE.Mesh, update:(field:object, coverage:object, options?:object)=>void,
+ *   reposition:(field:object)=>void, dispose:()=>void}}
  */
 export function createCoverageOverlay(field) {
-  const geometry = buildGeometry(field);
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
@@ -67,31 +40,79 @@ export function createCoverageOverlay(field) {
     depthWrite: false,
     side: THREE.DoubleSide,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
   mesh.name = 'coverage';
   mesh.renderOrder = 2;
 
-  const colour = geometry.attributes.color;
-  const position = geometry.attributes.position;
+  /** The grid the geometry currently represents, or null before the first update. */
+  let grid = null;
+
+  // Build once up front so the mesh has valid, empty geometry from the first frame;
+  // `update` rebuilds it if the coverage result arrives on a different stride.
+  const initialStride = Math.max(1, Math.round(RF.coverageStride));
+
+  /** (Re)build the drape geometry for a coverage grid over the given field. */
+  function build(sourceField, size, stride) {
+    if (grid) {
+      mesh.geometry.dispose();
+    }
+    const vertexCount = size * size;
+    const geometry = new THREE.BufferGeometry();
+    const position = new Float32Array(vertexCount * 3);
+    const colour = new Float32Array(vertexCount * 4);
+    const quads = (size - 1) * (size - 1) * 6;
+    const indexArray = vertexCount > 65535 ? new Uint32Array(quads) : new Uint16Array(quads);
+
+    let p = 0;
+    for (let gz = 0; gz < size; gz += 1) {
+      for (let gx = 0; gx < size; gx += 1) {
+        const ti = terrainIndex(sourceField, stride, gx, gz);
+        position[p] = sourceField.worldX(Math.min(gx * stride, sourceField.size - 1));
+        position[p + 1] = sourceField.heights[ti] + VIEW.coverageOffsetM;
+        position[p + 2] = sourceField.worldZ(Math.min(gz * stride, sourceField.size - 1));
+        p += 3;
+      }
+    }
+    let q = 0;
+    for (let gz = 0; gz < size - 1; gz += 1) {
+      for (let gx = 0; gx < size - 1; gx += 1) {
+        const a = gz * size + gx;
+        const b = a + 1;
+        const c = a + size;
+        const d = c + 1;
+        indexArray[q] = a;
+        indexArray[q + 1] = c;
+        indexArray[q + 2] = b;
+        indexArray[q + 3] = b;
+        indexArray[q + 4] = c;
+        indexArray[q + 5] = d;
+        q += 6;
+      }
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colour, 4));
+    geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
+    mesh.geometry = geometry;
+    grid = { size, stride, geometry, colour: geometry.attributes.color, position: geometry.attributes.position };
+  }
 
   /** Refresh the drape after the terrain changed (heights only, same grid). */
   function reposition(sourceField) {
-    if (sourceField.size !== field.size) {
-      throw new RangeError(`overlay grid ${field.size} does not match terrain ${sourceField.size}`);
-    }
-    const target = position.array;
-    for (let iz = 0; iz < sourceField.size; iz += 1) {
-      for (let ix = 0; ix < sourceField.size; ix += 1) {
-        const index = sourceField.index(ix, iz);
-        target[index * 3 + 1] = sourceField.heights[index] + VIEW.coverageOffsetM;
+    if (!grid) return;
+    const target = grid.position.array;
+    for (let gz = 0; gz < grid.size; gz += 1) {
+      for (let gx = 0; gx < grid.size; gx += 1) {
+        const ti = terrainIndex(sourceField, grid.stride, gx, gz);
+        target[(gz * grid.size + gx) * 3 + 1] = sourceField.heights[ti] + VIEW.coverageOffsetM;
       }
     }
-    position.needsUpdate = true;
-    geometry.computeBoundingSphere();
+    grid.position.needsUpdate = true;
+    grid.geometry.computeBoundingSphere();
   }
 
   /**
-   * Repaint from a coverage result. Requires the same field as at construction.
+   * Repaint from a coverage result, building the geometry if the grid changed.
    * @param {object} sourceField
    * @param {object} coverage
    * @param {{zoneView?:boolean}} [options] `zoneView` paints first-Fresnel-zone state
@@ -100,14 +121,15 @@ export function createCoverageOverlay(field) {
    *   top of the RSSI colours would wash the drape in one hue.
    */
   function update(sourceField, coverage, options = {}) {
-    if (sourceField.size !== coverage.size) {
-      throw new RangeError(`coverage grid ${coverage.size} does not match terrain ${sourceField.size}`);
+    const stride = coverage.stride ?? 1;
+    if (!grid || grid.size !== coverage.size || grid.stride !== stride) {
+      build(sourceField, coverage.size, stride);
     }
-    const target = colour.array;
+    const target = grid.colour.array;
     const lastBand = coverage.margins.length;
     const zoneView = options.zoneView === true;
     const rgb = [0, 0, 0];
-    for (let i = 0; i < sourceField.size * sourceField.size; i += 1) {
+    for (let i = 0; i < grid.size * grid.size; i += 1) {
       if (coverage.evaluated[i] === 1) {
         const band = coverage.level[i];
         const source = zoneView
@@ -125,13 +147,14 @@ export function createCoverageOverlay(field) {
         target[i * 4 + 3] = 0;
       }
     }
-    colour.needsUpdate = true;
+    grid.colour.needsUpdate = true;
   }
 
   function dispose() {
-    geometry.dispose();
+    if (grid) grid.geometry.dispose();
     material.dispose();
   }
 
+  build(field, Math.floor((field.size - 1) / initialStride) + 1, initialStride);
   return { mesh, reposition, update, dispose };
 }

@@ -50,3 +50,41 @@ flag records which cells were declared hopeless before the ground was consulted.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Cost gate met, Node, mast at (-2100, 0), 868 MHz, sensitivity -80 dBm, whole map:
+
+  | design | budget radius | stride 2 | stride 1 | excluded |
+  | --- | --- | --- | --- | --- |
+  | omni dipole (10 dBm) | 937 m | 30 ms | 60 ms | 20 793 |
+  | collinear (10 dBm) | 1670 m | 41 ms | 129 ms | 16 652 |
+  | Yagi (10 dBm) | 2204 m | 21 ms | 68 ms | 21 097 |
+  | biquad (20 dBm) | 9640 m | 90 ms | 386 ms | 5 687 |
+
+  Worst case 90 ms against the 250 ms gate; stride 1 would have blown it on the last row.
+- Pre-filter honesty measured before writing its test: comparing `budgetPrefilter` on
+  and off over the same grid gave **0 linked-set differences and 0.0000 dB drift** on
+  every linked cell, for all four designs.
+- The stride lives in `computeCoverage` (`options.stride`, default `RF.coverageStride`);
+  the result now carries `size`, `stride`, `terrainSize` and `cellSize`, and stats carry
+  `coverageStride`, `coverageCellSizeM`, `budgetExcludedCells`, `studyRangeM`. `stats.cells`
+  is the *coverage* grid's point count, which is what step-011 needs for its
+  "whole map is looked at" assertion.
+- Had to change two more files to keep every commit green rather than half-migrated
+  (their real content stays in steps 005/009):
+  - `coveragemesh.js` now builds its geometry on the coverage grid, draping each
+    coverage vertex onto the terrain height beneath it; painting rules untouched. It
+    prebuilds at `RF.coverageStride` so the mesh has valid geometry before the first
+    coverage result exists.
+  - `src/app/testapi.js` `rssiAt()` delegates to `sampleCoverage()` instead of indexing
+    the terrain grid itself - it was silently reading the wrong array the moment the
+    grids diverged, and now reports `budgetExcluded` for free.
+- Decibel statistics (mean/median/weak/best/worst) are computed over **walked** cells
+  only; folding in the pre-filtered far tail would drag "Median RSSI" to the noise floor
+  and say nothing. Commented at the site of the decision.
+- Live (port 8145): coverage grid 175^2 at 29.9 m, `evaluated 30624` of `cells 30625`
+  (whole map, the skipped centre point aside), `excluded 27796`, dipole max linked 936 m
+  against a 937 m budget, live rebuild 147 ms, and 20 dBm of transmitter power moved
+  linked cells 844 -> 3797. No console errors.
+- Red for later steps: `tests/unit/terrain.test.js` (valley probes, step-002),
+  `tests/unit/propagation.test.js` (geography + grid), `tests/unit/fresnel.test.js`
+  (asserted the arrays were `field.size^2` long, which is no longer the contract).
