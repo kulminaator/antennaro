@@ -61,30 +61,39 @@ an edited import map, and `npm run vendor` tells you which.
   antenna's location comfortable, and moving the mast moves no earth.
 - **The radiation lobe**: a 3D surface of the antenna's own gain, cut off 30 dB
   below the peak. It shows the shape of the antenna, not its range.
-- **The coverage overlay**: signal level painted onto the ground, measured where
+- **The coverage overlay**: signal painted onto the ground, measured where
   the terrain actually is - so the far side of a ridge goes dark. The map is 5.2 km
   across, the ground is sampled every 15 m and the coverage every 30 m, and the sweep
-  looks at the **whole map**, not a disc around the mast. Three strengths, three
-  meanings: solid colour where a link works, a faint wash where the sweep asked and the
-  terrain defeated the link, and no paint at all where the free-space budget cannot reach
-  the receiver - ground that was never consulted, and that therefore makes no claim.
+  looks at the **whole map**, not a disc around the mast. One control, *Coverage view*,
+  decides what the colours mean - signal bands, a continuous range gradient, or first
+  Fresnel zone clearance ([What the colours can mean](#what-the-colours-can-mean)).
+  Whatever you pick, three *opacity* meanings stay the same: solid where a link works, a
+  faint wash where the sweep asked and the terrain defeated the link, and no paint at all
+  where the free-space budget cannot reach the receiver - ground that was never consulted,
+  and that therefore makes no claim.
   **The outer edge of the colour is where the link dies.** If something of ours would cut
   the search off first - the study range you set, or the edge of the map - a pale ring
   appears at that radius, the still-alive directions are marked `>=` in the direction
   table, and the read-out names the limit that bit and what the link would have reached
   without it.
-- **The first Fresnel zone** (optional, off by default): switch on *Fresnel zone*
-  in the Display group and two things happen. A semi-transparent tube appears along
-  the boresight - the first Fresnel zone of a reference link from the mast to where
-  the beam lands. And the coverage overlay switches from signal bands to zone
-  clearance: green where the ground leaves the zone clear, amber where it eats into
-  it, purple where it stands above the ray. The legend changes with it, because a
-  legend that does not describe the colours under it is a bug.
+- **The first Fresnel zone volume** (optional, off by default): *Fresnel zone volume*
+  in the Display group draws a semi-transparent tube along the boresight - the first
+  Fresnel zone of a reference link from the mast to where the beam lands. It is only the
+  tube. Which language the coverage drape is painted in is the *Coverage view* select
+  above it, and setting that to *Fresnel zone clearance* colours the map green where the
+  ground leaves the zone clear, amber where it eats into it, purple where it stands above
+  the ray. The two are separate switches because the volume and the verdict answer
+  different questions, and because a toggle that also repaints the map is a control whose
+  label lies after the second click.
+
+The legend under the numbers changes with the view, and describes the pixels actually
+under it - see below.
 
 The read-out panel on the right reports what the current configuration delivers:
 peak gain, the −3 dB beamwidths, front-to-back ratio, EIRP at boresight,
 wavelength, the free-space range, the **range limit** (one line saying whether what you
-are looking at ends because of the link, your study range, or the edge of the map), how
+are looking at ends because of the link, your study range, or the edge of the map), a
+**curvature** line saying what the round earth was worth on the last link, how
 many cells have a link both as a share of the map and as a share of the ground a link
 could reach, the best / median / worst signal, how many cells are shadowed, how many of
 the *linked* cells keep their first Fresnel zone clear, and a per-direction table
@@ -92,13 +101,20 @@ across the eight compass sectors (N, NE, E, SE, S, SW, W, NW) showing how much o
 each sector has a link and how far that link reaches - a range printed as `>= 1400 m`
 was still alive where we stopped looking.
 
-Below the numbers is the legend: four colour bands and a faint row, keyed to your
-receiver sensitivity (at the default −80 dBm that is `>= -35 dBm`, `>= -50`, `>= -65`,
-`>= -80`, then `< -80 dBm (faint: terrain stops the link)`), plus a row for the bare
-"out of budget - not measured, not painted" area. Changing sensitivity moves the
-boundaries - the colours mean "margin over what the client can hear", not "signal
-quality" in the abstract. In the Fresnel-zone view the legend becomes three rows - cut,
-partly cut, clear - and quotes the receiver height the verdict was computed for.
+Below the numbers is the legend. In the **signal bands** view it is four colour bands and
+a faint row, keyed to your receiver sensitivity (at the default −80 dBm that is
+`>= -35 dBm`, `>= -50`, `>= -65`, `>= -80`, then `< -80 dBm (faint: terrain stops the
+link)`), plus a row for the bare "out of budget - not measured, not painted" area.
+Changing sensitivity moves the boundaries - the colours mean "margin over what the client
+can hear", not "signal quality" in the abstract. In the **range gradient** view the same
+ground is counted three ways instead of four, against the ramp's own scale: on the default
+map 6 points have 20 dB or more to spare, 56 have 10-20, 782 have 0-10, 1984 were measured
+and lost, and 27 796 were never measured. In the **zone** view it is three rows - cut,
+partly cut, clear - quoting the receiver height the verdict was computed for, plus the
+same unmeasured row and a line saying that faint means measured-and-failed. Every legend
+row is a count, and the counts of any of the three legends add up to the same 30 624
+points the sweep can account for: a legend that describes different pixels to the ones
+under it is a bug, and there is a test for it.
 
 ## Controls
 
@@ -109,9 +125,9 @@ Left panel, top to bottom:
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
 | **Placement and aim** | Site position: east offset and south offset, −2500 to +2500 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground under the mast), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
-| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, study range (100 m up to the whole map), clutter loss, and a switch for terrain shadowing. |
+| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, study range (100 m up to the whole map), clutter loss, and *Terrain shadowing (diffraction loss)* - off means the decibels ignore the ground, while the zone verdict and the earth's curvature are still walked over it. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
-| **Display** | Coverage overlay, radiation pattern, Fresnel zone, terrain mesh, zone labels. |
+| **Display** | Coverage overlay, coverage view (bands / range gradient / Fresnel zone clearance), radiation pattern, Fresnel zone volume, terrain mesh, zone labels. |
 
 Buttons: **New terrain** (fresh random seed), **Reset view** (camera back to
 start, centred on the site), **Reset placement** (site back to the middle of the
@@ -158,7 +174,8 @@ http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&siteX
 | `siteX`, `siteZ` | site position east / south, metres | off the map centre; both default to 0 |
 | `frequency` | band in MHz | `433`, `868`, `915`, `2400`, `5800` |
 | `sensitivity`, `range` | receiver sensitivity (dBm), study range (m) | both clamped to what the model allows, and the clamp is reported - see below |
-| `fresnel` | start in the Fresnel-zone view | `fresnel=1` (volume on, zone colours) |
+| `view` | how the coverage is painted | `bands`, `gradient`, `zone` |
+| `fresnel` | the Fresnel-zone volume, and the view that goes with it | `fresnel=1` turns the tube on **and** sets `view=zone`; `view` alone changes the colours without the tube |
 | `manual`, `nohud` | testing aids: no animation loop, no read-out panel | |
 
 A value outside the model is clamped rather than obeyed, and the clamp is not swallowed:
@@ -171,13 +188,21 @@ impossible. `?range=99999&siteX=99999` on a 5.2 km map, for instance, applies 38
 
 ## The five designs
 
-| Design | Beam | What it is good at |
-| --- | --- | --- |
-| **Omni half-wave dipole** | All directions, fat vertical lobe | Reference omni. Radiates everywhere, wastes power up and down. |
-| **Omni collinear** | All directions, flattened vertical lobe | Long-range omni on a tower: more power at the horizon, less directly overhead. |
-| **Yagi-Uda** | Narrow beam, deep null behind | Reaching one far place - straight down the flat field, or into the far end of the valley. |
-| **Biquad with plate reflector** | Wide, forgiving sector | Covering a broad area in one direction, e.g. a campsite or a farm yard. |
-| **Microstrip patch** | Neat sector, low profile | Sector coverage near the mast, especially with electrical downtilt. |
+| Design | Peak gain | -3 dB beamwidth (H x V) | Beam | What it is good at |
+| --- | --- | --- | --- | --- |
+| **Omni half-wave dipole** | 2.15 dBi | 360 x 78 deg | All directions, fat vertical lobe | Reference omni. Radiates everywhere, wastes power up and down. |
+| **Omni collinear** | 7.17 dBi | 360 x 45 deg | All directions, flattened vertical lobe | Long-range omni on a tower: more power at the horizon, less directly overhead. |
+| **Yagi-Uda** | 9.56 dBi | 42 x 66 deg | Narrow beam, deep null behind | Reaching one far place - straight down the flat field, or into the far end of the valley. |
+| **Biquad with plate reflector** | 8.13 dBi | 69 x 69 deg | Wide, forgiving sector | Covering a broad area in one direction, e.g. a campsite or a farm yard. |
+| **Microstrip patch** | 6.66 dBi | 72 x 68 deg | Neat sector, low profile | Sector coverage near the mast, especially with electrical downtilt. |
+
+At the defaults above (10 dBm into a receiver that hears −80 dBm at 868 MHz) those gains
+buy free-space ranges of 2.20, 1.86, 1.67, 1.57 and 0.94 km in that same order. Every
+number in the two first columns is a pair: the gain of each directional design is
+*derived from* the beamwidth next to it, so the biquad cannot keep the 12.4 dBi it used to
+carry - a 69 x 69 degree beam does not hold that much - and the ordering of these five by
+gain and by reach is a browser test
+([Antenna physics](#antenna-physics-why-a-wide-antenna-cannot-have-long-reach)).
 
 Aim controls only matter for the three directional designs - an omni does not
 care which way it faces, and the panel says so.
@@ -186,7 +211,10 @@ care which way it faces, and the panel says so.
 
 Every one of them is tuned so that **its own link** is the last thing to give out: none
 of the five is cut off by the study range or by the edge of the map, and a unit test fails
-if one ever is (`coverage: no preset is cut off by our own limits`).
+if one ever is (`coverage: no preset is cut off by our own limits`). None of them chooses a
+colour scheme either - a scenario is ground, antenna and aim, so a preset loads in whatever
+coverage view you had picked, and `?preset=valley-reach&fresnel=1` still gets you the zone
+picture (`panel: a scenario chooses ground and antenna, never the coverage view`).
 
 - **Reach down the valley** - long Yagi pointed south, tilted into the valley floor (the
   picture above). 2.48 km of link against a 2.50 km budget, and 99 % of those linked
@@ -273,15 +301,11 @@ never reconciled - a 69 x 69 degree beam holds about 9.4 dBi, and that ceiling i
 arithmetic, not a preference. This app now derives every directional design's gain from
 the beamwidths it draws, times an aperture efficiency for the losses a real build has
 (0.60 for a Yagi, 0.75 for a biquad, 0.55 for a patch; `ANTENNA.apertureEfficiency`), so
-the lobe on screen and the decibels in the link budget cannot disagree:
-
-| design | peak gain | -3 dB beamwidth | free-space range at 10 dBm / -80 dBm |
-| --- | --- | --- | --- |
-| Yagi (7 directors) | 9.6 dBi | 42 x 66 deg | 2.20 km |
-| Biquad with plate reflector | 8.1 dBi | 69 x 69 deg | 1.86 km |
-| Collinear (4 sections) | 7.2 dBi | 360 x 45 deg | 1.67 km |
-| Patch panel | 6.7 dBi | 72 x 68 deg | 1.57 km |
-| Half-wave dipole | 2.2 dBi | 360 x 78 deg | 0.94 km |
+the lobe on screen and the decibels in the link budget cannot disagree. The gains and
+beamwidths that come out of it are the two first columns of
+[The five designs](#the-five-designs), and the free-space ranges they buy are listed there
+too; a unit test recomputes the Kraus arithmetic in the model and refuses any design whose
+gain exceeds what its own beam can hold.
 
 The two omni designs keep an array-factor gain instead - a half-wave dipole is 2.15 dBi and
 N in-phase sections add `10*log10(N)` less a decibel for the feed - because a 360 degree
@@ -306,6 +330,73 @@ broken. A narrow beam pointed at the rise east of the centre drives straight int
 a wide beam spills past the same rise onto ground that is still in sight. Gain is a
 property of the antenna; range is a property of the antenna *and* the ground, and the map
 is where you see which of them is answering.
+
+### What the colours can mean
+
+One control, three views, and only the *colour* of a cell changes between them. The
+alpha channel - solid, faint, blank - is the same in all three, because that part of the
+message is not a matter of taste.
+
+| View | A cell's colour answers | Scale |
+| --- | --- | --- |
+| **signal bands** | which of four RSSI steps is this point in? | keyed to your receiver sensitivity: `+45`, `+30`, `+15`, `0 dB` above it |
+| **range gradient** | how much room does this link have left? | continuous yellow through pale yellow to pink, `0` to `30 dB` of margin over the receiver |
+| **Fresnel zone clearance** | how much of the first Fresnel zone has the ground left me? | purple (zone cut) through amber (partly cut) to green (`>= 60 %` clear) |
+
+The gradient is there because the bands hide the thing people actually read off a map. On
+the default configuration the banded view paints 828 of the 844 linked cells in *one*
+colour (the remaining 16 are a band higher); the gradient splits the same 828 into 6 strong,
+56 weaker and 782 at the limit, and that split is the difference between "it links"
+and "it links, this far, with this much to spare". The scale is deliberately absolute:
+`RF.gradientMaxMarginDb` is 30 dB of margin, not "the best cell on this map", because a
+ramp that quietly re-normalises itself to whatever is on screen makes two screenshots of
+two different links incomparable. 30 dB is measured, not chosen - over the disc a link
+actually lights up, margin spans 0-28 dB on the default dipole, 0-55 on the flat-field
+scenario and 18-112 on the loudest link the panel allows, and a top of 45 painted nearly
+every map pink.
+
+The three views are presentation, not physics, and one browser test insists:
+`browser: the coverage view repaints the drape, and no view changes a decibel` walks
+`gradient -> bands -> zone -> gradient` and asserts that the whole coverage statistics
+object is `deepEqual` at every stop, while the pixels do move. Switching a view repaints
+the grid the sweep already computed; it does not run a second model.
+
+### The earth is round, and now it says so
+
+Rays are traced over a curved earth: the standard `k = 1.413` effective radius, the same
+figure the knife-edge diffraction uses, so the profile a ridge is measured against already
+bows. A read-out row called **Curvature** states what that curvature was worth on the
+longest link you have, in metres, and compares the smooth-earth radio horizon with the map
+you are actually looking at. On the default configuration that is
+`k 1.41 - the ray bows 0.012 m over the last 0.93 km link; the earth curves away long
+before this map ends`. On the loudest link the panel allows (43 dBm into a −124 dBm
+receiver) the last link is 3.68 km, the bulge under it 0.19 m, and the horizon 35 km -
+still four times off this 5.2 km map.
+
+That is the honest version of a feature that would rather have been dramatic, and it was
+tested rather than asserted: a featureless plane, the lowest mast the panel allows (0.5 m),
+and a budget of 11 820 km still links every point of the map, the farthest being 3.68 km
+away at a corner (`coverage: the earth is never what ends the coverage inside this map`).
+The horizon the row quotes is the textbook one, computed for the *terminal height you set*
+- 21.9 km for the default 10 m mast with a 4 m terminal, 11.5 km for a 0.5 m mast with a 4 m
+terminal, 35.3 km for the loudest configuration - and all of those are off this 5.2 km map.
+So the curvature row exists to say so with a number, rather than to let a reader stare at a
+flat-looking map and suspect it is missing something.
+
+What the curved earth *does* change inside this map is the grazing geometry - it is why a
+ray that would clear a low ridge on flat ground does not clear it here, and why the worst
+clearance on a long path is worse than a flat-earth calculator says. It is not optional
+either: Fresnel verdicts are walked over the curved surface even when *Terrain shadowing
+(diffraction loss)* is off, and a unit test compares the two
+(`coverage: switching the terrain off for dB does not flatten the earth for the zone` -
+0.228 against 0.156 first-zone radii on a grazing path).
+
+And the reason a real low mast dies in an empty valley - the horizon - is still visible
+here as a *height* effect, because it is the same geometry seen from the inside: the flat
+-field scenario at 10 m of mast links 314 points and reaches 897 m of a 2018 m budget, at
+21 % zone-clear; lift the same antenna to 25 m and it links 2057 points over 2004 m at
+91 % zone-clear. Nothing about the horizon moved. What moved is that the ray and its first
+zone now have room to pass over the ground between.
 
 ### Decibels are not the same as a working link
 
@@ -361,7 +452,10 @@ widened by a fixed factor so it is visible next to a five-kilometre map; at
 ![The same valley scenario in the Fresnel-zone view: the drape is painted by zone clearance instead of signal level, and the pale tube is the first zone of the boresight link.](docs/screenshot-fresnel.png)
 
 Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
-cut outright - the ground stands above the ray. The read-out panel puts the same
+cut outright - the ground stands above the ray. The zone legend also carries the
+"out of budget - not measured, not painted" row and a line saying that its three rows
+count every path the ground was asked about, link or no link: the faint rim is a measured
+failure, the blank ground was never measured. The read-out panel puts the same
 numbers in words: how much of the *linked* set is clear, how many cells have the budget
 but not the zone, and the worst clearance on the map with the distance it happened at.
 
