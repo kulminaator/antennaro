@@ -17,3 +17,17 @@ Four documentation pictures show the new scale and their captions say what is in
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- Repo-wide sweep for the retired vocabulary, excluding `.tmp/`, `.taskman/` and git: `index.html`
+  and `assets/app.css` contain no colour-view wording at all; `tools/` and `src/ui/about.js`
+  mention neither views nor colours; only README.md and GUIDELINES.md carry the retired names, and
+  there only as history with its measurements attached. `src/` has exactly two live mentions of
+  `bands`/`gradient`, both inside `LEGACY_COVERAGE_VIEWS` in `main.js`.
+- README link check done in Node with GitHub slug rules, not with shell `tr` (which failed on the
+  space-to-dash range and reported six false misses): all six internal anchors and all four
+  images resolve, and `docs/screenshot-bands.png` is referenced nowhere outside the task notes.
+- No CI workflow exists in the repository to update (`.github/` is absent); deployment is the
+  repository root as web root, so the renamed screenshots need no other change.
+- The page itself was already proven to load with the deleted exports gone: `app-boot` asserts an
+  empty `appErrors`, `pageErrors` and console-error list, which is what catches a stale
+  `import { rangeGradientRgb }` that lint cannot see.
