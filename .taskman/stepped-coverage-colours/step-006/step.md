@@ -15,3 +15,10 @@ The panel offers exactly two coverage views with labels that say what the colour
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- No code change: none of the five presets touches a `display.*` key, so all five inherit
+  `RF.defaultCoverageView`. Measured through the reducer - `site-sector`, `valley-reach`,
+  `flat-field`, `mountain-shadow`, `bumps-hills` all resolve to `steps`, 0 rejected, 0 clamped,
+  and `validatePresets(applyPatch, createInitialState())` returns `[]`.
+- To keep it that way, step-009 adds a unit test: every preset must resolve to a view the field
+  table offers. A preset that hard-codes `gradient` would otherwise be silently rejected at boot.
