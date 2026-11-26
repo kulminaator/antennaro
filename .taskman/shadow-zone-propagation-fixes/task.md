@@ -55,3 +55,13 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
 *(Step statuses are tracked only in each `step-NNN/status` file, never here.)*
 
 ## Comments
+
+- `radioHorizonM()` and `rayProfile()` are one geometry seen two ways, and the identity
+  is exact when the two ends are at the same height: mid-path bulge `D^2 / (8 k R)`
+  equals the ray height `h` at `D = 2 sqrt(2 k R h)`, which is what
+  `radioHorizonM(h, h)` returns. Use that shape for curvature tests; with a receiver at
+  ground level (`h2 = 0`) the dip is only a centimetre near the horizon and makes a weak
+  assertion. (found in step-001)
+- The bulge bug shows up as an error of exactly **twice** the bulge, which makes it easy
+  to recognise in a failure message: the ray sits at `chord + bulge` instead of
+  `chord - bulge`. (found in step-001)

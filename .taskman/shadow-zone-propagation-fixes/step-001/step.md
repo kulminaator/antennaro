@@ -35,3 +35,25 @@ Done when the step's own verification commands pass and
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Tests went into a new file, `tests/unit/raycurvature.test.js`, rather than
+  `tests/unit/propagation.test.js`: the propagation file is 294 of 320 lines and three
+  tests with their derivations do not fit. The new file owns "how the ray sits on a
+  round earth" and step-003 extends it.
+- All three are red on the current code, with the failure being the lifted ray:
+  the 30 km case reports `worstExcess -0.619 m` where the geometry wants about +7.5 m,
+  and the per-sample convention test reports the ray at 11.746 m against a chord-less-
+  bulge expectation of 7.754 m - the difference being exactly twice the bulge, which is
+  what "added instead of subtracted" looks like.
+- Geometry learned while writing test 3: with the receiver standing **on** the ground
+  (`h2 = 0`) the ray can only be buried very close to the receiver, and the dip is tiny,
+  so that geometry is a weak test. With **both ends at the same height** the ray's
+  lowest point relative to the terrain is dead centre, the bulge there is
+  `D^2 / (8 k R)`, and `radioHorizonM(h, h) = 2 sqrt(2 k R h)` is the distance where
+  those two are equal - so the mid-path criterion and the textbook horizon coincide
+  exactly. That is the geometry the test uses.
+- Also learned (and it matters for step-005): the blockage distances of a round earth
+  follow from the product of the roots of the clearance quadratic. For a transmitter at
+  `h1` and a receiver on the ground the second crossing sits at `2 k R h1 / D`, so the
+  path is buried once `D > sqrt(2 k R h1)` - which is precisely `radioHorizonM(h1, 0)`.
+  The horizon formula and the profile are the same geometry, and neither is free to drift.
