@@ -26,3 +26,29 @@ captions describe those pixels.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Server detached on 8080, four shots at 1440x820 via `node tools/browser.js shot` (each
+  behind `tools/timebox.js`), then all four read back with the image tool and every caption
+  rewritten from the pixels:
+  - `docs/screenshot.png` - default scene, so now the **range gradient**: warm core at the
+    mast, pink over nearly the whole lit disc (honest for a 0.94 km budget), wide faint band
+    of asked-and-lost ground, bare map beyond; HUD legible down to the new **Curvature**
+    row, quoted in the caption.
+  - `docs/screenshot-valley.png` - `?preset=valley-reach`, yellow core running into pale
+    yellow down the valley floor and a pink rim where the link dies; HUD shows 10 directors,
+    10.69 dBi, F/B 26.0 dB, budget 2.50 km, last link 2.48 km @ 181 deg, 2024 points
+    (6.6 % of the map, 84.4 % of reachable ground), bulge 0.085 m, 98.9 % zone-clear.
+  - **new** `docs/screenshot-bands.png` - `?preset=valley-reach&view=bands`, the same scene
+    and the same HUD numbers, and the entire linked area in one flat orange. Referenced once
+    in *What the colours can mean*, in a two-column table opposite the gradient shot.
+  - `docs/screenshot-fresnel.png` - `?preset=valley-reach&fresnel=1`: green drape with amber
+    where the zone is partly cut, plus the translucent zone volume along the boresight.
+- Measured the exact bucket counts for the valley scene so the two captions quote numbers
+  rather than impressions (the same script path as step-019): bands `0 / 2 / 59 / 1963`
+  linked plus 374 faint and 28 226 unmeasured; gradient `20 / 207 / 1797` linked plus the
+  same 374 and 28 226. Both add to 2024 linked and 30 624 accounted ✓ - the caption claim
+  "1963 of its 2024 linked points are one colour" is the measured figure, and my first draft
+  ("all 2024") was wrong and is what the measurement was for.
+- Server and browser stopped (`browser.js stop --all` also cleaned 8 orphaned renderer
+  processes; `staticserver.js stop`), port 8080 confirmed dead.
+- `git status --short`: only the four `docs/*.png`, `README.md` and the task files.

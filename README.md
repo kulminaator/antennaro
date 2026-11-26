@@ -13,11 +13,15 @@ it, while the mountain, the valley and every other hill stay exactly where they
 are: the map never reshapes itself to suit the antenna. Put the mast on a ridge and
 it stands on the ridge, with the ground falling away beside it.
 
-![An omni dipole at the centre of a 5.2 km map. The solid patch south-east of the mast is
-where the link holds; the faint band along the escarpment is ground the sweep asked about
-and lost to the terrain; the rest of the map is bare because the antenna's own budget
-cannot reach it, so it was never measured. The read-out says the same in words: "the link:
-budget 0.94 km, last link 0.94 km", "844 of 30624 points (2.8 % of the map)".](docs/screenshot.png)
+![An omni dipole at the centre of a 5.2 km map, painted in the range gradient: a warm
+core right at the mast, pale yellow as the link's margin shrinks, and pink for the points
+that only just make the receiver - which is almost the whole lit area, because this budget
+is 0.94 km and there is nowhere to hide. The wide pale band beyond the pink is ground the
+sweep asked about and lost to the terrain, painted faint on purpose; beyond that the map is
+bare, because the antenna's own budget cannot reach it and it was never measured. The
+read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km", "844
+of 30624 points (2.8 % of the map)", "29.8 % of ground a link could reach", and under it
+"Curvature - k 1.41, the ray bows 0.012 m over the last 0.93 km link".](docs/screenshot.png)
 
 ## Run it
 
@@ -184,7 +188,7 @@ limited by a bad link can be told apart from one limited by a URL that asked for
 impossible. `?range=99999&siteX=99999` on a 5.2 km map, for instance, applies 3800 m and
 2500 m and says so.
 
-![The valley scenario: a 10-director Yagi aimed south, its beam holding all the way down the valley floor to 2.5 km and dying in the middle of the map, while the mountain side stays dark.](docs/screenshot-valley.png)
+![The valley scenario in the range gradient: a 10-director Yagi aimed south, yellow where the link has room near the mast, pale yellow down the valley floor, and pink as it dies at 2.48 km of a 2.50 km budget - in the middle of the map, not at its edge. The mountain side stays bare.](docs/screenshot-valley.png)
 
 ## The five designs
 
@@ -347,7 +351,13 @@ The gradient is there because the bands hide the thing people actually read off 
 the default configuration the banded view paints 828 of the 844 linked cells in *one*
 colour (the remaining 16 are a band higher); the gradient splits the same 828 into 6 strong,
 56 weaker and 782 at the limit, and that split is the difference between "it links"
-and "it links, this far, with this much to spare". The scale is deliberately absolute:
+and "it links, this far, with this much to spare".
+
+| ![The valley scenario in the signal-bands view: 1963 of its 2024 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 a band above that.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2024 linked points, in the range gradient: 20 strong near the mast, 207 with room to spare, 1797 at the dying pink rim.](docs/screenshot-valley.png) |
+| --- | --- |
+| *signal bands* | *range gradient* |
+
+The scale is deliberately absolute:
 `RF.gradientMaxMarginDb` is 30 dB of margin, not "the best cell on this map", because a
 ramp that quietly re-normalises itself to whatever is on screen makes two screenshots of
 two different links incomparable. 30 dB is measured, not chosen - over the disc a link
@@ -449,7 +459,7 @@ largest zone the antenna has to keep clear anywhere it is looking. Its radius is
 widened by a fixed factor so it is visible next to a five-kilometre map; at
 `FRESNEL.radialExaggeration: 1` you would see the truth, which is a hairline.
 
-![The same valley scenario in the Fresnel-zone view: the drape is painted by zone clearance instead of signal level, and the pale tube is the first zone of the boresight link.](docs/screenshot-fresnel.png)
+![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it (98.9 % of the linked points are clear - an open valley is good real estate), and the pale translucent band along the boresight is the zone volume itself. Every number in the read-out is identical to the valley picture above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
 
 Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
 cut outright - the ground stands above the ray. The zone legend also carries the
