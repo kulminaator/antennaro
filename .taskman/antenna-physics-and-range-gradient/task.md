@@ -78,3 +78,18 @@ numbers re-measured from the running app.
 
 <!-- Globally important findings discovered during execution are appended here
      as bullet points. This section starts empty and is append-only. -->
+
+- **Antenna gains were not reconciled with beamwidths** (step-001 audit, fixed in
+  step-005): the biquad claimed 12.40 dBi from a 69 x 69 degree beam, whose Kraus ceiling
+  is 9.38 dBi, while the Yagi sat 2-4 dB *under* what its narrower beam implies. Directional
+  gain is now `krausDirectivityDbi(H, V) + 10*log10(ANTENNA.apertureEfficiency[id])`, with
+  `beamwidths(params)` shared by the pattern and the gain, so the lobe and the link budget
+  are one decision. The omni designs keep an array-factor gain - Kraus has no 360 degree
+  plane - and that split is now written down in `GUIDELINES.md §7` so nobody "unifies" it.
+- **`limitingFactor` answers "what ended the sweep", not "what ended my coverage"**
+  (discovered in step-008, not fixed here): a biquad at the map centre reports
+  `Range limit | the link: budget 1.86 km, last link 0.90 km`, where the thing that ended
+  the coverage was 900 m of rising ground. `describeLimits()` only inspects cells clipped by
+  study range or map edge, so a ground-limited picture still says "the link". A fourth kind
+  (`ground`) plus a decision about what that row is for is a step of its own - raising it
+  with the user rather than smuggling it into a curvature step.
