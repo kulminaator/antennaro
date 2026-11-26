@@ -177,6 +177,8 @@ export function installTestApi(options) {
         maxExcess: profile.maxExcess,
         worstExcess: profile.worstExcess,
         maxExcessDistanceM: profile.maxExcessDistance,
+        screenExcess: profile.diffractionExcess,
+        screenDistanceM: profile.diffractionDistance,
         minClearance: profile.minClearance,
         minClearanceDistanceM: profile.minClearanceDistance,
         obstructionDb: profileObstructionDb(profile, resolveFrequencyHz(controller.state().frequencyKey)),

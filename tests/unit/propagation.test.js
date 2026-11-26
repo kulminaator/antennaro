@@ -142,7 +142,8 @@ test('los: a ridge blocks the ray and the shadow is deepest behind it', () => {
   assert.ok(profile.maxExcess > 15, `the ray is buried in the far flank (${profile.maxExcess.toFixed(1)} m)`);
   assert.ok(profile.maxExcessDistance > 250 && profile.maxExcessDistance < 650,
     'the blocking point is on the ridge, not at either end');
-  assert.ok(profile.d1 + profile.d2 <= profile.totalDistance + 1e-6, 'the two path segments come from the total');
+  assert.ok(profile.diffractionD1 + profile.diffractionD2 <= profile.totalDistance + 1e-6,
+    'the two segments the loss is charged over come from the total');
   const loss = obstructionLossDb(wall, tx, shadow, '868');
   assert.ok(loss > 15, `the shadow costs real dB (${loss.toFixed(1)} dB)`);
 

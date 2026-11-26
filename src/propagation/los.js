@@ -42,7 +42,8 @@ import { earthBulgeM, fresnelRadiusM, wavelengthM } from './rf.js';
  * @param {{x:number,y:number,z:number}} to
  * @param {{samples?:number, kFactor?:number, earthRadiusM?:number}} [options]
  * @returns {{points:Array<{x:number,z:number,distance:number,terrainY:number,rayY:number,excess:number}>,
- *   maxExcess:number, maxExcessDistance:number, d1:number, d2:number, totalDistance:number}}
+ *   maxExcess:number, worstExcess:number, maxExcessDistance:number,
+ *   diffractionExcess:number, diffractionDistance:number, totalDistance:number}}
  */
 export function rayProfile(field, from, to, options = {}) {
   const {
@@ -51,6 +52,8 @@ export function rayProfile(field, from, to, options = {}) {
     earthRadiusM = RF.earthRadiusM,
     freqHz = null,
     guard = 0,
+    diffractionGuard = RF.diffractionEndpointGuard,
+    diffractionNearEndM = RF.diffractionNearEndM,
   } = options;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -93,7 +96,9 @@ export function rayProfile(field, from, to, options = {}) {
       minClearance = clearance;
       minClearanceDistance = distance;
     }
+
   }
+  const screen = worstScreen(points, total, diffractionGuard, diffractionNearEndM);
   return {
     points,
     maxExcess: Number.isFinite(maxExcess) ? Math.max(0, maxExcess) : 0,
@@ -104,8 +109,17 @@ export function rayProfile(field, from, to, options = {}) {
      */
     worstExcess: Number.isFinite(maxExcess) ? maxExcess : -Infinity,
     maxExcessDistance,
-    d1: maxExcessDistance,
-    d2: Math.max(0, total - maxExcessDistance),
+    /**
+     * The signed excess of the sample that the diffraction loss is charged from, and where
+     * it sits. This is the profile's answer to "what is in the way", and it is deliberately
+     * not the same sample as `maxExcessDistance`: the closest approach of the ray to the
+     * ground is a geometric fact, the screen that costs decibels is a modelling decision
+     * taken inside the diffraction window.
+     */
+    diffractionExcess: screen.excess,
+    diffractionDistance: screen.distance,
+    diffractionD1: screen.distance,
+    diffractionD2: Math.max(0, total - screen.distance),
     totalDistance: total,
     minClearance: Number.isFinite(minClearance) ? minClearance : Infinity,
     minClearanceDistance,
@@ -113,18 +127,82 @@ export function rayProfile(field, from, to, options = {}) {
 }
 
 /**
- * Diffraction loss (dB, >= 0) for a knife edge of height `excessM` that sits
- * `d1` from the transmitter and `d2` from the receiver.
- * Monotone increasing in `excessM`; 0 dB when the edge is well below the ray.
+ * Which sample along a walked ray is the thing in the way, as `{ excess, distance }`, with
+ * `excess: -Infinity` when nothing is.
+ *
+ * Two candidates qualify, and the reason they do is the whole subtlety of charging a path
+ * that ends in the ground:
+ *
+ * - a **crest**: a sample higher, relative to the ray, than both its neighbours inside the
+ *   diffraction window. This is a screen in the knife-edge sense, and taking its *signed*
+ *   excess is what makes the shadow begin at 0 dB instead of leaping to the grazing 6 dB
+ *   the centimetre the ray is touched.
+ * - anything **above the ray** (`excess > 0`) that is not within `nearEndM` of the receiver:
+ *   a buried ray has an obstruction by definition, crest or not, so a monotone hillside that
+ *   swallows the ray, a wall 50 m in front of the antenna, and the edge of the tableland the
+ *   receiver is standing on all still get charged.
+ *
+ * What is deliberately excluded is the ray's dive into its own receiving point. This app's
+ * decibels are for a terminal *on the ground*, so the terrain always meets the ray at the
+ * last sample; charging that would blame the receiver's own footing for 6 dB on every path
+ * on the map, and would rank it above every real ridge, since `d1 d2 / (d1 + d2)` - and so
+ * the zone it is judged against - collapses towards zero at an antenna. Excluding the ends
+ * by a fraction of the path is not enough for that: the last guarded sample of a flat world
+ * is still where the ray is lowest. Requiring a crest is what says "land got in the way",
+ * and `nearEndM` is what stops the ground the receiver stands on from being that land - at
+ * the receiving end only, because the ray leaves the mast in the air and ground beside the
+ * mast is a real obstacle to everything down the path.
+ */
+function worstScreen(points, total, guard, nearEndM) {
+  const best = { excess: -Infinity, distance: 0 };
+  const inWindow = (point) => point.distance > guard * total && point.distance < (1 - guard) * total;
+  // Only at the receiving end. The ray leaves the mast in the air, so ground an antenna
+  // stands in - the lip of the gully it is in, the wall 16 m away - is a genuine obstacle;
+  // the ray's own endpoint is the only point that is not.
+  const notFooting = (point) => point.distance < total - nearEndM;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const point = points[i];
+    if (!notFooting(point)) continue;
+    const isCrest = inWindow(points[i - 1]) && inWindow(point) && inWindow(points[i + 1])
+      && point.excess >= points[i - 1].excess && point.excess > points[i + 1].excess;
+    if (!isCrest && !(point.excess > 0)) continue;
+    if (point.excess > best.excess) {
+      best.excess = point.excess;
+      best.distance = point.distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Where the Lee/Maqsood fit of the Fresnel integral stops being a fit: v ~ -0.78, about
+ * 0.78 first-zone radii clear of the edge. Above it the closed form tracks the integral;
+ * below it the true loss has died away into a fraction of a dB and the polynomial runs off
+ * into nonsense, so the answer is nothing. Declared next to the maths it bounds - like
+ * `PATTERN_FLOOR_DB` in `antenna/pattern.js` - because moving it to config would separate
+ * a model from the number that says where it stops being meaningful.
+ */
+const KIRCHHOFF_FIT_FLOOR_V = -0.78;
+
+/**
+ * Diffraction loss (dB, >= 0) for a knife edge `excessM` above the ray, sitting `d1` from
+ * the transmitter and `d2` from the receiver.
+ *
+ * `excessM` is **signed**: positive means the edge stands above the ray (the geometric
+ * shadow), negative means the ray clears it by that much. Passing the sign is what makes
+ * the shadow start where the physics says it does - a continuous climb from 0 dB at the
+ * fit floor, through 6 dB as the ray grazes the edge, and on into the deep shadow -
+ * instead of a step from "no obstruction" to "grazing" the centimetre the ray touches.
+ * Monotone increasing in `excessM`, and 0 dB once the edge is far enough below the ray.
  */
 export function diffractionLossDb(excessM, d1, d2, freqHz) {
-  if (excessM === undefined || excessM === null) return 0;
+  if (!Number.isFinite(excessM)) return 0;
   if (d1 <= 0 || d2 <= 0) return 0;
   const lambda = wavelengthM(freqHz);
   const total = d1 + d2;
   if (!(lambda > 0) || total <= 0) return 0;
   const v = excessM * Math.sqrt(2 / (lambda * (d1 * d2) / total));
-  if (v < -0.78) return 0;
+  if (v < KIRCHHOFF_FIT_FLOOR_V) return 0;
   const loss = 6.9 + 20 * Math.log10(Math.sqrt(Math.pow(v - 0.1, 2) + 1) + v - 0.1);
   return Math.max(0, loss);
 }
@@ -141,15 +219,22 @@ export function diffractionLossDb(excessM, d1, d2, freqHz) {
 /**
  * What an already-walked profile costs, in dB.
  *
- * A path whose ray misses the ground everywhere costs nothing, and that is decided here
- * rather than by handing `diffractionLossDb` a worst excess of 0: the knife-edge formula
- * returns about 6 dB at exactly 0, which is correct for a ray grazing a summit and wrong
- * for a ray that never came near the ground. Keeping the decision in one function means
- * `obstructionLossDb` and `pathtrace.js` cannot disagree about it.
+ * The **signed** worst excess is what gets charged, and that is the whole story of this
+ * function: `maxExcess` is floored at 0 so that "where is the worst point" has a single
+ * answer, but a path whose ray misses the ground by two zone radii is not the same path as
+ * one that grazes it, and flooring at 0 used to make them cost the same 0 dB - and then a
+ * ray that touched the ground by one centimetre cost 6 dB in one step. Signed, the loss
+ * climbs out of 0 dB at the fit floor, passes the textbook 6 dB at the shadow line, and
+ * keeps climbing behind it. The screen charged is `profile.diffractionExcess` at
+ * `profile.diffractionDistance` - the worst sample inside the diffraction window, not the
+ * ray's closest approach to the ground, which is usually the sample where the ray dives
+ * into the receiving antenna. `pathtrace.js` charges from here, so nothing can disagree
+ * about which excess was charged and where.
  */
 export function profileObstructionDb(profile, freqHz) {
-  if (!(profile.worstExcess >= 0)) return 0;
-  return diffractionLossDb(profile.maxExcess, profile.d1, profile.d2, freqHz);
+  return diffractionLossDb(
+    profile.diffractionExcess, profile.diffractionD1, profile.diffractionD2, freqHz,
+  );
 }
 
 export function obstructionLossDb(field, from, to, freqHz, options = {}) {

@@ -86,3 +86,19 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
   ray to a ground point, with the curvature optionally switched off. It is how curvature
   gets attributed to a specific path over real terrain, and GUIDELINES section 9 still
   needs it added to the method list. (step-006)
+
+- The 6 dB cliff was not the only thing the floored excess was hiding. Charging the signed
+  worst sample made every path over flat ground cost 4.5-6 dB, because the decibels belong
+  to a terminal *on the ground* and the ray therefore always ends in the ground: the worst
+  "obstruction" was the receiver's own footing, winning against a zone that collapses to
+  nothing at an antenna. `worstScreen()` now charges a crest (continuous onset) or any
+  burial beyond `RF.diffractionNearEndM` of the receiver. The floor had also been
+  *inflating* deep shadow - the default map's best path got 2 dB better.
+- Do not exclude the transmitter end by distance. The western wall is 16 m from the mast and
+  the northern lip 17 m; both are real obstacles (`rayTo` charged 40.8 dB and 10.8 dB). The
+  metre guard is receiving-end only.
+- A band is also a budget: comparing `clearPct` across bands on the default budget compares
+  2271 linked cells with 14. Band tests must open the budget until the linked set is fixed.
+- `-1000, 0` looking east is not a free-space corridor (it costs 3.2 dB); the middle of the
+  map looking east is (0.994 of budget). Rank antennas on the latter, and pin ground cost in
+  dB explicitly wherever it is nonzero.

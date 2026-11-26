@@ -117,27 +117,28 @@ export const RF = Object.freeze({
   kFactor: 1.413, // standard atmosphere refraction model for the terrain LOS bulge
   profileSamples: 96,
   /**
-   * A path is only reliable when at least this fraction of the *first Fresnel zone*
-   * is clear of the ground. 0.6 (60 % of r1) is the conventional engineering
-   * criterion; it is a flag on the link, not an extra loss term - the dB already
-   * come from the Fresnel/Kirchhoff diffraction parameter.
+   * A path is only reliable when at least this fraction of the *first Fresnel zone* is clear
+   * of the ground. 0.6 (60 % of r1) is the conventional criterion; it is a flag on the link,
+   * not an extra loss term - the dB already come from the diffraction parameter.
    */
   fresnelClearFraction: 0.6,
   /**
-   * Height above the ground of the *receiving* terminal the zone is judged against.
-   * Not a fudge - a stated assumption, because the answer depends on it: judged
-   * against a receiver lying on the ground, the zone radius collapses to nothing at
-   * the receiver and flat earth is always inside the zone (a 10 m mast is only
-   * Fresnel-clear within 2.2*(h1+h2)/lambda = 89 m at 868 MHz, 596 m at 5.8 GHz).
-   * A rooftop terminal of a few metres is what "the link holds" is really claiming.
+   * Height above the ground of the *receiving* terminal the zone is judged against. Not a
+   * fudge - a stated assumption, because the answer depends on it: against a receiver lying
+   * on the ground the zone collapses at the receiver and flat earth is always inside it (a
+   * 10 m mast is only Fresnel-clear within 2.2*(h1+h2)/lambda = 89 m at 868 MHz). A rooftop
+   * terminal is what "the link holds" is really claiming.
    */
   fresnelRxHeightM: 4,
   /**
-   * Fraction of the path at each end whose samples are not judged. Near an antenna
-   * the zone is narrower than the terrain sampling and the geometry, not the
-   * ground, decides the answer, so only obstacles well inside the path count.
+   * How near to an antenna a sample has to be to be excused, per verdict. One cause for two
+   * windows: `sqrt(d1 d2 / (d1 + d2))` collapses at an antenna, so the dive into the
+   * terminal's own ground is judged against a zone a centimetre wide. The fraction excuses
+   * sub-ray crests at both ends; the metres excuse the receiver's footing, only at its end.
    */
   fresnelEndpointGuard: 0.1,
+  diffractionEndpointGuard: 0.1,
+  diffractionNearEndM: 30,
   /**
    * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex.
    * The ground needs ~15 m cells to look like land; a ray walk over every one of

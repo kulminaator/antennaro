@@ -12,7 +12,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { withApp } from '../harness/app.js';
-import { WORLD } from '../../src/config.js';
+import { RF, WORLD } from '../../src/config.js';
 
 test('browser: the zone report agrees with the coverage grid it is drawn from', async () => {
   await withApp(async (session) => {
@@ -92,23 +92,52 @@ test('browser: the zone is cut where the ground says it should be cut', async ()
 
 test('browser: a higher band has a smaller zone, so more of the map is clear', async () => {
   await withApp(async (session) => {
+    // The zone radius goes as the square root of the wavelength, so a band climbs and the
+    // ground that was in the way is not. That claim can only be measured on ground that is
+    // being looked at in every band, and a band is also a link budget: over the default
+    // configuration this sweep links 2271 cells at 433 MHz and 14 at 5800 MHz, and comparing
+    // "share of linked cells that are clear" between those two is comparing two different
+    // maps. So the budget is opened until nothing is ever out of reach and the same cells
+    // are walked and linked in every band; the last paragraph is the shuffle itself.
+    await session.patch({ txPowerDbm: 43, rxSensitivityDbm: -124, heightM: 10 });
     await session.settle();
+    const keys = ['433', '868', '2400', '5800'];
     const clearPct = {};
-    for (const frequencyKey of ['433', '868', '2400', '5800']) {
+    const linked = {};
+    for (const frequencyKey of keys) {
       await session.patch({ frequencyKey });
       await session.settle();
       const fresnel = await session.sim('fresnel');
-      assert.equal(fresnel.evaluatedCells, (await session.sim('coverage')).evaluatedCells,
+      const coverage = await session.sim('coverage');
+      assert.equal(fresnel.evaluatedCells, coverage.evaluatedCells,
         'the study area did not move, only the zone inside it');
       clearPct[frequencyKey] = fresnel.clearPct;
+      linked[frequencyKey] = coverage.linkedCells;
     }
-    const keys = ['433', '868', '2400', '5800'];
     for (let i = 1; i < keys.length; i += 1) {
-      assert.ok(
-        clearPct[keys[i]] > clearPct[keys[i - 1]] + 1,
+      assert.ok(clearPct[keys[i]] > clearPct[keys[i - 1]] + 0.75,
         `${keys[i]} MHz (${clearPct[keys[i]].toFixed(1)} %) should be more clear than ${keys[i - 1]} MHz (${clearPct[keys[i - 1]].toFixed(1)} %)`,
       );
     }
+    // Diffraction itself grows with the band, so the highest band is the one that starts
+    // losing links to the ground: the zone gets easier and the decibels get harder.
+    assert.ok(linked['5800'] < linked['2400'],
+      `5800 MHz kept ${linked['5800']} of ${linked['2400']} links that 2400 MHz kept`);
+    assert.ok(linked['433'] === linked['868'] && linked['868'] === linked['2400'],
+      `the lower three bands all reached the edge of the map: ${keys.map((k) => linked[k]).join(' / ')}`);
+
+    // And the shuffle is worth stating, because it is the trap: with the default budget the
+    // band is deciding what gets measured at all, not how clear the zone is.
+    await session.patch({ txPowerDbm: 10, rxSensitivityDbm: RF.defaultRxSensitivityDbm });
+    await session.settle();
+    const byBand = [];
+    for (const frequencyKey of ['433', '5800']) {
+      await session.patch({ frequencyKey });
+      await session.settle();
+      byBand.push((await session.sim('coverage')).linkedCells);
+    }
+    assert.ok(byBand[0] > 20 * byBand[1],
+      `the default budget links ${byBand[0]} cells at 433 MHz against ${byBand[1]} at 5800 MHz`);
     assert.deepEqual(session.errors(), []);
   });
 });
