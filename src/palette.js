@@ -82,12 +82,13 @@ const ZONE_CLEAR = hexToRgb(COLOURS.fresnelClear);
  * Colour for the first-Fresnel-zone view, from a clearance ratio in zone radii.
  *
  * The scale runs from "ground above the ray" (the zone is fully cut) to
- * `FRESNEL.rampMaxRatio` radii of clearance, with the `RF.fresnelClearFraction`
- * criterion at the amber/green junction. Ramped rather than binary on purpose: on a
- * real map only about one cell in ten meets the criterion, so painting the flag
- * would wash the drape in one hue. The warm-to-cool language matches the signal ramp
- * so both overlays read the same way; only the "cut" hue is new, and it never
- * appears among the signal bands.
+ * `FRESNEL.rampMaxRatio` radii of clearance, with the `RF.fresnelClearFraction` criterion at
+ * the violet/mint junction. Ramped rather than binary on purpose: on the default map only
+ * 1080 of 30624 cells meet the criterion (38 % of the paths the ground was asked about), so
+ * painting the flag alone would wash the drape in one hue.
+ * It borrows nothing from the signal scale - not a hue, not a warmth - because the two views
+ * are switched and a shared colour would make a pixel mean two things; the palette test
+ * refuses any signal step within 12 CIEDE2000 of any zone state, in every eye it simulates.
  *
  * @param {number} clearanceRatio worst clearance along the path, in first-zone radii
  * @param {number[]} [out] written to, when given (the drape loops over 25k cells)

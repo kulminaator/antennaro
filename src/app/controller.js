@@ -154,7 +154,7 @@ export function createController(options) {
     mapObjects.terrain.setWireframe(state.display.showWireframe);
     mapObjects.labels.group.visible = state.display.showSectors;
     fresnel.setVisible(state.display.showFresnel === true);
-    // The three views share one drape rather than adding three, so switching view
+    // The two views share one drape rather than adding two, so switching view
     // means repainting it in the other language.
     const view = state.display.coverageView;
     if (view !== lastPaintedView) {

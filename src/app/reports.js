@@ -140,7 +140,7 @@ export function createReports(accessors) {
       mastHeightM: rigInfo.mastHeightM,
       patternVisible: rigInfo.patternVisible,
       coverageVisible: mapObjects.overlay.mesh.visible,
-      /** Which question the drape's colours answer: `bands | gradient | zone`. */
+      /** Which question the drape's colours answer: `steps | zone`. */
       coverageView: coverageViewOf(),
       /** Our work-area boundary: `{ visible, radiusM, canBind }`. */
       rangeRing: mapObjects.ring.info(),

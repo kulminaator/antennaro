@@ -149,7 +149,7 @@ export function levelMarginsDb() {
   return RF.levelMarginsDb.map((v) => Number(v));
 }
 
-/** Map an RSSI to a ramp index: 0 = best ... levels = weaker-than-all-bands. */
+/** Map an RSSI to a signal-step index: 0 = most margin ... `levels` = below every step. */
 export function levelIndexFor(rssiDbm, sensitivityDbm, margins = levelMarginsDb()) {
   for (let i = 0; i < margins.length; i += 1) {
     if (rssiDbm >= sensitivityDbm + margins[i]) return i;

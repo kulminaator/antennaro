@@ -20,3 +20,22 @@ visibly different on the real mesh.
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- Four stale comments, one of them a false claim rather than a stale word:
+  - `controller.js`: "the three views share one drape" -> two.
+  - `reports.js`: the `coverageView` doc said `bands | gradient | zone` -> `steps | zone`.
+  - `propagation/rf.js`: "ramp index ... weaker-than-all-bands" -> "signal-step index ...
+    below every step".
+  - `palette.js`, the zone-ramp docstring, asserted "the warm-to-cool language matches the
+    signal ramp so both overlays read the same way". That was true of a purple/amber/green
+    zone ramp against a yellow/pink gradient and it is the opposite of what is shipped now:
+    the two scales are deliberately disjoint. Rewritten to say so and to name the test that
+    enforces it.
+- The same paragraph carried an unmeasured figure - "only about one cell in ten meets the
+  criterion". Measured on the default map: 1080 of 30624 cells clear, which is 3.5 % of the
+  grid and 38 % of the 2828 paths the ground was actually asked about. Both denominators are
+  now in the comment, because the two numbers answer different questions and the old sentence
+  answered neither.
+- `ui/schema.js` and `ui/controls.js` needed nothing: the panel builds the select from
+  `STATE_FIELDS`, so the two new options arrive with the field table. No keyboard shortcut
+  cycles coverage views (`orbit.js` keydown is camera only).
