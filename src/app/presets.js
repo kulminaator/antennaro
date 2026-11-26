@@ -6,6 +6,12 @@
  * They exist so a first-time user sees an interesting terrain/antenna story in
  * one click instead of having to discover the sliders first.
  *
+ * A preset never touches `display`. A scenario is a bit of ground, an antenna and an aim;
+ * which of the three coverage views you want to see it in is your business, not the
+ * scenario's - and a preset that carried a view would silently overrule `?view=` and
+ * `?fresnel=1`, which are applied to the boot state and then patched over by the preset.
+ * `tests/unit/display.test.js` holds that line.
+ *
  * Every scenario is tuned so that *its own link* is the last thing to give out:
  * the transmit power and receiver sensitivity are chosen so the free-space budget
  * dies inside the map, and the study range is left at the whole map unless the

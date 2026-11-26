@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { RF } from '../../src/config.js';
+import { PRESETS } from '../../src/app/presets.js';
 import { applyPatch, createInitialState, STATE_FIELDS } from '../../src/app/state.js';
 
 const fieldByKey = new Map(STATE_FIELDS.map((field) => [field.key, field]));
@@ -43,4 +44,17 @@ test('panel: the coverage view is one field with three honest values', () => {
   const hint = volume.hint ?? '';
   assert.ok(!/instead of/i.test(hint), 'the volume hint must not promise a colouring mode');
   assert.match(hint, /coverage view/i, 'and it must point at the control that does');
+});
+
+test('panel: a scenario chooses ground and antenna, never the coverage view', () => {
+  for (const preset of PRESETS) {
+    assert.ok(!('display' in preset.patch), `${preset.id} would overrule the user's own view`);
+    const applied = applyPatch(createInitialState(), preset.patch);
+    assert.deepEqual(applied.rejected, [], `${preset.id} must apply cleanly`);
+    assert.deepEqual(applied.state.display, createInitialState().display,
+      `${preset.id} changed the display block`);
+  }
+  // And the view the app boots with is one a scenario could be looked at in: the zone
+  // demo is reached by the panel or `?fresnel=1`, on top of any preset.
+  assert.equal(createInitialState().display.coverageView, RF.defaultCoverageView);
 });

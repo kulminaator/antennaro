@@ -173,26 +173,59 @@ test('browser: the toggle shows and hides the zone volume, riding the beam', asy
   });
 });
 
-test('browser: the zone view repaints the coverage drape and gives it back', async () => {
+test('browser: the coverage view repaints the drape, and no view changes a decibel', async () => {
   await withApp(async (session) => {
     await session.settle();
-    const rssiView = await session.sim('pixelStats');
+    const pictures = new Map();
+    const stats = new Map();
+    const seen = [];
+    for (const view of ['gradient', 'bands', 'zone', 'gradient']) {
+      await session.patch({ display: { coverageView: view } });
+      await session.settle();
+      assert.equal((await session.sim('scene')).coverageView, view, 'the scene says which colours are up');
+      seen.push({ view, frame: await session.sim('pixelStats'), stats: await session.sim('coverage') });
+      pictures.set(view, seen[seen.length - 1].frame);
+      stats.set(view, seen[seen.length - 1].stats);
+    }
+    assert.equal(seen.length, 4, 'the last visit to gradient is a separate reading, not the first');
+    const [firstVisit, , , lastVisit] = seen;
+
+    // Each view is a different picture - otherwise the select is decoration.
+    assert.notEqual(pictures.get('bands').meanLuminance, pictures.get('zone').meanLuminance,
+      'the zone ramp and the RSSI bands do not paint the same map');
+
+    // Coming back to the view you started on restores the frame exactly: the mode is a
+    // re-paint of the same coverage grid, not a rebuild of it.
+    assert.deepEqual(
+      { distinct: lastVisit.frame.distinctColours, luminance: lastVisit.frame.meanLuminance },
+      { distinct: firstVisit.frame.distinctColours, luminance: firstVisit.frame.meanLuminance },
+      'the picture came back unchanged',
+    );
+
+    // And the physics never moved. Three views, one sweep: a mode that changed a linked
+    // cell, a range or a percentage would be a second model wearing a colour scheme.
+    for (const view of ['bands', 'zone']) {
+      assert.deepEqual(stats.get(view), stats.get('gradient'),
+        `switching to ${view} changed the coverage statistics`);
+    }
+    assert.ok(stats.get('gradient').linkedCells > 0, 'this map has to have a link to look at');
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
+test('browser: the zone volume switch no longer chooses the colours', async () => {
+  await withApp(async (session) => {
+    await session.settle();
+    await session.patch({ display: { coverageView: 'bands' } });
+    await session.settle();
+    const before = await session.sim('scene');
+    assert.equal(before.coverageView, 'bands');
 
     await session.patch({ display: { showFresnel: true } });
     await session.settle();
-    const zoneView = await session.sim('pixelStats');
-    assert.notEqual(zoneView.distinctColours, rssiView.distinctColours, 'the drape did not change colour');
-    assert.ok(zoneView.distinctColours > rssiView.distinctColours,
-      'the zone ramp is a continuous scale, so it shows more distinct colours than four bands');
-
-    await session.patch({ display: { showFresnel: false } });
-    await session.settle();
-    const back = await session.sim('pixelStats');
-    assert.deepEqual(
-      { distinct: back.distinctColours, luminance: back.meanLuminance },
-      { distinct: rssiView.distinctColours, luminance: rssiView.meanLuminance },
-      'switching the view off restored the picture exactly - the mode is a re-paint, not a rebuild',
-    );
+    const after = await session.sim('scene');
+    assert.equal(after.coverageView, 'bands', 'the volume left the drape wearing the bands');
+    assert.equal((await session.sim('fresnel')).volume.visible, true, 'and did put the tube in the scene');
     assert.deepEqual(session.errors(), []);
   });
 });
