@@ -28,3 +28,20 @@ with the measurements it was chosen against written next to it.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `ANTENNA.apertureEfficiency` (`yagi 0.60`, `biquad-reflector 0.75`, `patch 0.55`) plus
+  `ANTENNA.apertureEfficiencyDefault: 0.55`, with a comment block that states the derived-gain
+  formula, why efficiency may never exceed 1, the published figures each number was chosen
+  against, and that the omni designs are exempt because Kraus has no 360-degree plane.
+- **Deviation from this step's text, on purpose:** the step said `yagi: 0.55`, step-001's
+  audit chose 0.60. 0.60 puts the default Yagi at 9.55 dBi against the 9.58 dBi it has
+  today - so the Yagi does not move, and neither do the valley/flat-field presets or the
+  README's Yagi numbers. 0.55 would have knocked 0.45 dB off every Yagi figure in the docs
+  to fix a design that was not the complaint. Recorded in step-001's comments; the
+  biquad (the actual defect) still drops 4.27 dB.
+- `grep` confirms nothing else reads these keys yet (`catalogue.js` picks them up in
+  step-005), so no other behaviour moved: `npm run lint` ok,
+  `state.test.js` + `architecture.test.js` 42 pass / 0 fail.
+- Deliberately not a `config.js` top-level block: efficiency belongs with the antenna
+  limits the panel and the catalogue already share, so a new design cannot forget it while
+  still finding its beamwidths.

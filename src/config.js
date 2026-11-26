@@ -178,6 +178,37 @@ export const ANTENNA = Object.freeze({
   azimuthLimitsDeg: Object.freeze({ min: 0, max: 360 }),
   tiltLimitsDeg: Object.freeze({ min: -60, max: 60 }), // boresight elevation; negative = downtilt
   defaultAim: Object.freeze({ azimuthDeg: 0, tiltDeg: 0 }),
+  /**
+   * How much of the directivity a design's own beam implies it actually keeps.
+   *
+   * A directional design's peak gain here is **derived from the beam it draws**:
+   * `gain = krausDirectivityDbi(H, V) + 10*log10(efficiency)` (see
+   * `antenna/pattern.js`). The efficiency is what a real build loses to amplitude taper,
+   * feed loss, mismatch and the finite reflector - never above 1, because a gain above
+   * the beam-implied directivity is not a strong antenna, it is a contradiction, and
+   * that contradiction is exactly what once made a 69-degree biquad outrange a Yagi.
+   *
+   * Chosen against published/field figures for these builds
+   * (`.taskman/antenna-physics-and-range-gradient/step-001/step.md` has the audit):
+   *  - yagi 0.60 -> 7.6 dBi at 2 directors, 9.5 at 7, 12.3 at 14, against ~7-8 dBi for
+   *    a 3-element and ~12-13 dBi for a 15-element single-row boom.
+   *  - biquad 0.75 -> 7.3 / 8.1 / 9.1 dBi at 1 / 2 / 3 turns, against the 8-10 dBi a
+   *    measured 2-turn biquad in front of a plate gives. It was previously 12.4 dBi at
+   *    a beam that can hold 9.4.
+   *  - patch 0.55 -> 3.6 / 6.7 / 10.2 dBi across its size range, against the 4-10 dBi a
+   *    microstrip panel of that aperture gives.
+   *
+   * The omni designs are exempt and keep an array-factor gain
+   * (`2.15 + 10*log10(sections) - 1.0`): a 360-degree azimuth plane is not a main lobe,
+   * so Kraus's single-lobe arithmetic does not apply to them.
+   */
+  apertureEfficiency: Object.freeze({
+    yagi: 0.6,
+    'biquad-reflector': 0.75,
+    patch: 0.55,
+  }),
+  /** A design that has not said what it is worth is not allowed to be lossless. */
+  apertureEfficiencyDefault: 0.55,
   lobeRings: 48,
   lobeColumns: 72,
   lobeDynamicRangeDb: 30, // pattern surface is clipped to peak-30 dB
