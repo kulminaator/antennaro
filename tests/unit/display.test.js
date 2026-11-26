@@ -3,7 +3,7 @@
  * what the reducer accepts.
  *
  * Split out of `state.test.js` (which had outgrown its line budget) because the display
- * switches are a contract of their own: the coverage view is one field with three values,
+ * switches are a contract of their own: the coverage view is one field with two values,
  * so no combination of toggles can ask for two different maps at once, and every default
  * has to be inside the control that shows it.
  */
@@ -17,12 +17,16 @@ import { applyPatch, createInitialState, STATE_FIELDS } from '../../src/app/stat
 
 const fieldByKey = new Map(STATE_FIELDS.map((field) => [field.key, field]));
 
-test('panel: the coverage view is one field with three honest values', () => {
+test('panel: the coverage view is one field with two honest values', () => {
   const field = fieldByKey.get('display.coverageView');
   assert.ok(field, 'the panel declares the coverage view');
   assert.equal(field.kind, 'select');
   const values = field.options.map((option) => option.value);
-  assert.deepEqual(values, ['bands', 'gradient', 'zone']);
+  assert.deepEqual(values, ['steps', 'zone'],
+    'the signal scale is stepped now, so the ramp it replaces is not offered as a view');
+  assert.deepEqual(field.options.map((option) => option.label),
+    ['signal steps (red to yellow)', 'Fresnel zone clearance'],
+    'the control says what each view is, in the words the scale uses');
   // The rule that caught the seed bug: a default has to be inside its own control.
   assert.ok(values.includes(createInitialState().display.coverageView),
     `the default ${createInitialState().display.coverageView} is not one of the panel's options`);
@@ -57,4 +61,13 @@ test('panel: a scenario chooses ground and antenna, never the coverage view', ()
   // And the view the app boots with is one a scenario could be looked at in: the zone
   // demo is reached by the panel or `?fresnel=1`, on top of any preset.
   assert.equal(createInitialState().display.coverageView, RF.defaultCoverageView);
+  // Every preset therefore boots into a view the panel offers. A preset that ever grew its
+  // own `display.coverageView` and named a retired view would be silently refused at boot,
+  // which is exactly how the old `gradient` default could have vanished without a sound.
+  const offered = new Set(fieldByKey.get('display.coverageView').options.map((option) => option.value));
+  for (const preset of PRESETS) {
+    const applied = applyPatch(createInitialState(), preset.patch);
+    assert.ok(offered.has(applied.state.display.coverageView),
+      `${preset.id} boots into "${applied.state.display.coverageView}", which the panel does not offer`);
+  }
 });

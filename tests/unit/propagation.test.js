@@ -107,14 +107,14 @@ test('rf: free-space range inverts the path loss, Fresnel zones are symmetric', 
   assert.ok(approxEqual(summary.fsplAt100mDb, freeSpaceLossDb(100, '915'), 1e-12));
 });
 
-test('rf: coverage bands are ordered thresholds above the sensitivity floor', () => {
+test('rf: the coverage steps are ordered thresholds above the sensitivity floor', () => {
   const margins = levelMarginsDb();
   assert.ok(margins.length >= 3);
-  for (let i = 1; i < margins.length; i += 1) assert.ok(margins[i] < margins[i - 1], 'best band first');
+  for (let i = 1; i < margins.length; i += 1) assert.ok(margins[i] < margins[i - 1], 'strongest step first');
   const sensitivity = -80;
-  assert.equal(levelIndexFor(sensitivity + 50, sensitivity), 0, 'plenty of margin is the best band');
+  assert.equal(levelIndexFor(sensitivity + 50, sensitivity), 0, 'plenty of margin is the strongest step');
   assert.equal(levelIndexFor(sensitivity + margins[0], sensitivity), 0);
-  assert.equal(levelIndexFor(sensitivity - 1, sensitivity), margins.length, 'below sensitivity there is no band');
+  assert.equal(levelIndexFor(sensitivity - 1, sensitivity), margins.length, 'below sensitivity there is no step');
   assert.equal(levelIndexFor(-200, sensitivity), margins.length);
   assert.ok(approxEqual(margins[0], RF.levelMarginsDb[0], 1e-12), 'margins come from configuration');
 });
