@@ -157,6 +157,19 @@ export function installTestApi(options) {
     pixelStats,
     /** Control-panel widget keys currently rendered. */
     controls: () => (globalThis.__simControls ? globalThis.__simControls.fieldKeys() : []),
+    /**
+     * The About dialog - source, licence and the three.js notice. Deliberately not part
+     * of `state()`: an open dialog is not a property of the simulation.
+     */
+    about: () => (globalThis.__simAbout
+      ? globalThis.__simAbout.info()
+      : { open: false, threeVersion: '' }),
+    openAbout: () => {
+      if (globalThis.__simAbout) globalThis.__simAbout.open();
+    },
+    closeAbout: () => {
+      if (globalThis.__simAbout) globalThis.__simAbout.close();
+    },
     dispose: () => controller.dispose(),
   };
 

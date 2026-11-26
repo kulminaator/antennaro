@@ -21,6 +21,7 @@ import { installTestApi } from './app/testapi.js';
 import { getPreset } from './app/presets.js';
 import { createInitialStateWithReport } from './app/state.js';
 import { createControls } from './ui/controls.js';
+import { createAbout } from './ui/about.js';
 import { createHud } from './ui/hud.js';
 
 const HUD_REFRESH_MS = 400;
@@ -80,13 +81,18 @@ function boot() {
     ? { update: () => {} }
     : createHud({ root: document.getElementById('hud') });
 
+  // The About dialog is the panel's footer: the button lives in the panel, the dialog is
+  // its own element, and neither is app state.
+  const about = createAbout({ mount: document.body });
   const controls = createControls({
     root: document.getElementById('panel'),
     getState: controller.state,
     onPatch: (patch) => controller.patch(patch),
     onAction: (request) => controller.action(request),
+    footerNodes: [about.trigger],
   });
   globalThis.__simControls = controls;
+  globalThis.__simAbout = about;
 
   function refreshHud() {
     const info = controller.viewport.info();
@@ -141,7 +147,10 @@ function boot() {
   };
   api.boot = { ...globalThis.__simBoot, status: 'ready', version: APP.version, overrides };
   globalThis.__simBoot = { ...globalThis.__simBoot, status: 'ready', version: APP.version, overrides, at: Date.now() };
-  globalThis.addEventListener('beforeunload', () => controller.dispose());
+  globalThis.addEventListener('beforeunload', () => {
+    about.dispose();
+    controller.dispose();
+  });
 }
 
 try {

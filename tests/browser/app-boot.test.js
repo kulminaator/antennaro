@@ -7,7 +7,8 @@
  *
  * Assertions read `window.__sim` only - never DOM ids - and use the real return
  * shapes: `stats()` is the frame loop, `scene()` is the scene graph, `antenna()`
- * is the model summary.
+ * is the model summary. The one exception is the About dialog: it is deliberately
+ * not app state, so its words can only be read where they live, in the document.
  */
 
 import test from 'node:test';
@@ -145,6 +146,56 @@ test('browser: dispose() stops the frame loop', async () => {
     await session.settle();
     await session.sim('dispose');
     assert.equal((await session.sim('stats')).status, 'stopped');
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
+test('browser: the panel foot offers an About dialog, and it changes nothing', async () => {
+  await withApp(async (session) => {
+    await session.settle();
+    const before = await session.sim('state');
+    const placement = await session.evaluate(`(() => {
+      const button = document.querySelector('[data-action="about"]');
+      const panel = document.getElementById('panel');
+      return JSON.stringify({
+        inPanel: panel.contains(button),
+        lastThingInThePanel: button?.closest('section') === panel.lastElementChild,
+        isNotAControl: !window.__sim.controls().includes('about'),
+      });
+    })()`);
+    const where = JSON.parse(placement);
+    assert.ok(where.inPanel, 'the About button belongs to the left-hand panel');
+    assert.ok(where.lastThingInThePanel, 'and sits at its foot, under the action buttons');
+    assert.ok(where.isNotAControl, 'opening a dialog is not a simulation control');
+
+    await session.evaluate('window.__sim.openAbout()');
+    const opened = await session.sim('about');
+    assert.equal(opened.open, true, 'the dialog opens modally');
+    const words = await session.evaluate(`(() => {
+      const dialog = document.querySelector('dialog.about');
+      return JSON.stringify({
+        text: dialog.textContent.replace(/\\s+/g, ' '),
+        hrefs: [...dialog.querySelectorAll('a')].map((a) => a.getAttribute('href')),
+        modal: dialog.matches(':modal'),
+      });
+    })()`);
+    const said = JSON.parse(words);
+    const manifest = vendorManifest();
+    assert.ok(said.modal, 'it is a real modal, so Escape and focus work');
+    assert.match(said.text, /github\.com\/kulminaator\/antennaro/, 'names the repository');
+    assert.match(said.text, /MIT/, 'names the licence');
+    assert.match(said.text, /three\.js/, 'says what draws the picture');
+    assert.match(said.text, /three\.js authors/, 'and whose copyright that attribution carries');
+    assert.ok(said.hrefs.includes('vendor/three/LICENSE.txt'),
+      'links the licence text that has to travel with three.js');
+    // The release number is read from the manifest, so a test must not assume it landed:
+    // either it has not been read yet, or it is the version this repository ships.
+    assert.ok(['', manifest.version].includes(opened.threeVersion),
+      `quotes ${opened.threeVersion}, which is neither blank nor ${manifest.version}`);
+
+    await session.evaluate('window.__sim.closeAbout()');
+    assert.equal((await session.sim('about')).open, false, 'and closes');
+    assert.deepEqual(await session.sim('state'), before, 'opening it moved no state at all');
     assert.deepEqual(session.errors(), []);
   });
 });

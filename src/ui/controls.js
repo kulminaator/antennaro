@@ -34,11 +34,14 @@ function formatValue(field) {
 
 /**
  * @param {{root:HTMLElement, getState:()=>object, onPatch:(patch:Record<string,unknown>)=>void,
- *   onAction:(action:{type:string, value?:unknown})=>void}} options
+ *   onAction:(action:{type:string, value?:unknown})=>void,
+ *   footerNodes?:Node[]}} options `footerNodes` are nodes the caller owns - the About
+ *   button, say - placed at the foot of the panel. They are not controls: they emit no
+ *   patch and no action, because opening a dialog is not a property of the simulation.
  * @returns {{render:()=>void, dispose:()=>void, fieldKeys:()=>string[]}}
  */
 export function createControls(options) {
-  const { root, getState, onPatch, onAction } = options;
+  const { root, getState, onPatch, onAction, footerNodes = [] } = options;
   /** @type {Map<string, {field:object, input:HTMLElement, output?:HTMLElement}>} */
   const widgets = new Map();
   let structureSignature = '';
@@ -171,6 +174,11 @@ export function createControls(options) {
       for (const group of panel) renderGroup(group, root);
       const actions = el('section', 'group');
       buildButtons(actions);
+      if (footerNodes.length > 0) {
+        const foot = el('div', 'panel-foot');
+        for (const node of footerNodes) foot.appendChild(node);
+        actions.appendChild(foot);
+      }
       root.appendChild(actions);
       return;
     }

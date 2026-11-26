@@ -149,6 +149,121 @@ select {
   color: #fff;
 }
 
+/* The panel's footer holds the one control that is not a control: it opens a dialog
+   about the software instead of changing what the software simulates, so it is drawn
+   quieter than the buttons above it. */
+.panel-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.btn-ghost {
+  background: none;
+  border-color: transparent;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  padding: 4px 10px;
+}
+
+.btn-ghost:hover {
+  border-color: var(--line);
+  color: var(--accent);
+}
+
+/* ---------- about dialog ---------- */
+
+dialog.about {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  color-scheme: dark;
+  max-width: 30em;
+  width: min(90vw, 30em);
+  padding: 16px 18px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+dialog.about::backdrop {
+  background: rgba(4, 8, 12, 0.66);
+}
+
+dialog.about h2 {
+  font-size: 0.98rem;
+  margin: 0 0 6px;
+}
+
+.about-version {
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+
+.about-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.about-row {
+  display: grid;
+  grid-template-columns: 8.5em 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.about-row dt {
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.about-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+dialog.about a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+dialog.about a:hover {
+  text-decoration: underline;
+}
+
+.about-details {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.about-details summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.about-licence pre {
+  max-height: 12em;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
+.about-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 /* ---------- stage ---------- */
 
 .stage {
