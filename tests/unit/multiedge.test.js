@@ -12,8 +12,13 @@ import assert from 'node:assert/strict';
 
 import { RF } from '../../src/config.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
+import { resolveSite } from '../../src/terrain/site.js';
+import { createAntennaModel } from '../../src/antenna/model.js';
+import { computeCoverage, sampleCoverage } from '../../src/propagation/coverage.js';
 import { diffractionLossDb, multiEdgeDiffractionDb } from '../../src/propagation/diffraction.js';
 import { profileObstructionDb, rayProfile } from '../../src/propagation/los.js';
+import { screenEdges } from '../../src/propagation/diffraction.js';
+import { wavelengthM } from '../../src/propagation/rf.js';
 
 const FREQ = 868e6;
 const SIZE = 161;
@@ -163,4 +168,70 @@ test('diffraction: the first screen is charged in full, the ones behind it are n
   assert.ok(capped <= multi + 0.1 && capped > 0,
     `edgeLimit 1 must cost no more than the full sum: ${capped} vs ${multi} dB`);
   assert.ok(RF.diffractionEdgeLimit >= 2, 'the shipped cap has to allow superposition at all');
+});
+
+/**
+ * The same ground, swept, with and without a second ridge behind the first: the end-to-end
+ * version of the defect, in dBm, at cells the picture paints. The ridges are 6 m tall and 700 m
+ * apart, which is the geometry where they stay two separate screens rather than merging into
+ * one long hillside, and where the far one is still below the line the near one casts - so the
+ * near screen is only grazing the ray and the sum has somewhere to go.
+ */
+function ridgedSweep(withSecondRidge) {
+  const field = new HeightField({ size: 201, worldSize: 6000 }).fillFromFunction((x, z) => {
+    const bump = (bx) => 6 * Math.exp(-(((x - bx) ** 2 + z ** 2) / (2 * 260 * 260)));
+    return bump(700) + (withSecondRidge ? bump(1400) : 0);
+  });
+  const site = resolveSite(field, { x: 0, z: 0, heightM: 10 });
+  const model = createAntennaModel({
+    designId: 'omni-dipole',
+    aim: { azimuthDeg: 0, tiltDeg: 0 },
+    wavelength: wavelengthM(FREQ),
+  });
+  return {
+    field,
+    site,
+    coverage: computeCoverage({
+      field, site, model, freqHz: FREQ, txPowerDbm: 43, rxSensitivityDbm: -124, maxRangeM: 2600,
+    }),
+  };
+}
+
+test('diffraction: a ridge behind the ridge shows up in the coverage, not only in the model', () => {
+  const both = ridgedSweep(true);
+  const oneOnly = ridgedSweep(false);
+  const behindBoth = sampleCoverage(both.coverage, both.field, 2100, 0);
+  const behindOne = sampleCoverage(oneOnly.coverage, oneOnly.field, 2100, 0);
+  const clear = sampleCoverage(both.coverage, both.field, 0, 2100);
+  assert.ok(behindBoth && behindOne && clear, 'all three cells are inside the study range');
+  assert.ok(Math.abs(behindBoth.distanceM - clear.distanceM) < 60,
+    `the clear cell is as far away, so free space cannot explain the gap: `
+    + `${behindBoth.distanceM} vs ${clear.distanceM} m`);
+
+  assert.equal(clear.obstructionDb, 0, 'nothing in the way, nothing charged');
+  assert.ok(behindOne.obstructionDb > 1, `the near ridge alone obstructs: ${behindOne.obstructionDb} dB`);
+  assert.ok(behindBoth.obstructionDb > behindOne.obstructionDb + 0.5,
+    `the far ridge is not free to charge: ${behindOne.obstructionDb.toFixed(2)} -> `
+    + `${behindBoth.obstructionDb.toFixed(2)} dB when it appears`);
+  assert.ok(clear.rssiDbm > behindBoth.rssiDbm + 1,
+    `at the same range the sheltered cell is quieter: ${clear.rssiDbm.toFixed(1)} vs `
+    + `${behindBoth.rssiDbm.toFixed(1)} dBm`);
+
+  // The signature the single-screen model could not produce, from the same ray the sweep
+  // walked: two screens, and a charge greater than the worse of them standing on its own.
+  const profile = rayProfile(both.field, both.site, { x: 2100, y: both.field.sample(2100, 0), z: 0 },
+    { freqHz: FREQ });
+  const edges = screenEdges(profile.points, profile.totalDistance,
+    RF.diffractionEndpointGuard, RF.diffractionNearEndM);
+  assert.ok(edges.length >= 2, `the path has to cross two screens, found ${edges.length}`);
+  const worstAlone = Math.max(...edges.map((edge) => diffractionLossDb(
+    edge.excess, edge.distance, profile.totalDistance - edge.distance, FREQ,
+  )));
+  const charged = multiEdgeDiffractionDb(profile.points, profile.totalDistance, FREQ);
+  assert.ok(charged > worstAlone + 0.5,
+    `${edges.length} screens must cost more than the worst one alone: ${charged.toFixed(2)} vs `
+    + `${worstAlone.toFixed(2)} dB`);
+  assert.ok(Math.abs(charged - behindBoth.obstructionDb) < 0.5,
+    `and the map charged what this ray says it costs: ${behindBoth.obstructionDb.toFixed(2)} vs `
+    + `${charged.toFixed(2)} dB`);
 });

@@ -30,7 +30,7 @@
 
 import { RF } from '../config.js';
 import { clamp } from '../math/scalar.js';
-import { diffractionLossDb } from './diffraction.js';
+import { diffractionLossDb, multiEdgeDiffractionDb } from './diffraction.js';
 import { earthBulgeM, fresnelRadiusM, pathSamples } from './rf.js';
 
 /** The loss model lives in `diffraction.js`; it is re-exported for the callers of `los.js`. */
@@ -181,24 +181,29 @@ function worstScreen(points, total, guard, nearEndM) {
 }
 
 /**
- * What an already-walked profile costs, in dB.
+ * What an already-walked profile costs, in dB: the Deygout superposition of every screen the
+ * profile contains (`diffraction.js`), floored at what the most significant one costs alone.
  *
- * The **signed** worst excess is what gets charged, and that is the whole story of this
- * function: `maxExcess` is floored at 0 so that "where is the worst point" has a single
- * answer, but a path whose ray misses the ground by two zone radii is not the same path as
- * one that grazes it, and flooring at 0 used to make them cost the same 0 dB - and then a
- * ray that touched the ground by one centimetre cost 6 dB in one step. Signed, the loss
- * climbs out of 0 dB at the fit floor, passes the textbook 6 dB at the shadow line, and
- * keeps climbing behind it. The screen charged is `profile.diffractionExcess` at
- * `profile.diffractionDistance` - the worst sample inside the diffraction window, not the
- * ray's closest approach to the ground, which is usually the sample where the ray dives
- * into the receiving antenna. `pathtrace.js` charges from here, so nothing can disagree
- * about which excess was charged and where.
+ * This used to be the single worst screen, and on this map that was worth up to 15.7 dB: two
+ * thirds of the paths out of the default site cross two or more ridges, and a second ridge
+ * behind the first used to be free. The **signed** worst excess is still what gets charged,
+ * and that is the story of the onset: `maxExcess` is floored at 0 so that "where is the worst
+ * point" has a single answer, but a path whose ray misses the ground by two zone radii is not
+ * the same path as one that grazes it, and flooring at 0 used to make them cost the same 0 dB
+ * - and then a ray that touched the ground by one centimetre cost 6 dB in one step. Signed,
+ * the loss climbs out of 0 dB at the fit floor, passes the textbook 6 dB at the shadow line,
+ * and keeps climbing behind it.
+ *
+ * For one screen this is exactly `diffractionLossDb` of `profile.diffractionExcess` at
+ * `profile.diffractionDistance` - the two functions cannot disagree on a single-obstruction
+ * path - and with more screens it is more, which is the point. That pair is still the
+ * profile's answer to "what is the one thing in the way", and it is deliberately not
+ * `maxExcessDistance`: the closest approach of the ray to the ground is a geometric fact, the
+ * screen that costs decibels is a modelling decision taken inside the diffraction window.
+ * `pathtrace.js` charges from here, so nothing can disagree about what a path costs.
  */
-export function profileObstructionDb(profile, freqHz) {
-  return diffractionLossDb(
-    profile.diffractionExcess, profile.diffractionD1, profile.diffractionD2, freqHz,
-  );
+export function profileObstructionDb(profile, freqHz, options) {
+  return multiEdgeDiffractionDb(profile.points, profile.totalDistance, freqHz, options);
 }
 
 export function obstructionLossDb(field, from, to, freqHz, options = {}) {

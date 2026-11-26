@@ -37,12 +37,24 @@ const FREQ = 868e6;
 const midPath = Object.freeze({ d1: 1000, d2: 1000 });
 const lossAt = (excessM) => diffractionLossDb(excessM, midPath.d1, midPath.d2, FREQ);
 
-/** Profile-shaped object: `worstExcess` signed, `maxExcess` floored, as `rayProfile` builds. */
-const profileWithWorst = (diffractionExcess) => ({
-  diffractionExcess,
-  diffractionD1: midPath.d1,
-  diffractionD2: midPath.d2,
-});
+/***
+ * A walked-profile-shaped object: five samples along a 2 km path whose middle sample is a
+ * crest `diffractionExcess` above the ray. It has to be samples rather than a summary field,
+ * because `profileObstructionDb` reads the samples the way the sweep does; `diffractionExcess`
+ * and friends stay on the object because `rayProfile` reports them and other tests read them.
+ */
+const profileWithWorst = (diffractionExcess) => {
+  const total = midPath.d1 + midPath.d2;
+  const at = (i, excess) => ({ distance: (total * i) / 4, excess });
+  return {
+    totalDistance: total,
+    diffractionExcess,
+    diffractionD1: midPath.d1,
+    diffractionD2: midPath.d2,
+    points: [at(0, -Infinity), at(1, diffractionExcess - 2), at(2, diffractionExcess),
+      at(3, diffractionExcess - 2), at(4, -Infinity)],
+  };
+};
 
 
 test('diffraction: the loss climbs through the shadow line instead of stepping over it', () => {

@@ -1,5 +1,5 @@
 /**
- * One path, two questions: what does the ground cost, and how much first Fresnel
+ * One path, two questions: what does the sequence of ridges cost, and how much first Fresnel
  * zone is left?
  *
  * Layer: L2 (domain service, pure). Extracted from `coverage.js` because the coverage loop
@@ -30,7 +30,8 @@ export function tracePath(field, from, to, options) {
   const zoneProfile = rayProfile(field, from, zone, { samples, freqHz, guard });
   // The loss ray keeps the default (unguarded) profile: the endpoint guard is a device
   // for *judging* a zone near an antenna, and silently applying it here would move the
-  // decibels whenever the criterion's tuning changes.
+  // decibels whenever the criterion's tuning changes. The dB themselves are the multi-edge
+  // sum in `diffraction.js`, so a second ridge behind the first is not free.
   const groundProfile = rxHeightM === 0
     ? zoneProfile
     : rayProfile(field, from, to, { samples, freqHz });

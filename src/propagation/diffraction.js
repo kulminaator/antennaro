@@ -62,8 +62,11 @@ export function diffractionLossDb(excessM, d1, d2, freqHz) {
  * runs are then collapsed to their top, because a ridge sampled twenty times is one ridge.
  * Without that collapse a long hillside would contribute one edge per sample and the
  * superposition below would charge the same slope twenty times over.
+ *
+ * Exported because "how many ridges are in the way" is a question worth asking of a path,
+ * and a probe or a read-out should not have to reimplement the qualification rules.
  */
-function screenEdges(points, total, guard, nearEndM) {
+export function screenEdges(points, total, guard, nearEndM) {
   const inWindow = (point) => point.distance > guard * total && point.distance < (1 - guard) * total;
   const obstructs = (point, i) => {
     if (!(point.distance < total - nearEndM)) return false;

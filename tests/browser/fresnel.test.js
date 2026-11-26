@@ -104,6 +104,7 @@ test('browser: a higher band has a smaller zone, so more of the map is clear', a
     const keys = ['433', '868', '2400', '5800'];
     const clearPct = {};
     const linked = {};
+    const asked = {};
     for (const frequencyKey of keys) {
       await session.patch({ frequencyKey });
       await session.settle();
@@ -113,6 +114,7 @@ test('browser: a higher band has a smaller zone, so more of the map is clear', a
         'the study area did not move, only the zone inside it');
       clearPct[frequencyKey] = fresnel.clearPct;
       linked[frequencyKey] = coverage.linkedCells;
+      asked[frequencyKey] = coverage.evaluatedCells;
     }
     for (let i = 1; i < keys.length; i += 1) {
       assert.ok(clearPct[keys[i]] > clearPct[keys[i - 1]] + 0.75,
@@ -123,8 +125,13 @@ test('browser: a higher band has a smaller zone, so more of the map is clear', a
     // losing links to the ground: the zone gets easier and the decibels get harder.
     assert.ok(linked['5800'] < linked['2400'],
       `5800 MHz kept ${linked['5800']} of ${linked['2400']} links that 2400 MHz kept`);
-    assert.ok(linked['433'] === linked['868'] && linked['868'] === linked['2400'],
-      `the lower three bands all reached the edge of the map: ${keys.map((k) => linked[k]).join(' / ')}`);
+    // The ridges now accumulate, so the band reaches further than it used to - and the two
+    // lowest still cross every cell of the map while each step up loses ground at the edge.
+    assert.ok(linked['433'] === asked['433'] && linked['868'] === asked['868'],
+      `the two lowest bands reach the edge of the map: ${linked['433']} and ${linked['868']} of `
+      + `${asked['433']} cells asked`);
+    assert.ok(linked['2400'] < linked['868'] && linked['5800'] < linked['2400'],
+      `and each step up in band loses more of it to the ridges: ${keys.map((k) => linked[k]).join(' / ')}`);
 
     // And the shuffle is worth stating, because it is the trap: with the default budget the
     // band is deciding what gets measured at all, not how clear the zone is.

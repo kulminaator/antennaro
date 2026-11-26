@@ -115,7 +115,12 @@ test('browser: the app lowers its ray by exactly the earth, wherever the path is
       const delta = curved.worstExcess - flat.worstExcess;
       assert.ok(delta > 0, `${label}: the round earth must make the path worse, not better`);
       assert.ok(curved.minClearance < flat.minClearance, `${label}: and eat into the first zone`);
-      assert.ok(curved.obstructionDb >= flat.obstructionDb, `${label}: charging at least as much`);
+      // Deliberately nothing about decibels here. What the sweep charges is the multi-edge
+      // sum, and that sum is not monotone in the ray's height - a taller first screen relieves
+      // everything behind it, measured at 21.60 dB flat against 21.54 dB curved on the
+      // map-centre path below, where the worst excess nevertheless rose. The curvature's own
+      // claim is geometric, so that is what this test pins; the sum's behaviour is pinned, and
+      // argued, in tests/unit/multiedge.test.js.
       // The bulge peaks mid-path, so no path's difference can exceed its own mid-path bulge.
       const peak = earthBulgeM(curved.distanceM / 2, curved.distanceM / 2);
       assert.ok(delta <= peak + 1e-9,
