@@ -7,7 +7,7 @@
  * reinterpret anything.
  */
 
-import { coverageLegendItems, fresnelZoneLegendItems, rangeGradientLegendItems } from '../palette.js';
+import { coverageLegendItems, fresnelZoneLegendItems } from '../palette.js';
 import { SECTOR_LABELS } from '../propagation/coverage.js';
 import { formatDb } from '../math/scalar.js';
 
@@ -47,15 +47,14 @@ const LIMIT_SENTENCES = Object.freeze({
 });
 
 const LEGEND_TITLES = Object.freeze({
-  bands: 'Coverage legend',
-  gradient: 'Range gradient legend',
+  steps: 'Coverage legend',
   zone: 'Fresnel zone legend',
 });
 
 /**
- * What the legend's rows do not say. The banded and gradient legends carry a row per
- * absence, so they need no note; the zone rows are clearance categories, which count a
- * measured path whether or not it linked, so the faint rim it paints needs a sentence.
+ * What the legend's rows do not say. The signal legend carries a row per absence, so it needs
+ * no note; the zone rows are clearance categories, which count a measured path whether or not
+ * it linked, so the faint rim it paints needs a sentence.
  */
 const LEGEND_NOTES = Object.freeze({
   zone: 'every row counts paths the ground was asked about, link or no link: '
@@ -170,10 +169,10 @@ export function createHud(options) {
   function renderLegend(coverage, view) {
     // The legend describes the pixels beneath it, so it changes when the drape does -
     // one entry per value of `display.coverageView`, and nothing else decides.
-    legendTitle.textContent = LEGEND_TITLES[view] ?? LEGEND_TITLES.bands;
+    legendTitle.textContent = LEGEND_TITLES[view] ?? LEGEND_TITLES.steps;
     const items = (view === 'zone'
       ? fresnelZoneLegendItems(coverage.stats)
-      : (view === 'gradient' ? rangeGradientLegendItems(coverage) : coverageLegendItems(coverage)));
+      : coverageLegendItems(coverage));
     legendList.replaceChildren();
     for (const item of items) {
       const li = el('li', 'legend-item');
@@ -263,7 +262,7 @@ export function createHud(options) {
         + `${km(clipped.limitM)} (a ${clipped.label} link would go further).`
       : '';
 
-    renderLegend(coverage, state.display?.coverageView ?? 'bands');
+    renderLegend(coverage, state.display?.coverageView ?? 'steps');
     notes.textContent = 'Antenna hardware is drawn enlarged to stay visible; the mast is true scale. '
       + 'A pale ring, when drawn, is the area this sweep evaluated - our work area, not a signal limit. '
       + 'Free space + terrain diffraction only: no clutter, vegetation, multipath or receiver noise figure.';
