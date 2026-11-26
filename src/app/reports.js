@@ -117,10 +117,10 @@ export function createReports(accessors) {
 
   /** What the scene is made of: geometry counts, placement, visibility. */
   /** The view the drape is painted in - asked of the controller, so a test can assert
-      which colours are on screen without scraping pixels. */
+      which colours are on screen without scraping pixels. Normalised the same way the
+      mesh normalises, so the answer is the picture, not the string someone passed in. */
   function coverageViewOf() {
-    const view = getState().display?.coverageView;
-    return view === 'gradient' || view === 'zone' ? view : 'bands';
+    return getState().display?.coverageView === 'zone' ? 'zone' : 'steps';
   }
 
   function sceneInfo() {

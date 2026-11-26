@@ -20,3 +20,13 @@
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- Deviation, with reason: the plan said to normalise legacy names in the reducer. The reducer
+  already refuses any select value that is not in the field table (`coerce()` -> `undefined` ->
+  `rejected: [{key, reason: 'invalid value'}]`), which is the house rule for every select, and
+  quietly accepting `bands` would break it for one field. So the vocabulary is strict
+  (`steps`, `zone`) and the legacy spellings are translated where they actually arrive: the URL,
+  in step-005. Measured now: `steps`/`zone` accepted; `bands`, `gradient`, `nonsense` rejected
+  with the state left at `steps`.
+- `coverageViewOf()` in `reports.js` normalises the same way the mesh does, so the testapi reports
+  the picture rather than the string somebody passed in.

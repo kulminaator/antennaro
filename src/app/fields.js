@@ -118,12 +118,12 @@ export const STATE_FIELDS = Object.freeze([
     key: 'display.coverageView', path: ['display', 'coverageView'], label: 'Coverage view',
     kind: 'select', group: 'Display', impact: [RECOMPUTE.DISPLAY],
     options: Object.freeze([
-      Object.freeze({ value: 'bands', label: 'signal bands' }),
-      Object.freeze({ value: 'gradient', label: 'range gradient (yellow to pink)' }),
+      Object.freeze({ value: 'steps', label: 'signal steps (red to yellow)' }),
       Object.freeze({ value: 'zone', label: 'Fresnel zone clearance' }),
     ]),
-    hint: 'Bands and gradient are two readings of the same signal level; zone paints how '
-      + 'much of the first Fresnel zone the ground leaves clear.',
+    hint: 'Four steps of margin over your own receiver - red where the link survives by a '
+      + 'decibel or two, yellow where it has room. Zone asks a different question: how much '
+      + 'of the first Fresnel zone the ground leaves clear.',
   }),
   Object.freeze({
     key: 'display.showFresnel', path: ['display', 'showFresnel'], label: 'Fresnel zone volume',

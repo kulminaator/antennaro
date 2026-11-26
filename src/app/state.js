@@ -67,7 +67,8 @@ function baseState(designId) {
     display: {
       showCoverage: true,
       showPattern: true,
-      /** `'bands' | 'gradient' | 'zone'` - see `RF.defaultCoverageView`. */
+      /** `'steps' | 'zone'` - see `RF.defaultCoverageView`. The reducer's select coercion
+         rejects anything else, so the mesh never has to guess. */
       coverageView: RF.defaultCoverageView,
       showFresnel: false,
       showWireframe: false,
