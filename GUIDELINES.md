@@ -332,7 +332,12 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   map" a piece of maths rather than a guess. The HUD then says it in words ("our study
   range 1.40 km - the link would reach 1.67 km") and marks a clipped direction `>=`.
   The study-range ring (`app/mapmesh.js`) is drawn *only when it could bind*: a circle
-  that can never be the limit trains the eye to ignore the one time it is.
+  that can never be the limit trains the eye to ignore the one time it is. "Could bind" is
+  measured **from the mast**, not from the middle of the map - `math/vec3.js`'s
+  `farthestGroundDistanceM` says how much map there is left from where the antenna stands -
+  because `RF.maxRangeLimitsM.max` is wider than the map on purpose (6 km against a 5.2 km
+  map, which is 3.68 km of ground from the centre and 7.35 km from a corner), so a ring may
+  be real for one mast position and decoration for the next.
 - **Three alpha values are a contract, not a style choice.** `1` means the link works,
   `RF.noLinkAlpha` means the ground was asked and defeated the link, `0` means the ground
   was never asked. Beyond the free-space budget the sweep stores the upper bound and marks

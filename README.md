@@ -129,7 +129,7 @@ Left panel, top to bottom:
 | **Scenario** | Five ready-made setups to load (see below). |
 | **Antenna design** | Which of the five designs, plus that design's own parameters (number of directors, loop turns, patch size, ...). |
 | **Placement and aim** | Site position: east offset and south offset, −2500 to +2500 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground under the mast), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
-| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, study range (100 m up to the whole map), clutter loss, and *Terrain shadowing (diffraction loss)* - off means the decibels ignore the ground, while the zone verdict and the earth's curvature are still walked over it. |
+| **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, study range (100 m to 6 km), clutter loss, and *Terrain shadowing (diffraction loss)* - off means the decibels ignore the ground, while the zone verdict and the earth's curvature are still walked over it. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
 | **Display** | Coverage overlay, coverage view (bands / range gradient / Fresnel zone clearance), radiation pattern, Fresnel zone volume, terrain mesh, zone labels. |
 
@@ -185,8 +185,8 @@ http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&siteX
 A value outside the model is clamped rather than obeyed, and the clamp is not swallowed:
 `window.__simBoot.overrides` lists what was asked for and what was applied, so a picture
 limited by a bad link can be told apart from one limited by a URL that asked for the
-impossible. `?range=99999&siteX=99999` on a 5.2 km map, for instance, applies 3800 m and
-2500 m and says so.
+impossible. `?range=99999&siteX=99999` on a 5.2 km map, for instance, applies 6000 m - the
+widest work area there is, past the map itself - and 2500 m of east offset, and says so.
 
 ![The valley scenario in the range gradient: a 10-director Yagi aimed south, yellow where the link has room near the mast, pale yellow down the valley floor, and pink as it dies at 2.48 km of a 2.50 km budget - in the middle of the map, not at its edge. The mountain side stays bare.](docs/screenshot-valley.png)
 
@@ -274,12 +274,16 @@ which one did:
   and by default it is what you get - the read-out prints
   `the link: budget 0.94 km, last link 0.94 km`.
 - **Your study range.** *Study range* is a work area, not a prediction: it says how far
-  from the mast the sweep is willing to look. At the maximum it is the whole map, and no
-  ring is drawn because a ring that cannot bind only teaches you to ignore it. Lower it
-  and the ring appears, points beyond it are not measured at all (no paint, no counts),
-  and any direction that was still linked where the search stopped is printed as
-  `>= <range>`. The read-out then says `our study range 1.40 km - the link would reach
-  1.67 km`.
+  from the mast the sweep is willing to look. The default, 3800 m, is the whole map seen
+  from its middle - so by default the edge you see is the link's own, and no ring is drawn,
+  because a ring that cannot bind only teaches you to ignore the one time it can. The slider
+  runs to 6 km, deliberately past the map: mast positions are not all equal, and a mast in a
+  corner has 7.2 km of ground on the other side of the picture, so a 6 km work area really
+  does cut something there (in the other directions from that same mast the wall 100 m away
+  cuts first, and the direction table says which is which). Lower the range and the ring
+  appears, points beyond it are not measured at all (no paint, no counts), and any direction
+  that was still linked where the search stopped is printed as `>= <range>`. The read-out
+  then says `our study range 1.40 km - the link would reach 1.67 km`.
 - **The edge of the map.** A big enough antenna on a small enough map: the search walks
   off the world. Then it says `edge of the map 0.30 km - the link would reach 11.82 km`.
 
@@ -481,8 +485,10 @@ single knife edge, and everything about the return path (this is one-way RSSI).
 The hardware geometry is drawn to be recognisable, not to scale.
 
 Two limits of the *tool* are worth naming here as well, because both can be mistaken for
-physics. The study range is a work area chosen for the sweep - a maximum of the whole map,
-so by default nothing is cut off, and if you lower it the ring and the `>=` marks say so.
+physics. The study range is a work area chosen for the sweep - 3800 m by default, which is
+the whole map from its middle, and up to 6 km, which is more than the map and can still bind
+on a mast standing in a corner - so by default nothing is cut off, and if you lower it the
+ring and the `>=` marks say so.
 And inside the sweep, ground beyond the free-space budget is never ray-walked: that is a
 shortcut whose worst case is provably a point that could not have linked anyway (see
 [What the edge of the colour is](#what-the-edge-of-the-colour-is)), and its result is
