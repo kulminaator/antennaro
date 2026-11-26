@@ -46,3 +46,25 @@ directions.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- File created: `tests/unit/antennaphysics.test.js`, 152 lines (a new file on purpose -
+  `tests/unit/antenna.test.js` sits at 310 of its 320 line budget).
+- First run is red in exactly three places, and green where the app was already right:
+  - `no design claims more gain than its own beam can hold` -
+    `biquad-reflector at default (69.0 x 69.0 deg implies 9.38 dBi): 12.40 dBi is more gain
+    than that beam can hold`.
+  - `a Yagi beats a biquad, and is narrower doing it` -
+    `a Yagi must have more gain than a biquad, not 9.58 against 12.40 dBi`.
+  - `gains stay in the range these designs are measured at` -
+    `biquad-reflector at default: 12.40 dBi is outside the 6-11 dBi this design is measured
+    at in the field`.
+  - `gain and beamwidth move in opposite directions` **passes** already: the catalogue's
+    parameter *directions* were never the problem, only the scale of the biquad's gain.
+- The Kraus arithmetic is defined *locally* in the test file, with a comment saying so, and
+  step-003 adds an assertion that the shipped `krausDirectivityDbi` agrees with it - so the
+  test cannot quietly start believing a different formula than the model uses.
+- Omnis are excluded from the bound by filtering on `entry.family === 'directional'`, and
+  the file header says why in one sentence (a 360 degree plane is not a main lobe), so the
+  exclusion reads as a decision rather than an oversight.
+- The `UNDER_BOUND_DB = 6` half of the first invariant also has teeth: the Yagi at 2
+  directors currently sits 4.4 dB under its own beam and would fail at 6.
