@@ -317,15 +317,19 @@ test('coverage: switching the terrain off for dB does not flatten the earth for 
   assert.ok(asked > 100, `this swept ${asked} points, which is not a test of anything`);
   assert.ok(shadowed > 0, 'the terrain has to actually shadow something for this to mean anything');
 
-  // And the answer it keeps giving is the *curved* one. Over a plane the only thing that
-  // lifts the ray off the ground is the bulge, so the two walks can be told apart exactly.
+  // And the answer it keeps giving is the *curved* one. Over a plane the curvature has
+  // nothing to hide behind, so the two walks can be told apart exactly - and the curved
+  // earth is the worse of the two: the surface bows up into the space the ray needs, so
+  // clearance shrinks. (A standard atmosphere bends rays *down*, which is exactly why the
+  // equivalent earth is rounder; any model in which curvature helps a link has the sign
+  // the wrong way round, and this assertion is what catches it.)
   const plane = new HeightField({ size: 121, worldSize: 3800 }).fillFromFunction(() => 0);
   const from = { x: -1800, y: 4, z: 0 };
   const to = { x: 1800, y: 0, z: 0 };
   const curved = fresnelStatus(plane, from, to, freqHz);
   const straight = fresnelStatus(plane, from, to, freqHz, { kFactor: 1e12 });
   assert.ok(Number.isFinite(curved.clearanceRatio) && Number.isFinite(straight.clearanceRatio));
-  assert.ok(curved.clearanceRatio > straight.clearanceRatio,
-    `a standard atmosphere lifts the ray: ${curved.clearanceRatio.toFixed(4)} against `
+  assert.ok(curved.clearanceRatio < straight.clearanceRatio,
+    `a standard atmosphere takes room off the ray: ${curved.clearanceRatio.toFixed(4)} against `
     + `${straight.clearanceRatio.toFixed(4)} zone radii with the curve switched off`);
 });

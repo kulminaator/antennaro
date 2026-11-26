@@ -26,3 +26,20 @@ Done when the step's own verification commands pass and
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- One line changed in `src/propagation/los.js` (`rayY = from.y + dy * t - bulge`) plus a
+  header paragraph saying which way the transform moves and why both ray ends stay put.
+- Exactly one existing test failed, and it had the wrong sign written into its own
+  justification: `coverage: switching the terrain off for dB does not flatten the earth
+  for the zone` asserted `curved.clearanceRatio > straight.clearanceRatio` with the
+  message "a standard atmosphere lifts the ray". A standard atmosphere bends rays *down*,
+  which is why the equivalent earth is rounder, so the assertion is now `<` and the
+  comment says that a model in which curvature helps a link has the sign backwards.
+  Measured on the flat test plane: 0.2167 curved against 0.2269 flat zone radii.
+- No other unit file changed character, and the whole browser suite (6 files) passed
+  unchanged - `node tools/test.js --browser`, 70 s. The browser curvature tests quote the
+  *radio horizon for the terminal height*, which this fix does not touch; step-006 still
+  has to re-read them for claims that were really about the ray.
+- Consequence the suite does not yet express: the README/GUIDELINES sentence pair that
+  quotes this test's numbers (0.228 against 0.156) is now stale in both value and
+  direction. That belongs to step-014 / step-015.

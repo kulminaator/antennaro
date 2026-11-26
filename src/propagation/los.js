@@ -4,10 +4,18 @@
  *
  * Layer: L1 (pure domain). Given a transmit point in the air and a ground point,
  * work out how much of the ray is buried in the terrain and how much that costs
- * in dB. Model: ray height sampled along the path, standard-earth bulge from the
- * k-factor, then ITU-R P.526-style single knife-edge diffraction (Maqsood/Lee
- * closed form). It is intentionally deterministic and cheap: this runs once per
- * terrain cell on every parameter change.
+ * in dB. Model: ray height sampled along the path, over the standard-earth
+ * curvature implied by the k-factor, then ITU-R P.526-style single knife-edge
+ * diffraction (Maqsood/Lee closed form). It is intentionally deterministic and cheap:
+ * this runs once per terrain cell on every parameter change.
+ *
+ * Which way the curvature goes, because it is the kind of sign that survives for months
+ * if nothing asks: a height field is a **planar** datum, so the equivalent-round-earth
+ * transform leaves the terrain exactly where it is and bends the **ray** down toward it
+ * (`rayProfile` subtracts `earthBulgeM`). Adding the bulge instead lifts the ray over
+ * every obstacle and turns the earth into something that helps the link, which is how a
+ * 30 km path with a 13 km horizon used to be reported as clear. Both ends stay anchored,
+ * because the bulge is 0 when either leg of the path is: the antennas never move.
  *
  * The same walk also reports how much of the **first Fresnel zone** the ground
  * intrudes into, because dB and zone occupancy are one physics seen two ways. With
@@ -61,8 +69,9 @@ export function rayProfile(field, from, to, options = {}) {
     const distance = total * t;
     const d1 = distance;
     const d2 = total - distance;
+    // The obstacle gains what the ray loses: same transform, one of the two moves.
     const bulge = earthBulgeM(d1, d2, kFactor, earthRadiusM);
-    const rayY = from.y + dy * t + bulge;
+    const rayY = from.y + dy * t - bulge;
     const terrainY = i === n ? to.y : field.sample(x, z);
     const excess = i === 0 ? -Infinity : terrainY - rayY;
     // Neither end is an obstacle, and neither end competes for the title. The
