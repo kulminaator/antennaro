@@ -82,10 +82,11 @@ export const STATE_FIELDS = Object.freeze([
     key: 'maxRangeM', path: ['maxRangeM'], label: 'Study range', kind: 'range',
     min: RF.maxRangeLimitsM.min, max: RF.maxRangeLimitsM.max, step: 50, unit: 'm',
     group: 'Radio', impact: [RECOMPUTE.COVERAGE],
-    hint: 'How far from the mast the sweep looks. At the maximum that is the whole map, so '
-      + 'every edge you see is the link itself. Lower it and a pale ring shows the edge of '
-      + 'the work area: links beyond it are not measured, and directions still alive there '
-      + 'are marked ">=" in the HUD.',
+    hint: 'How far from the mast the sweep looks. The default covers the whole map from the '
+      + 'middle of it, so every edge you see is the link itself; the cap is 6 km, past the '
+      + 'map from most mast positions and a real limit for one standing in a corner. Lower '
+      + 'it and a pale ring shows the edge of the work area: links beyond it are not '
+      + 'measured, and directions still alive there are marked ">=" in the HUD.',
   }),
   Object.freeze({
     key: 'clutterLossDb', path: ['clutterLossDb'], label: 'Clutter loss', kind: 'range',

@@ -16,6 +16,7 @@ import { createLabels } from './labels.js';
 import { createTerrainMesh } from '../terrain/terrainmesh.js';
 import { createCoverageOverlay } from '../propagation/coveragemesh.js';
 import { ZONE_LAYOUT } from '../terrain/generators.js';
+import { farthestGroundDistanceM } from '../math/vec3.js';
 
 /**
  * The study-range ring: the boundary of the area the coverage sweep was asked to
@@ -50,9 +51,14 @@ function createRangeRing(field) {
   let radiusM = 0;
   let shown = false;
 
-  /** A circle wider than the map can never be what stopped a coverage blob. */
+  /**
+   * A circle wider than all the map there is from this mast can never be what stopped a
+   * coverage blob - and "all the map" is measured from the mast, not from the middle of the
+   * picture: a mast in a corner has 7354 m of ground to think about, so a work area wider
+   * than the half-diagonal is real for it and decoration for a mast at the centre.
+   */
   function canBind() {
-    return radiusM > 0 && radiusM < ground.half * Math.SQRT2;
+    return radiusM > 0 && radiusM < farthestGroundDistanceM(centre, ground.half);
   }
 
   function reshape() {

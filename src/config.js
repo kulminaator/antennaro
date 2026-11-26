@@ -102,14 +102,16 @@ export const RF = Object.freeze({
   /** Typical WiFi-ish client; the coverage ramp is drawn relative to this. */
   defaultRxSensitivityDbm: -80,
   /**
-   * The study range: how much of the map the coverage is evaluated over. The
-   * default is at least the map's half-diagonal (5200/sqrt(2) = 3677 m), so by
-   * default the whole map is evaluated and the edge of the painted coverage is the
-   * link's own maximum. Lower it and it becomes a declared limit: step-008 draws
-   * the ring, step-009 names it in the read-out.
+   * The study range: how far from the mast the coverage is evaluated. The default is the
+   * map's half-diagonal (3677 m) rounded up, so by default the whole map is evaluated and
+   * the edge of the colour is the link's own maximum. Lower it and it becomes a declared
+   * limit: a ring is drawn wherever it could bind, and the read-out names it.
    */
   defaultMaxRangeM: 3800,
-  maxRangeLimitsM: Object.freeze({ min: 100, max: 3800 }),
+  /* Past the map on purpose: a mast in a corner has 7354 m of ground on the other side, so
+     a 6 km work area is a limit somebody can genuinely ask for - and it costs nothing where
+     it cannot bind, because the sweep only ever walks the grid that exists. */
+  maxRangeLimitsM: Object.freeze({ min: 100, max: 6000 }),
   clutterLossDb: 0,
   earthRadiusM: 6_371_000,
   kFactor: 1.413, // standard atmosphere refraction model for the terrain LOS bulge
@@ -157,11 +159,8 @@ export const RF = Object.freeze({
   noLinkAlpha: 0.22,
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
-  /**
-   * How the drape is painted: `'bands'` (the four RSSI steps), `'gradient'` (yellow through
-   * pink against link margin) or `'zone'` (first Fresnel zone clearance). One field, three
-   * values, so no two switches can disagree about the picture.
-   */
+  /** How the drape is painted: `'bands'`, `'gradient'` or `'zone'` - one field with three
+     values, so no two switches can disagree about the picture. */
   defaultCoverageView: 'gradient',
   /**
    * Top of the gradient scale in dB of margin - measured, not guessed. Margin falls 20 dB

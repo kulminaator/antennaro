@@ -132,3 +132,20 @@ export function rayBoxExitDistance(origin, direction, half) {
 export const AXIS_X = Object.freeze({ x: 1, y: 0, z: 0 });
 export const AXIS_Y = Object.freeze({ x: 0, y: 1, z: 0 });
 export const AXIS_Z = Object.freeze({ x: 0, y: 0, z: 1 });
+
+/**
+ * The farthest corner of the square map from a point: the most ground there is to look at,
+ * as the crow flies. `rayBoxExitDistance` answers "how far until this ray leaves the map";
+ * this answers "how much map is there in total from here", which is the question a work
+ * area has to be compared against - from a mast in a corner there is more than twice as
+ * much map one way as there is the other, so a range wider than the map's half-diagonal can
+ * still be the thing that ends the sweep.
+ *
+ * @param {{x:number, z:number}} site @param {number} half half the map width, metres
+ */
+export function farthestGroundDistanceM(site, half) {
+  return Math.hypot(
+    Math.max(half - site.x, half + site.x),
+    Math.max(half - site.z, half + site.z),
+  );
+}

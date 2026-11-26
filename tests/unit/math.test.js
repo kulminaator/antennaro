@@ -15,8 +15,10 @@ import {
 } from '../../src/math/scalar.js';
 import {
   add, angularDistance, AXIS_X, AXIS_Y, AXIS_Z, cloneVec, cross, distance, dot, fromCompass, horizontalLength,
-  isVec3, length, lengthSq, lerpVec, neg, normalize, rayBoxExitDistance, scale, sub, toCompass, v3,
+  farthestGroundDistanceM, isVec3, length, lengthSq, lerpVec, neg, normalize, rayBoxExitDistance,
+  scale, sub, toCompass, v3,
 } from '../../src/math/vec3.js';
+import { RF, WORLD } from '../../src/config.js';
 import { createRandom, fbm2, hash2i, pick, randomInRange, ridgedFbm2, valueNoise2 } from '../../src/math/noise.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
 
@@ -249,4 +251,37 @@ test('vec3: a horizontal ray knows where the map ends', () => {
   assert.ok(approxEqual(rayBoxExitDistance(east, fromCompass(270, 0), half), 1600, 1e-9), 'west: the far wall');
   // A direction with no horizontal component never leaves the box.
   assert.equal(rayBoxExitDistance(v3(), { x: 0, z: 0 }, half), Infinity);
+});
+
+test('vec3: how much map there is from where the mast stands', () => {
+  const half = 1000;
+  // From the middle, the farthest ground is the corner.
+  assert.ok(approxEqual(farthestGroundDistanceM(v3(), half), half * Math.SQRT2, 1e-9));
+  // From a corner, it is the opposite corner: the whole diagonal of the square.
+  assert.ok(approxEqual(farthestGroundDistanceM({ x: -half, z: -half }, half), 2 * half * Math.SQRT2, 1e-9));
+  // Walking the mast to a wall doubles the map on the far side of it - sqrt(5) half-widths
+  // instead of sqrt(2) - which is the whole reason a work area wider than the
+  // half-diagonal is not automatically decoration.
+  const eastWall = { x: half, z: 0 };
+  assert.ok(approxEqual(farthestGroundDistanceM(eastWall, half), half * Math.sqrt(5), 1e-9));
+  assert.ok(approxEqual(farthestGroundDistanceM({ x: half, z: half }, half), 2 * half * Math.SQRT2, 1e-9));
+  for (const site of [v3(), { x: 400, z: -700 }, { x: half, z: 0 }, { x: -half, z: half }]) {
+    const far = farthestGroundDistanceM(site, half);
+    const near = Math.hypot(half - Math.abs(site.x), half - Math.abs(site.z)) || 0;
+    assert.ok(far >= near, 'the farthest corner is never nearer than the nearest one');
+    assert.ok(far <= 2 * half * Math.SQRT2 + 1e-9 && far >= half * Math.SQRT2 - 1e-9,
+      'every point on the map sees between the half-diagonal and the whole diagonal');
+  }
+
+  // What that means for the work-area control: its cap is allowed past the map's
+  // half-diagonal - which is what a mast in the middle can see - because a mast in a
+  // corner has more ground than that. Both bounds are stated against the world, not
+  // against a literal somebody typed into a test.
+  const halfMap = WORLD.worldSize / 2;
+  assert.ok(RF.maxRangeLimitsM.max > farthestGroundDistanceM(v3(), halfMap),
+    'at the cap, a mast at the centre of the map can never be cut off by the work area');
+  assert.ok(RF.maxRangeLimitsM.max < farthestGroundDistanceM({ x: -halfMap, z: -halfMap }, halfMap),
+    'and still short of what a mast in a corner could reach, so the cap can genuinely bind');
+  assert.ok(RF.maxRangeLimitsM.min > 0 && RF.defaultMaxRangeM >= farthestGroundDistanceM(v3(), halfMap),
+    'the default covers the whole map from the middle, and the minimum is a real distance');
 });

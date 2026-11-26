@@ -31,8 +31,9 @@ export function createInitialState(overrides = {}) {
 /**
  * Same, but keeps the reducer's verdict on the requested values.
  *
- * A shared link or a test harness can ask for something outside the model - `?range=9000`
- * on a map we only sweep to 3800 m. Silently answering with the clamped number would let
+ * A shared link or a test harness can ask for something outside the model - `?range=99999`
+ * on a 5.2 km map whose work area stops at `RF.maxRangeLimitsM`. Silently answering with the
+ * clamped number would let
  * a screenshot look like physics when it is a limit of ours, so the boot record says what
  * was asked for and what was applied.
  *

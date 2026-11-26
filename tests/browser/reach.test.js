@@ -232,6 +232,41 @@ test('browser: the sweep looks at the whole map, not a plate on top of it', asyn
   });
 });
 
+test('browser: a work area wider than the map is a real limit for a mast in a corner', async () => {
+  await withApp(async (session) => {
+    // The cap on the study range is deliberately wider than the map, for the one place it
+    // can matter: a corner mast has more than 6 km of ground on the other side of the
+    // picture, while the same work area at the map centre is decoration.
+    await session.patch({
+      designId: 'omni-collinear', txPowerDbm: 43, rxSensitivityDbm: -124, clutterLossDb: 0,
+      heightM: 30, site: { x: ANTENNA.siteLimitsM.max, z: ANTENNA.siteLimitsM.max },
+      maxRangeM: RF.maxRangeLimitsM.max,
+    });
+    await session.settle();
+    const corner = await session.sim('coverage');
+    const cornerScene = await session.sim('scene');
+    assert.ok(corner.clippedByRangeCells > 0, 'the work area cut off linked ground');
+    const byRange = corner.sectors.filter((cell) => cell.clippedBy === 'study-range');
+    const byEdge = corner.sectors.filter((cell) => cell.clippedBy === 'map-edge');
+    assert.ok(byRange.length > 0, 'across the map, in the directions with room for it');
+    assert.ok(byEdge.length > 0, 'and in the other directions the wall, 100 m away, first');
+    // Both boundaries coexist, and the single summary line names the nearer one: a mast
+    // 100 m from two walls has the wall in front of it long before 6 km.
+    assert.equal(corner.limitingFactor, 'map-edge', 'the nearer boundary is the one named');
+    assert.equal(cornerScene.rangeRing.canBind, true, 'the wider work area is a real ring here');
+    assert.equal(cornerScene.rangeRing.visible, true, 'drawn because there is ground beyond it');
+
+    await session.patch({ site: { x: 0, z: 0 } });
+    await session.settle();
+    const centre = await session.sim('coverage');
+    const centreScene = await session.sim('scene');
+    assert.equal(centre.clippedByRangeCells, 0, 'at the centre nothing lies past it');
+    assert.equal(centreScene.rangeRing.canBind, false, 'and the ring knows it, because it follows the mast');
+    assert.equal(centreScene.rangeRing.visible, false, 'so it stays out of the picture');
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
 test('browser: over flat ground the five designs reach in gain order, and none has more gain than its beam', async () => {
   await withApp(async (session) => {
     await session.settle();
