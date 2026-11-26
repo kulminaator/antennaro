@@ -65,3 +65,19 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
 - The bulge bug shows up as an error of exactly **twice** the bulge, which makes it easy
   to recognise in a failure message: the ray sits at `chord + bulge` instead of
   `chord - bulge`. (found in step-001)
+
+- step-004 measurements (probe `.tmp/curvature-truth.mjs`): the earth begins to hide a
+  ground-level terminal at 3008 m with the panel's lowest 0.5 m mast, 4254 m at 1 m,
+  6016 m at 2 m, 9513 m at 5 m - so curvature obstructs **inside** this map for masts at
+  or below 2 m and for nothing taller. The default 10 m configuration is numerically
+  identical to before the fix (844 linked, 936 m, median -90.3 dBm, 86.1 % zone-clear);
+  113 of its 844 linked paths change in dB, none by more than 0.01 dB, while all 844
+  change in zone clearance. On the loudest configuration curvature is worth up to
+  **6.12 dB** on a grazing path at 3141 m. Keep the "curvature never ends coverage here"
+  test - it is still true - and add the obstruction fact next to it.
+- `computeCoverage` needs `site` from `resolveSite(field, {...})`, not a bare
+  `{x, z, heightM}`: without `groundY`/`y` the antenna ends up underground and every
+  number the probe prints is nonsense (it looked plausible, which is the dangerous part).
+- `computeCoverage` does not accept a `kFactor`, so "curved versus flat" comparisons have
+  to re-walk paths with `rayProfile(..., { kFactor: 0 })` beside the sweep rather than
+  running the sweep twice.
