@@ -93,3 +93,11 @@ numbers re-measured from the running app.
   study range or map edge, so a ground-limited picture still says "the link". A fourth kind
   (`ground`) plus a decision about what that row is for is a step of its own - raising it
   with the user rather than smuggling it into a curvature step.
+- **Curvature at 5.2 km is worth 0.19 m, not a story** (measured in step-010): the bulge is
+  `d1*d2/(2kR)` = 0.014 m at 1 km, 0.19 m centre-to-corner, 0.75 m on the 7.35 km diagonal;
+  `radioHorizonM` is 19.4 km for 10 m/2 m and 11.5 km even for 0.5 m/4 m, against a 5.2 km
+  map. So no configuration of this app can have its coverage ended by the radio horizon, and
+  step-014's premise ("horizon inside the map") is refuted by the maths it asked us to test.
+  The honest deliverable for the user's "make the curvature relevant even in the valley" is
+  the app *saying* how much curvature is worth on the link being looked at - and saying that
+  here it is centimetres, so the ridge is what is hiding the signal, not the planet.

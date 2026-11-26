@@ -21,7 +21,7 @@
 
 import { RF } from '../config.js';
 import { clamp } from '../math/scalar.js';
-import { fresnelRadiusM, wavelengthM } from './rf.js';
+import { earthBulgeM, fresnelRadiusM, wavelengthM } from './rf.js';
 
 /**
  * Sample the terrain against the straight ray from `from` (in the air) to `to`.
@@ -61,7 +61,7 @@ export function rayProfile(field, from, to, options = {}) {
     const distance = total * t;
     const d1 = distance;
     const d2 = total - distance;
-    const bulge = (kFactor > 0 && total > 0) ? (d1 * d2) / (2 * kFactor * earthRadiusM) : 0;
+    const bulge = earthBulgeM(d1, d2, kFactor, earthRadiusM);
     const rayY = from.y + dy * t + bulge;
     const terrainY = i === n ? to.y : field.sample(x, z);
     const excess = i === 0 ? -Infinity : terrainY - rayY;

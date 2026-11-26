@@ -14,12 +14,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RF } from '../../src/config.js';
+import { RF, WORLD } from '../../src/config.js';
 import { approxEqual } from '../../src/math/scalar.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
 import {
-  eirpDbm, freeSpaceLossDb, freeSpaceRangeM, frequencyLabel, fresnelRadiusM, levelIndexFor, levelMarginsDb,
-  linkMarginDb, receivedDbm, resolveFrequencyHz, rfSummary, wavelengthM, SPEED_OF_LIGHT_MPS,
+  earthBulgeM, eirpDbm, freeSpaceLossDb, freeSpaceRangeM, frequencyLabel, fresnelRadiusM, levelIndexFor,
+  levelMarginsDb, linkMarginDb, radioHorizonM, receivedDbm, resolveFrequencyHz, rfSummary, wavelengthM,
+  SPEED_OF_LIGHT_MPS,
 } from '../../src/propagation/rf.js';
 import {
   diffractionLossDb, hasLineOfSight, obstructionLossDb, rayProfile, requiredHeightForClearance,
@@ -247,4 +248,47 @@ test('los: the ground a receiver stands on is not an obstacle, unless it is a pl
   assert.equal(hasLineOfSight(mesa, low, { x: top.x, y: top.y + 4, z: 0 }), true,
     'so does the same 10 m mast, when the receiver is 4 m off the ground');
   assert.equal(hasLineOfSight(mesa, low, top), false, 'while a receiver lying on the plateau floor does not');
+});
+
+test('rf: the earth bulges under a ray, exactly as much as the geometry says', () => {
+  const k = 1.413;
+  const R = 6_371_000;
+  // Hand-worked midpoint of a 2.6 km path: (1300 * 1300) / (2 * 1.413 * 6371000).
+  const mid = (1300 * 1300) / (2 * k * R);
+  assert.ok(approxEqual(earthBulgeM(1300, 1300, k, R), mid, 1e-12), `0.094 m at 2.6 km, got ${earthBulgeM(1300, 1300, k, R).toFixed(4)}`);
+  assert.ok(earthBulgeM(1300, 1300, k, R) < 0.1, 'and that is the largest it gets anywhere on a 5.2 km map');
+  assert.equal(earthBulgeM(0, 2600, k, R), 0, 'no bulge at either end');
+  assert.equal(earthBulgeM(2600, 0, k, R), 0);
+  assert.equal(earthBulgeM(-100, 2600, k, R), 0, 'a nonsense distance cannot buy negative ground');
+
+  // Square in the path length, symmetric in the split, and reduced by more refraction.
+  const far = earthBulgeM(2600, 2600, k, R);
+  assert.ok(approxEqual(far, 4 * mid, 1e-9), 'double the path, four times the bulge');
+  assert.ok(approxEqual(earthBulgeM(800, 1800, k, R), earthBulgeM(1800, 800, k, R), 1e-12), 'the split is symmetric');
+  assert.ok(earthBulgeM(800, 1800, k, R) < mid, 'a split nearer one end bulges less than the middle');
+  assert.ok(earthBulgeM(1300, 1300, 4 / 3, R) > earthBulgeM(1300, 1300, 2, R), 'more refraction lifts the ray higher off the ground');
+  assert.equal(earthBulgeM(1300, 1300, 0, R), 0, 'k <= 0 is the flat-earth switch, for tests only');
+});
+
+test('rf: the radio horizon is the textbook tangent sum, and beyond this map', () => {
+  const k = 1.413;
+  const R = 6_371_000;
+  // The classic `d = sqrt(2kR) * (sqrt(h1) + sqrt(h2))`: 10.2 km for 2 m and 1 m.
+  const textbook = Math.sqrt(2 * k * R) * (Math.sqrt(2) + Math.sqrt(1));
+  const ours = radioHorizonM(2, 1, k, R);
+  assert.ok(Math.abs(ours / textbook - 1) < 0.01, `${ours.toFixed(0)} m against the textbook ${textbook.toFixed(0)} m`);
+  assert.ok(radioHorizonM(4, 1, k, R) > radioHorizonM(2, 1, k, R), 'higher at either end sees further');
+  assert.ok(radioHorizonM(4, 2, k, R) > radioHorizonM(2, 2, k, R));
+  assert.equal(radioHorizonM(2, 1, k, R), radioHorizonM(1, 2, k, R), 'either end can carry the height');
+  assert.equal(radioHorizonM(0, 0, k, R), 0, 'two antennas lying on the ground see nothing over the curve');
+  assert.equal(radioHorizonM(2, 1, 0, R), Infinity, 'a flat earth has no horizon');
+  assert.ok(radioHorizonM(2, 1) > WORLD.worldSize,
+    'and with the app k, an ordinary link horizon is off the map entirely');
+  // Scale of the thing, so nobody has to guess whether the round earth matters here:
+  // 0.19 m for a mast at the centre to a corner, 0.75 m for the corner-to-corner
+  // diagonal, the longest path this map contains.
+  const centreToCorner = WORLD.worldSize / 2 * Math.SQRT2 / 2;
+  assert.ok(earthBulgeM(centreToCorner, centreToCorner) < 0.2, 'centre to corner bulges under 0.2 m');
+  assert.ok(earthBulgeM(WORLD.worldSize / 2, WORLD.worldSize / 2) < 0.8,
+    'and the longest link the map allows bulges under 0.8 m');
 });

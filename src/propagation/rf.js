@@ -71,6 +71,54 @@ export function fresnelRadiusM(d1, d2, freqHz) {
   return Math.sqrt((lambda * d1 * d2) / (d1 + d2));
 }
 
+/**
+ * How much the earth gets in the way, in metres.
+ *
+ * A straight ray between two points `d1 + d2` apart passes over ground that curves away
+ * and back; measured against the straight line, the *ground* bulges towards the ray by
+ *
+ *     b = d1 * d2 / (2 * k * R)
+ *
+ * with R the earth's radius and `k` the effective-radius factor that folds standard
+ * atmospheric refraction into geometry (k = 1 is no refraction, k = 4/3 is the classic
+ * "4/3 earth", and `RF.kFactor` is the value this app uses). It is 0 at either end,
+ * largest midway, and quadratic in the path length - which is the whole story of its
+ * size: 0.014 m at 1 km, 0.06 m at 2 km, 0.13 m at 3 km, 1.4 m at 10 km, 22 m at 40 km.
+ * This map is 5.2 km across, so a mast at the centre talking to a corner (3.68 km) curves
+ * over 0.19 m of world, and the longest path the map contains - corner to corner, 7.35 km
+ * - over 0.75 m. Neither is what ends a link over flat ground here; both are more than
+ * enough to decide which side of a ridge brow a cell sits on, which is what curvature is
+ * actually for at this scale. The ray is a chord, and 0.1 m at the brow is the difference
+ * between a shadow and no shadow.
+ *
+ * `los.js` adds this to the ray height (equivalently: lowers the ground). Setting
+ * `kFactor` to 0 or less switches it off; that is not "the earth is flat" so much as
+ * "ignore the earth", and `radioHorizonM` reports `Infinity` for it.
+ */
+export function earthBulgeM(d1M, d2M, kFactor = RF.kFactor, earthRadiusM = RF.earthRadiusM) {
+  if (!(d1M > 0) || !(d2M > 0) || !(kFactor > 0) || !(earthRadiusM > 0)) return 0;
+  return (d1M * d2M) / (2 * kFactor * earthRadiusM);
+}
+
+/**
+ * The radio horizon between two antennas at heights `h1M` and `h2M` above flat ground,
+ * in metres: how far apart they can be before the round earth puts ground between them
+ * with nothing else in the way. Each end sees `sqrt(2 k R h)`; the link closes when the
+ * two horizons meet.
+ *
+ * The textbook form is `d_km = 4.12 * (sqrt(h1_m) + sqrt(h2_m))` for k = 4/3. With this
+ * app's `RF.kFactor` the constant is a few per cent larger, which is the only honest way
+ * to put it: the number is a *model of refraction*, not a survey of the hill in front of
+ * you. A mast 10 m up talking to a terminal 2 m up sees about 13 km - five times the map.
+ * So curvature is never what kills a link over *flat* ground here; it is what makes a
+ * distant ridge hide what is behind it, and that is worth a line in the read-out.
+ */
+export function radioHorizonM(h1M, h2M, kFactor = RF.kFactor, earthRadiusM = RF.earthRadiusM) {
+  if (!(kFactor > 0) || !(earthRadiusM > 0)) return Infinity; // a flat earth has no horizon
+  const reach = (h) => (h > 0 ? Math.sqrt(2 * kFactor * earthRadiusM * h) : 0);
+  return reach(h1M) + reach(h2M);
+}
+
 /** Distance (m) at which a transmitter of EIRP reaches `floorDbm` in free space. */
 export function freeSpaceRangeM(txPowerDbm, gainDbi, floorDbm, freqHz, feederLossDb = 0) {
   const lambda = wavelengthM(freqHz);
