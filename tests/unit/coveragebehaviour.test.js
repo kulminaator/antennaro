@@ -19,6 +19,7 @@ import { createAntennaModel } from '../../src/antenna/model.js';
 import { createDefaultParams } from '../../src/antenna/catalogue.js';
 import { fromCompass } from '../../src/math/vec3.js';
 import { sampleCoverage, sectorIndexForAzimuth } from '../../src/propagation/coverage.js';
+import { fresnelStatus } from '../../src/propagation/los.js';
 import { computeCoverage } from '../../src/propagation/coverage.js';
 import { earthBulgeM, radioHorizonM, wavelengthM } from '../../src/propagation/rf.js';
 
@@ -285,4 +286,46 @@ test('coverage: the sweep says how much round earth was involved', () => {
   }).stats;
   assert.equal(dead.linkedCells, 0, 'a receiver that only hears -20 dBm links nothing here');
   assert.equal(dead.earthBulgeUnderMaxLinkM, 0, 'and an absent link bulges nothing');
+});
+
+test('coverage: switching the terrain off for dB does not flatten the earth for the zone', () => {
+  // `useDiffraction: false` is a reference mode: the decibels become free space, which
+  // is only honest if the panel says so, because it quietly stops asking the ground any
+  // question that costs dB - including "what is over the horizon". The reliability verdict
+  // is a different question, and it keeps being asked of the real, curved world. Both
+  // halves of that are pinned here, so the label and the behaviour cannot drift apart.
+  const on = computeCoverage({
+    field, site, model: omni(), freqHz, txPowerDbm: 10, feederLossDb: 1.5,
+    rxSensitivityDbm: -80, maxRangeM: 1000, clutterLossDb: 0, useDiffraction: true,
+  });
+  const off = computeCoverage({
+    field, site, model: omni(), freqHz, txPowerDbm: 10, feederLossDb: 1.5,
+    rxSensitivityDbm: -80, maxRangeM: 1000, clutterLossDb: 0, useDiffraction: false,
+  });
+
+  let asked = 0;
+  let shadowed = 0;
+  for (let i = 0; i < on.rssi.length; i += 1) {
+    if (!on.evaluated[i] || on.budgetExcluded[i]) continue;
+    asked += 1;
+    if (on.obstructionDb[i] > 0) shadowed += 1;
+    assert.equal(off.obstructionDb[i], 0, 'shadowing off pays the ground nothing anywhere');
+    assert.equal(off.fresnelClearance[i], on.fresnelClearance[i],
+      'and the zone verdict is exactly the answer the real ground gave');
+    assert.equal(off.fresnelClear[i], on.fresnelClear[i], 'flag and all');
+  }
+  assert.ok(asked > 100, `this swept ${asked} points, which is not a test of anything`);
+  assert.ok(shadowed > 0, 'the terrain has to actually shadow something for this to mean anything');
+
+  // And the answer it keeps giving is the *curved* one. Over a plane the only thing that
+  // lifts the ray off the ground is the bulge, so the two walks can be told apart exactly.
+  const plane = new HeightField({ size: 121, worldSize: 3800 }).fillFromFunction(() => 0);
+  const from = { x: -1800, y: 4, z: 0 };
+  const to = { x: 1800, y: 0, z: 0 };
+  const curved = fresnelStatus(plane, from, to, freqHz);
+  const straight = fresnelStatus(plane, from, to, freqHz, { kFactor: 1e12 });
+  assert.ok(Number.isFinite(curved.clearanceRatio) && Number.isFinite(straight.clearanceRatio));
+  assert.ok(curved.clearanceRatio > straight.clearanceRatio,
+    `a standard atmosphere lifts the ray: ${curved.clearanceRatio.toFixed(4)} against `
+    + `${straight.clearanceRatio.toFixed(4)} zone radii with the curve switched off`);
 });

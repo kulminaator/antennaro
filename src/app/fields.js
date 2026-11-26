@@ -93,9 +93,11 @@ export const STATE_FIELDS = Object.freeze([
     hint: 'Flat allowance for trees, crops and buildings (none of which are drawn).',
   }),
   Object.freeze({
-    key: 'useDiffraction', path: ['useDiffraction'], label: 'Terrain shadowing', kind: 'toggle',
-    group: 'Radio', impact: [RECOMPUTE.COVERAGE],
-    hint: 'Off = pure free space, on = knife-edge diffraction over the terrain.',
+    key: 'useDiffraction', path: ['useDiffraction'], label: 'Terrain shadowing (diffraction loss)',
+    kind: 'toggle', group: 'Radio', impact: [RECOMPUTE.COVERAGE],
+    hint: 'Off: the signal level ignores the ground - free space over a flat earth, '
+      + 'useful as a reference. The Fresnel-zone verdict is still walked over the real '
+      + 'terrain, curvature included, so a zone cut keeps being reported.',
   }),
   Object.freeze({
     key: 'seed', path: ['seed'], label: 'Terrain seed', kind: 'int',
