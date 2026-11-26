@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { ANTENNA, RF } from '../../src/config.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
 import { earthBulgeM, radioHorizonM } from '../../src/propagation/rf.js';
-import { rayProfile } from '../../src/propagation/los.js';
+import { hasLineOfSight, rayProfile } from '../../src/propagation/los.js';
 
 const FREQ_HZ = 868e6;
 
@@ -101,6 +101,65 @@ test('los: a path past the radio horizon is buried, and a flat earth has no hori
     { samples: 96, freqHz: FREQ_HZ, kFactor: 0 });
   assert.ok(flat.worstExcess < 0, 'a flat earth has no horizon, so nothing blocks it');
   assert.ok(RF.kFactor > 0, 'and the app ships a round earth, so the case above is real');
+});
+
+/**
+ * The headline invariant, for the height pairs the app actually talks about.
+ *
+ * `radioHorizonM()` is printed to users; `rayProfile()` decides coverage. If they are
+ * the same piece of geometry then the distance at which the horizon formula says "the
+ * two antennas can just see each other" must be the distance at which the profile
+ * reports its ray exactly grazing the ground - not approximately, and not in one
+ * direction only. That is what this asserts, for three pairs: the lowest mast the panel
+ * allows with an equal-height terminal, that same mast with the terminal height the
+ * Fresnel verdict is stated for, and the default 10 m mast with that terminal.
+ *
+ * Nothing quotes a metre of this map or that one; every distance is a multiple of the
+ * horizon the pair itself implies, so the test survives a k-factor change, a band change
+ * and a map resize.
+ */
+test('los: the radio horizon is exactly where the ray starts to graze the ground', () => {
+  const pairs = [
+    ['lowest mast, equal terminals', ANTENNA.heightLimitsM.min, ANTENNA.heightLimitsM.min],
+    ['lowest mast, zone terminal', ANTENNA.heightLimitsM.min, RF.fresnelRxHeightM],
+    ['default mast, zone terminal', 10, RF.fresnelRxHeightM],
+  ];
+  for (const [title, h1, h2] of pairs) {
+    const horizonM = radioHorizonM(h1, h2);
+    const field = new HeightField({ size: 801, worldSize: 4 * horizonM });
+    const link = (fraction) => {
+      const half = (fraction * horizonM) / 2;
+      return {
+        from: { x: -half, y: h1, z: 0 },
+        to: { x: half, y: h2, z: 0 },
+        profile: rayProfile(field, { x: -half, y: h1, z: 0 }, { x: half, y: h2, z: 0 },
+          { samples: 192, freqHz: FREQ_HZ }),
+      };
+    };
+
+    const inside = link(0.7);
+    const grazing = link(1);
+    const beyond = link(1.3);
+    assert.ok(inside.profile.worstExcess < 0, `${title}: inside the horizon nothing is in the way`);
+    assert.ok(hasLineOfSight(field, inside.from, inside.to, { samples: 192 }),
+      `${title}: and the line-of-sight answer agrees`);
+    // The tangency is exact; the walk only misses it by the sample spacing, and the
+    // clearance near a tangency is quadratic in the miss (miss^2 / (2 k R)).
+    assert.ok(Math.abs(grazing.profile.worstExcess) < 0.02,
+      `${title}: at ${horizonM.toFixed(0)} m the ray should graze, not sink: ${grazing.profile.worstExcess} m`);
+    assert.ok(beyond.profile.worstExcess > 0, `${title}: past the horizon the earth is the obstacle`);
+    assert.ok(!hasLineOfSight(field, beyond.from, beyond.to, { samples: 192 }),
+      `${title}: and that is not line of sight`);
+
+    // Control, same geometry, flat earth: no horizon, no obstacle. Without this a
+    // "fix" that drops the curvature term altogether would still satisfy everything
+    // above at 0.7x and 1.3x... except that it would not, because 1.3x would be clear -
+    // which is exactly the bug this whole file exists to keep out.
+    const flat = rayProfile(field, beyond.from, beyond.to,
+      { samples: 192, freqHz: FREQ_HZ, kFactor: 0 });
+    assert.ok(flat.worstExcess < 0, `${title}: a flat earth hides nothing`);
+    assert.ok(Number.isFinite(horizonM) && horizonM > 0, `${title}: a round earth has a horizon`);
+  }
 });
 
 /** Local reading of the profile so the first test states its own expectation. */
