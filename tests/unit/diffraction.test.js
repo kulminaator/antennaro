@@ -21,7 +21,13 @@ import assert from 'node:assert/strict';
 
 import { diffractionLossDb, profileObstructionDb, rayProfile } from '../../src/propagation/los.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
-import { fresnelRadiusM } from '../../src/propagation/rf.js';
+import { generateTerrain } from '../../src/terrain/generators.js';
+import { resolveSite } from '../../src/terrain/site.js';
+import { createAntennaModel } from '../../src/antenna/model.js';
+import { createDefaultParams } from '../../src/antenna/catalogue.js';
+import { computeCoverage } from '../../src/propagation/coverage.js';
+import { createInitialState } from '../../src/app/state.js';
+import { fresnelRadiusM, wavelengthM } from '../../src/propagation/rf.js';
 
 const FREQ = 868e6;
 
@@ -188,4 +194,41 @@ test('diffraction: the first obstacle that costs anything costs less than 6 dB',
     `6 dB was crossed from ${depths[crossed - 1].toFixed(2)} to ${depths[crossed].toFixed(2)} dB`);
   assert.ok(depths[depths.length - 1] > 12,
     `and a ridge that buries the ray is worth far more (${depths[depths.length - 1].toFixed(2)} dB)`);
+});
+
+test('diffraction: on the map the app ships, ground only ever subtracts', () => {
+  // The budget pre-filter is allowed to skip a point only because a ray can be losing
+  // *nothing* but never losing *less than nothing*, so free space is an upper bound on what
+  // the terrain will do. Charging a signed excess puts that argument under pressure - a
+  // signed quantity is one sign error away from a path that gains power by passing behind a
+  // hill - so the property is checked on every cell the sweep looked at, not assumed.
+  const state = createInitialState();
+  const field = generateTerrain({ seed: state.terrainSeed, kind: state.terrainKind });
+  const site = resolveSite(field, { x: state.site.x, z: state.site.z, heightM: state.heightM });
+  const options = {
+    field, site, freqHz: FREQ, txPowerDbm: state.txPowerDbm, feederLossDb: state.feederLossDb,
+    rxSensitivityDbm: state.rxSensitivityDbm, maxRangeM: state.maxRangeM, clutterLossDb: 0,
+    model: createAntennaModel({
+      designId: state.designId, params: createDefaultParams(state.designId),
+      aim: state.aim, wavelength: wavelengthM(FREQ),
+    }),
+  };
+  const freeSpace = computeCoverage({ ...options, useDiffraction: false });
+  const ground = computeCoverage(options);
+
+  let charged = 0;
+  let clear = 0;
+  for (let i = 0; i < ground.rssi.length; i += 1) {
+    if (!ground.evaluated[i] || ground.budgetExcluded[i]) continue;
+    assert.ok(ground.obstructionDb[i] >= 0, `cell ${i} was charged ${ground.obstructionDb[i]} dB`);
+    assert.ok(ground.rssi[i] <= freeSpace.rssi[i] + 1e-9,
+      `cell ${i}: ${ground.rssi[i].toFixed(2)} dBm with ground against ${freeSpace.rssi[i].toFixed(2)} in free space`);
+    assert.equal(freeSpace.obstructionDb[i], 0, 'with shadowing off nothing carries a loss');
+    if (ground.obstructionDb[i] > 0) charged += 1;
+    else clear += 1;
+  }
+  assert.ok(charged > 0 && clear > 0,
+    `both regimes have to exist on this map for the loop above to mean anything (${charged} charged, ${clear} clear)`);
+  assert.ok(freeSpace.stats.linkedCells >= ground.stats.linkedCells,
+    'turning the ground off cannot leave less of the map served');
 });
