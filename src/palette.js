@@ -45,7 +45,12 @@ export function terrainRgb(height, min, max, slopeDeg = 0) {
   return [rgb[0] * shade, rgb[1] * shade, rgb[2] * shade];
 }
 
-/** Coverage band colour; band === levels.length means "below sensitivity". */
+/**
+ * Signal-step colour. A step is a range of margin over the receiver sensitivity
+ * (`RF.levelMarginsDb`, strongest first), not a continuous ramp: four unmistakable
+ * colours beat a smooth gradient that a red-green colour-blind eye reads as one wash.
+ * `band === levels.length` means "measured, and the ground said no".
+ */
 export function coverageRgb(band) {
   if (band >= COLOURS.levels.length) return hexToRgb(COLOURS.noLink);
   return hexToRgb(COLOURS.levels[Math.max(0, band)]);
@@ -148,125 +153,6 @@ export function fresnelZoneLegendItems(stats = {}) {
 }
 
 /**
- * The three stops of the range gradient, weakest last. Read in order: strong link,
- * margin shrinking, link only just made.
- */
-const GRADIENT_STRONG = hexToRgb(COLOURS.gradientStops.strong);
-const GRADIENT_MID = hexToRgb(COLOURS.gradientStops.mid);
-const GRADIENT_WEAK = hexToRgb(COLOURS.gradientStops.weak);
-
-/**
- * Colour for the continuous range-gradient view, from a link margin in dB.
- *
- * Margin is the only honest thing to ramp a coverage map against: the absolute dBm moves
- * with the receiver's sensitivity slider, and a map keyed to it would change colour
- * because you changed a spec sheet. Margin says how much room the link has left, which is
- * what "strong" and "weak" mean to a person choosing a site - yellow with room to spare,
- * pale yellow as it closes, pink for a link that survives by a decibel or two.
- *
- * Piecewise linear through the three stops, clamped at both ends, and `out`-writing like
- * `fresnelZoneRgb` because the drape calls this 30 000 times a rebuild.
- *
- * @param {number} marginDb RSSI minus the receiver sensitivity (negative = no link)
- * @param {number[]} [out] written to, when given
- * @returns {number[]} rgb triple, 0..1
- */
-export function rangeGradientRgb(marginDb, out = null) {
-  const top = Math.max(1, RF.gradientMaxMarginDb);
-  const t = clamp01((Number.isFinite(marginDb) ? marginDb : 0) / top);
-  // Exact at the ends: `mixRgb` interpolates, and `a + (b - a) * 1` is not always `b` in
-  // floating point, which would make the legend's own swatch differ from the map's by an
-  // increment nobody can see and everybody can fail a test over.
-  const rgb = t >= 1 ? GRADIENT_STRONG
-    : t <= 0 ? GRADIENT_WEAK
-      : t >= 0.5
-    ? mixRgb(GRADIENT_MID, GRADIENT_STRONG, (t - 0.5) / 0.5)
-      : mixRgb(GRADIENT_WEAK, GRADIENT_MID, t / 0.5);
-  if (!out) return rgb.slice();
-  out[0] = rgb[0]; out[1] = rgb[1]; out[2] = rgb[2];
-  return out;
-}
-
-/**
- * Where the gradient legend cuts its own scale, and what it calls the pieces. The rows are
- * thirds of the ramp, *not* the RSSI bands: a continuous view whose legend lists four flat
- * bands is describing a picture it does not paint, and if the ramp's top were ever below a
- * band boundary two rows would come out the same colour. Each row's swatch is the ramp
- * sampled at `value`, which is inside the row's own range, so the swatch is a colour a cell
- * in that row really is painted.
- */
-export function gradientLegendStops() {
-  const top = Math.max(1, RF.gradientMaxMarginDb);
-  return Object.freeze([
-    Object.freeze({ label: 'strong', value: top, min: (2 / 3) * top, max: Infinity }),
-    Object.freeze({ label: 'weaker', value: top / 2, min: top / 3, max: (2 / 3) * top }),
-    Object.freeze({ label: 'at the limit', value: top / 6, min: 0, max: top / 3 }),
-  ]);
-}
-
-/**
- * Count the painted ground the way the ramp sees it: linked cells in their third of the
- * margin scale, asked-and-lost cells apart, never-asked cells apart. Walked in the legend
- * rather than in the sweep because only this view asks for it, and it is 30 000 array
- * reads - the sweep's own tallies stay where the dBm statistics live.
- * @returns {{buckets:number[], lost:number, excluded:number}}
- */
-function gradientCounts(coverage) {
-  const stops = gradientLegendStops();
-  const buckets = stops.map(() => 0);
-  let lost = 0;
-  for (let i = 0; i < coverage.rssi.length; i += 1) {
-    if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) continue;
-    const margin = coverage.rssi[i] - coverage.sensitivityDbm;
-    if (margin < 0) {
-      lost += 1;
-      continue;
-    }
-    const index = stops.findIndex((stop) => margin >= stop.min && margin < stop.max);
-    buckets[index < 0 ? buckets.length - 1 : index] += 1;
-  }
-  return { buckets, lost, excluded: coverage.stats.budgetExcludedCells ?? 0 };
-}
-
-/**
- * Legend for the gradient: three rows of ramp colour, then the two absences. Below
- * sensitivity and out of budget are unchanged from the banded legend - they are not
- * strengths of link, they are the absence of one, and they keep the alpha contract
- * (faint = asked and lost, none = never asked).
- */
-export function rangeGradientLegendItems(coverage) {
-  const rgb = [0, 0, 0];
-  const stops = gradientLegendStops();
-  const { buckets, lost, excluded } = gradientCounts(coverage);
-  const items = stops.map((stop, index) => ({
-    band: index,
-    colour: rgbToHex(rangeGradientRgb(stop.value, rgb)),
-    label: `${stop.label}: ${stop.min.toFixed(0)}`
-      + (Number.isFinite(stop.max) ? `-${stop.max.toFixed(0)}` : '+')
-      + ' dB over the receiver',
-    count: buckets[index],
-    alpha: 1,
-  }));
-  items.push({
-    band: coverage.margins.length,
-    colour: COLOURS.noLink,
-    label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (faint: terrain stops the link)`,
-    count: lost,
-    alpha: RF.noLinkAlpha,
-  });
-  if (excluded > 0) {
-    items.push({
-      band: coverage.margins.length,
-      colour: COLOURS.noLink,
-      label: 'out of budget - not measured, not painted',
-      count: excluded,
-      alpha: 0,
-    });
-  }
-  return items;
-}
-
-/**
  * Radiation-pattern colour: hot at the peak lobe, cold in the nulls.
  * @param {number} db absolute gain in dBi
  * @param {number} peakDbi peak gain of the design
@@ -286,15 +172,16 @@ export function patternRgb(db, peakDbi, dynamicRangeDb = 30) {
 }
 
 /**
- * CSS-ready legend entries for the coverage ramp. The last entry describes the faint
- * rim (measured, and the terrain said no); a further entry names the area left bare
- * because free-space loss alone lost the link, which the drape does not paint at all.
+ * CSS-ready legend entries for the four signal steps: the step's word, and the dBm that
+ * enters it. The last entry describes the faint rim (measured, and the terrain said no);
+ * a further entry names the area left bare because free-space loss alone lost the link,
+ * which the drape does not paint at all.
  */
 export function coverageLegendItems(coverage) {
   const items = coverage.margins.map((margin, band) => ({
     band,
     colour: COLOURS.levels[band],
-    label: `>= ${(coverage.sensitivityDbm + margin).toFixed(0)} dBm`,
+    label: `${RF.levelNames[band] ?? `step ${band + 1}`}: >= ${(coverage.sensitivityDbm + margin).toFixed(0)} dBm`,
     count: coverage.stats.levelCounts[band] ?? 0,
     alpha: 1,
   }));

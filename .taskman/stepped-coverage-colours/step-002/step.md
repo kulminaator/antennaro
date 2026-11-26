@@ -21,3 +21,14 @@ The palette exposes one signal scale and one zone scale, and the legend rows car
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- 119 lines of gradient machinery went (three stops, `rangeGradientRgb`, `gradientLegendStops`,
+  `gradientCounts`, `rangeGradientLegendItems`); `palette.js` is 208 lines.
+- Legend labels now read `comfortable: >= -72 dBm` and so on. `RF.levelNames` is indexed by band
+  with a `step N` fallback, so a future length mismatch cannot print `undefined`.
+- The legend of the small test fixture (2.4 km, collinear, 10 dBm, -80 dBm) reads
+  181 / 376 / 63 / 3 linked cells across the four steps, then 2190 faint and 907 out of budget:
+  the steps are populated top to bottom, which is the whole point of the change.
+- `src/propagation/coveragemesh.js` and `src/ui/hud.js` still import the deleted functions, so the
+  app would throw at boot until steps 003 and 007. Lint cannot see that (it is a named-import
+  error at runtime), so do not gate on lint alone between these steps.
