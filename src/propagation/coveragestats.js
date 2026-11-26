@@ -7,7 +7,9 @@
  * thing that file has to be about - it is the hot path of the whole application.
  */
 
+import { RF } from '../config.js';
 import { fromCompass, rayBoxExitDistance } from '../math/vec3.js';
+import { earthBulgeM, radioHorizonM } from './rf.js';
 
 export const SECTOR_COUNT = 8;
 export const SECTOR_LABELS = Object.freeze(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
@@ -88,6 +90,35 @@ export function describeLimits(options) {
     clippedByMapCells,
     /** `'budget'` is the answer you want: the drape ends where the link does. */
     limitingFactor,
+  };
+}
+
+/**
+ * How much of the world's roundness this particular coverage had to deal with.
+ *
+ * Reported rather than assumed, because at this map's scale the answer is not what a
+ * reader expects and they should be able to check it: the bulge under the longest link is
+ * centimetres (the term is quadratic in path length - 0.19 m for 3.68 km, 0.75 m for the
+ * 7.35 km diagonal), and the smooth-earth radio horizon of a mast and a receiver is
+ * 10-20 km, two to four times across this map. Those two numbers together are the honest
+ * answer to "is the curvature of the earth hiding my signal?": no, and here is the
+ * arithmetic. Curvature still decides *which side of a ridge brow* a cell is on, because
+ * the ray is a chord and a ridge top is thin - but it cannot end a link over ground this
+ * small, and a UI that let you believe otherwise would be selling a mystery.
+ *
+ * @param {{siteHeightM:number, maxLinkedRangeM:number, rxHeightM?:number, kFactor?:number}} options
+ * @returns {{kFactor:number, earthBulgeUnderMaxLinkM:number, radioHorizonM:number}}
+ */
+export function describeEarth(options) {
+  const { siteHeightM, maxLinkedRangeM, rxHeightM = RF.fresnelRxHeightM, kFactor = RF.kFactor } = options;
+  const half = Math.max(0, maxLinkedRangeM) / 2;
+  return {
+    /** The refraction factor the walk used, so the two numbers below can be re-derived. */
+    kFactor,
+    /** How much ground bulged into the middle of the longest working link. */
+    earthBulgeUnderMaxLinkM: earthBulgeM(half, half, kFactor),
+    /** How far a link of these two heights reaches over a perfectly smooth earth. */
+    radioHorizonM: radioHorizonM(siteHeightM, rxHeightM, kFactor),
   };
 }
 

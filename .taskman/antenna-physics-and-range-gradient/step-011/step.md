@@ -28,3 +28,26 @@ computes.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Took the branch this step planned for the line-budget case: `coverage.js` is at 347 of
+  350 lines, so the two numbers are computed by **`describeEarth({ siteHeightM,
+  maxLinkedRangeM, rxHeightM, kFactor })`** in `coveragestats.js`, spread into `stats` with
+  one line in the sweep (`...describeEarth({ siteHeightM: site.heightM, maxLinkedRangeM,
+  rxHeightM })`). New fields: `kFactor`, `earthBulgeUnderMaxLinkM`, `radioHorizonM`, each
+  with a comment saying which question it answers.
+- Measured on the default map, 10 m omni, 10 dBm / -80 dBm: `kFactor 1.413`, bulge under
+  the 936 m last link **0.012 m**, smooth-earth horizon for a 10 m mast and a 4 m receiver
+  **21.9 km**, against a 5.2 km map. Those are the numbers the HUD has to explain, and they
+  say the curvature is not what is hiding anything on this map.
+- New test `coverage: the sweep says how much round earth was involved`, in
+  `tests/unit/coveragebehaviour.test.js` (243 -> 288 lines) rather than the planned
+  `coverage.test.js`, which sits at 316 of its 320 line budget and would not have taken it.
+  It pins: the factor is the config factor; the bulge is `earthBulgeM` of *the reported
+  last link* and nothing else; the horizon is `radioHorizonM` for *this mast* and the
+  stated receiver height; the horizon is beyond `WORLD.worldSize`; the bulge under the
+  longest default link is under 0.2 m; a louder link reaches further and curves over more
+  world; and a sweep that links nothing reports a bulge of 0 rather than a NaN.
+- `npm run test:unit` all 13 files pass; `node tools/timebox.js -t 600 -- node tools/test.js
+  --browser --only tests/browser/app-boot.test.js` passes (it asserts the stats shape);
+  `npm run lint` ok. `coverage.js` is now 348 of 350 lines - flagged for whatever step next
+  wants to touch the sweep.

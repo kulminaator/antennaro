@@ -35,7 +35,7 @@ import { toCompass } from '../math/vec3.js';
 import { clamp, mean, percentile } from '../math/scalar.js';
 import { freeSpaceLossDb, freeSpaceRangeM, levelIndexFor, levelMarginsDb } from './rf.js';
 import { tracePath } from './pathtrace.js';
-import { createSectorTally, describeLimits, markClippedSectors } from './coveragestats.js';
+import { createSectorTally, describeEarth, describeLimits, markClippedSectors } from './coveragestats.js';
 
 export { SECTOR_COUNT, SECTOR_LABELS, sectorIndexForAzimuth } from './coveragestats.js';
 
@@ -285,6 +285,7 @@ export function computeCoverage(options) {
       clippedByRangeCells,
       clippedByMapCells,
     }),
+    ...describeEarth({ siteHeightM: site.heightM, maxLinkedRangeM, rxHeightM }),
   };
 
   return {

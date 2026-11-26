@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RF } from '../../src/config.js';
+import { RF, WORLD } from '../../src/config.js';
 import { approxEqual } from '../../src/math/scalar.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
 import { generateTerrain } from '../../src/terrain/generators.js';
@@ -20,7 +20,7 @@ import { createDefaultParams } from '../../src/antenna/catalogue.js';
 import { fromCompass } from '../../src/math/vec3.js';
 import { sampleCoverage, sectorIndexForAzimuth } from '../../src/propagation/coverage.js';
 import { computeCoverage } from '../../src/propagation/coverage.js';
-import { wavelengthM } from '../../src/propagation/rf.js';
+import { earthBulgeM, radioHorizonM, wavelengthM } from '../../src/propagation/rf.js';
 
 const freqHz = 868e6;
 const field = generateTerrain({ size: 81, worldSize: 2400, seed: 4242 });
@@ -240,4 +240,49 @@ test('coverage: the model is not a dice roll - same inputs, byte-identical outpu
   assert.deepEqual(Array.from(again.rssi), Array.from(baseCoverage.rssi));
   assert.deepEqual(Array.from(again.level), Array.from(baseCoverage.level));
   assert.deepEqual(again.stats, baseCoverage.stats);
+});
+
+test('coverage: the sweep says how much round earth was involved', () => {
+  // Curvature is a number the reader should be able to check from the report alone, so
+  // the sweep publishes it: the factor it used, how much ground bulged into the middle of
+  // the longest working link, and how far a link of these two heights would reach over a
+  // perfectly smooth earth.
+  const quiet = computeCoverage({
+    field: map, site: mapSite, model: omni(), freqHz,
+    feederLossDb: 1.5, txPowerDbm: 10, rxSensitivityDbm: -80, maxRangeM: RF.defaultMaxRangeM,
+    clutterLossDb: 0, useDiffraction: true,
+  }).stats;
+  assert.equal(quiet.kFactor, RF.kFactor, 'the stats name the refraction factor they used');
+  assert.ok(Number.isFinite(quiet.earthBulgeUnderMaxLinkM) && quiet.earthBulgeUnderMaxLinkM > 0);
+  assert.ok(Number.isFinite(quiet.radioHorizonM) && quiet.radioHorizonM > 0);
+
+  // Neither number may drift from the maths it comes from.
+  const half = quiet.maxLinkedRangeM / 2;
+  assert.ok(approxEqual(quiet.earthBulgeUnderMaxLinkM, earthBulgeM(half, half, RF.kFactor), 1e-12),
+    'the bulge is the bulge of the reported last link, nothing else');
+  assert.equal(quiet.radioHorizonM, radioHorizonM(mapSite.heightM, RF.fresnelRxHeightM, RF.kFactor),
+    'the horizon is for this mast and the stated receiver height');
+  assert.ok(quiet.radioHorizonM > WORLD.worldSize,
+    `and on this map the horizon (${(quiet.radioHorizonM / 1000).toFixed(1)} km) is off the edge: the curvature cannot be what ended the coverage`);
+  assert.ok(quiet.earthBulgeUnderMaxLinkM < 0.2,
+    `the longest link had ${quiet.earthBulgeUnderMaxLinkM.toFixed(3)} m of bulge to curve over`);
+
+  // A longer link meets more curved ground - quadratic in distance, so this is the one
+  // direction the number can move in.
+  const loud = computeCoverage({
+    field: map, site: mapSite, model: omni(), freqHz,
+    feederLossDb: 1.5, txPowerDbm: 30, rxSensitivityDbm: -80, maxRangeM: RF.defaultMaxRangeM,
+    clutterLossDb: 0, useDiffraction: true,
+  }).stats;
+  assert.ok(loud.maxLinkedRangeM > quiet.maxLinkedRangeM, 'the louder link reaches further');
+  assert.ok(loud.earthBulgeUnderMaxLinkM > quiet.earthBulgeUnderMaxLinkM, 'and curves over more world');
+
+  // Nothing linked: no link, so no bulge - and never a NaN into the read-out.
+  const dead = computeCoverage({
+    field: map, site: mapSite, model: omni(), freqHz,
+    feederLossDb: 1.5, txPowerDbm: 10, rxSensitivityDbm: -20, maxRangeM: 100,
+    clutterLossDb: 0, useDiffraction: true,
+  }).stats;
+  assert.equal(dead.linkedCells, 0, 'a receiver that only hears -20 dBm links nothing here');
+  assert.equal(dead.earthBulgeUnderMaxLinkM, 0, 'and an absent link bulges nothing');
 });
