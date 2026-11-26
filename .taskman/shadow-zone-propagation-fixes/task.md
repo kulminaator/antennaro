@@ -102,3 +102,31 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
 - `-1000, 0` looking east is not a free-space corridor (it costs 3.2 dB); the middle of the
   map looking east is (0.994 of budget). Rank antennas on the latter, and pin ground cost in
   dB explicitly wherever it is nonzero.
+
+## Task comments
+
+### Numbers steps 014-016 quote (all re-measured in step-013, nothing adjusted to fit)
+
+- Default scene: **836 linked of 30624** (2.7 % of the map, 29.6 % of reachable ground), last
+  link **936 m @ 153 deg** against a **937 m** budget, `limit: budget`; RSSI **-50.1 / -90.2 /
+  -116.7 dBm** (best / median / worst); zone **87.9 %** clear, **101** linked cells cut
+  (**12.1 %**), worst clearance **-19.9 r1 at 90 m**; curvature **k 1.413**, ray bows **0.0122 m**
+  over the longest link, radio horizon **21.90 km**; bands `[0,0,20,816,29788]`, gradient thirds
+  **8 / 58 / 770**, faint **1992**, never measured **27796**; HUD **73.7 %** of walked cells
+  diffracted by more than 6 dB.
+- Presets all still end at their own link (`limit: budget`), none retuned. Last link / budget:
+  site-sector 2.20 / 3.08 km, valley-reach 2.48 / 2.50 km, flat-field 2.00 / 2.02 km,
+  mountain-shadow 2.04 / 2.04 km, bumps-hills 1.42 / 3.32 km.
+- Design reaches up the east corridor at 40 m: **0.93, 1.56, 1.67, 1.86, 2.18 km** for dipole,
+  patch, collinear, biquad, Yagi - 99-100 % of their own free space, exactly in gain order.
+  At the centre on the default 10 m mast, aimed east: Yagi **0.81** of 2.20 km, patch **0.93** of
+  1.57, biquad **0.97** of 1.86 - gain ordered, range not.
+- Band sweep at the default budget: **77.1 %** of 2165 clear at 433 MHz, **87.9 %** of 836 at
+  868, **92.9 %** of 84 at 2.4 GHz, **93.3 %** of 15 at 5.8 GHz.
+- Flat-field preset as a horizon demonstration: **273** cells / **0.81 km** of 2.20 km / **19 %**
+  clear at 10 m, **1770** cells / **2.18 km** / **93 %** at 25 m.
+- What the four fixes were worth, in one line each: the earth now hides what is behind it
+  (step-002); the shadow begins at 0 dB instead of leaping to 6 (step-007); the ray walks the
+  mesh instead of stepping over it, 6.5 dB -> 1.9 dB worst case (step-009); and ridges
+  accumulate, moving **22.1 %** of cells by up to **15.7 dB**, because **72 %** of paths from the
+  default mast cross two or more screens (step-012).
