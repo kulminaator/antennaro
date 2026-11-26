@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 
 import { withApp } from '../harness/app.js';
 import { ANTENNA, RF, WORLD } from '../../src/config.js';
+import { krausDirectivityDbi } from '../../src/antenna/pattern.js';
 
 const DESIGNS = Object.freeze(['omni-dipole', 'omni-collinear', 'yagi']);
 /** The western edge of the flat field: a clear run east, the mast away from the mountain. */
@@ -227,6 +228,60 @@ test('browser: the sweep looks at the whole map, not a plate on top of it', asyn
     assert.equal(corner.limitingFactor, 'map-edge',
       'in a corner the border is what stops the search, and the sweep has to admit it');
     assert.ok(corner.sectors.some((cell) => cell.clippedBy === 'map-edge'), 'and mark the directions it cut');
+    assert.deepEqual(session.errors(), []);
+  });
+});
+
+test('browser: over flat ground the five designs reach in gain order, and none has more gain than its beam', async () => {
+  await withApp(async (session) => {
+    await session.settle();
+    // One piece of ground, one mast, one direction: the only variable left is the
+    // antenna. This is the test the biquad bug would have failed - it claimed 12.4 dBi
+    // from a 69 x 69 degree beam, which is 3 dB more than that beam can hold, and it
+    // therefore reached further on the map than a Yagi with half its beamwidth.
+    await session.patch({
+      site: { x: WESTERN_FIELD_X, z: 0 },
+      heightM: ANTENNA.heightLimitsM.max,
+      aim: { azimuthDeg: 90, tiltDeg: 0 },
+    });
+    await session.settle();
+
+    // In gain order, so the reach list below is also a monotonicity assertion.
+    const designs = ['omni-dipole', 'patch', 'omni-collinear', 'biquad-reflector', 'yagi'];
+    const rows = [];
+    for (const designId of designs) {
+      await session.patch({ designId });
+      await session.settle();
+      const antenna = await session.sim('antenna');
+      const stats = await session.sim('coverage');
+      rows.push({ designId, gain: antenna.peakGainDbi, h: antenna.hBeamwidthDeg, v: antenna.vBeamwidthDeg, max: stats.maxLinkedRangeM, budget: stats.budgetRangeM });
+      assert.equal(stats.limitingFactor, 'budget', `${designId}: something other than the link ended the picture`);
+      if (antenna.hBeamwidthDeg < 350) {
+        const ceiling = krausDirectivityDbi(antenna.hBeamwidthDeg, antenna.vBeamwidthDeg);
+        assert.ok(antenna.peakGainDbi <= ceiling + 0.25,
+          `${designId}: ${antenna.peakGainDbi.toFixed(2)} dBi from a `
+          + `${antenna.hBeamwidthDeg.toFixed(1)} x ${antenna.vBeamwidthDeg.toFixed(1)} degree beam `
+          + `(ceiling ${ceiling.toFixed(2)} dBi)`);
+      }
+      const ratio = stats.maxLinkedRangeM / stats.budgetRangeM;
+      assert.ok(ratio > 0.85 && ratio <= 1.001,
+        `${designId} reached ${stats.maxLinkedRangeM.toFixed(0)} m of a ${stats.budgetRangeM.toFixed(0)} m budget - ground, not gain, is deciding here`);
+    }
+
+    for (let i = 1; i < rows.length; i += 1) {
+      assert.ok(rows[i].gain > rows[i - 1].gain, `${rows[i].designId} has no more gain than ${rows[i - 1].designId}`);
+      assert.ok(rows[i].max > rows[i - 1].max,
+        `${rows[i].designId} (${rows[i].gain.toFixed(1)} dBi) reached no further than `
+        + `${rows[i - 1].designId} (${rows[i - 1].gain.toFixed(1)} dBi): `
+        + `${rows[i].max.toFixed(0)} m against ${rows[i - 1].max.toFixed(0)} m`);
+    }
+
+    const yagi = rows.find((row) => row.designId === 'yagi');
+    const biquad = rows.find((row) => row.designId === 'biquad-reflector');
+    assert.ok(biquad.gain < yagi.gain, 'a biquad must not out-gain a Yagi');
+    assert.ok(biquad.h > yagi.h && biquad.v > yagi.v, 'and it must be the wider antenna in both planes');
+    assert.ok(yagi.max / biquad.max > 1.1,
+      `the Yagi's extra gain has to show up as reach: ${yagi.max.toFixed(0)} m against ${biquad.max.toFixed(0)} m`);
     assert.deepEqual(session.errors(), []);
   });
 });
