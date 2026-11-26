@@ -197,10 +197,15 @@ diffraction model (`RF.diffractionEndpointGuard` and `RF.diffractionNearEndM`, w
 the two ray ends out of the screen list, and `RF.diffractionEdgeLimit` - how many of the
 screens found along a path are actually superposed), the `FRESNEL` block (mesh density,
 opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`), the
-`COLOURS.fresnel*` stops of the zone ramp, the range gradient
-(`RF.gradientMaxMarginDb` - measured, not guessed: margin only falls 20 dB per decade of
-distance, so 45 dB painted nearly every map pink, and 30 dB is a decade and a half inside
-a link's own edge - and `COLOURS.gradientStops`), `RF.defaultCoverageView`, and
+`COLOURS.fresnel*` stops of the zone ramp, the four signal steps
+(`RF.levelMarginsDb` with `RF.levelNames`, placed on the measured margin distribution rather
+than on round numbers - the median linked cell of the six shipped configurations has 2.9-5.1 dB
+of room, so the old 45/30/15/0 put 93-98 % of every map in one colour - and `COLOURS.levels`,
+whose closest neighbours are 11.5 CIEDE2000 apart under the worst simulated eye), the drape's
+own `RF.overlayOpacity` (it used to be a literal inside `coveragemesh.js`, which is why no test
+could say what it cost: every step has to stay >= 24 CIEDE2000 from the bare ground under it,
+and at 0.35 it no longer does, which the palette test now reports),
+`RF.defaultCoverageView`, and
 `ANTENNA.apertureEfficiency` / `apertureEfficiencyDefault`, which are not decoration:
 they *are* the gain of every directional design
 (`gain = krausDirectivityDbi(H, V) + 10*log10(efficiency)`), so pattern and link budget
@@ -365,7 +370,7 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   clutter only subtract, so a point that misses sensitivity on free space alone could not
   have been saved by the terrain. That makes the pre-filter lossless for the linked set,
   which `coverage: the budget pre-filter cannot move the link boundary` proves by
-  comparing both paths over the real map (same linked set, same bands, bit-identical dB at
+  comparing both paths over the real map (same linked set, same steps, bit-identical dB at
   every walked point, and every dismissed point shown to be unreachable). The consequence
   is that an excluded point carries **no verdict**: no paint, no band, no Fresnel claim,
   and its clearance sentinel must never be read as "clear".
@@ -394,29 +399,58 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   must not move the RSSI: pinned by a unit test and a browser test), once to the
   raised terminal for the zone. A cell can be badly diffracted *and* zone-clear, and
   that is geography, not a bug to reconcile.
-- **One drape, three readings.** `display.coverageView` is a select with exactly
-  `bands | gradient | zone`, and `propagation/coveragemesh.js` paints from that one field -
-  `coverageRgb`, `rangeGradientRgb` on margin over sensitivity, or `palette.fresnelZoneRgb`.
+- **One drape, two readings.** `display.coverageView` is a select with exactly
+  `steps | zone`, and `propagation/coveragemesh.js` paints from that one field -
+  `coverageRgb` for the step the sweep banded the cell into, or `palette.fresnelZoneRgb`.
   It is a *mode*, never a marking laid over another view: only a minority of cells meet the
-  zone criterion, and the gradient would tint the bands into one unreadable hue, so a pixel
-  must mean exactly one thing. The **alpha channel is the same in all three** - that part of
-  the message is not a matter of taste - the legend is chosen by the same field
-  (`coverageLegendItems` / `rangeGradientLegendItems` / `fresnelZoneLegendItems`, each with
+  zone criterion, and a tint over the signal steps would make a pixel mean two things. The
+  **alpha channel is the same in both** - that part of the message is not a matter of taste -
+  the legend is chosen by the same field
+  (`coverageLegendItems` / `fresnelZoneLegendItems`, each with
   its own title and each counting every point the sweep can account for), and switching a
   view may not move a single decibel: `browser: the coverage view repaints the drape, and no
-  view changes a decibel` walks the three views and requires the whole coverage stats object
+  view changes a decibel` walks `steps -> zone -> steps` and requires the whole coverage stats object
   to be `deepEqual` at every stop. `display.showFresnel` is now only the *volume*; a control
   that both drew a tube and recoloured the map was a control whose label lied. A scenario
   never picks a view - presets carry no `display` block, so `?preset=...&fresnel=1` still
-  reaches the zone picture and the panel keeps the last view the user chose.
-- **The gradient is keyed to margin, and its scale is absolute.** `rangeGradientRgb` takes
-  dB *over the receiver sensitivity*, never dBm, so moving the sensitivity slider cannot
-  recolour a map that describes the same antenna over the same ground; and it is never
-  normalised to the best cell on screen, because two screenshots of two different links
-  would stop being comparable. Its three legend rows are thirds of its own ramp, sampled
-  inside each row: the day the ramp top and the RSSI band boundaries stopped coinciding,
-  sampling the ramp at band boundaries produced two legend rows in one colour, which is a
-  legend that describes a picture the map does not paint.
+  reaches the zone picture and the panel keeps the last view the user chose, and a unit test
+  refuses any preset that resolves to a view the panel does not offer.
+  The two views replaced three: `bands` and `gradient` were flat steps and a continuous ramp
+  over the same signal strength, and both are refused by the reducer now, so the legacy
+  spellings are translated in `main.js`, at the URL boundary where old links arrive
+  (`LEGACY_COVERAGE_VIEWS`). That is deliberate: the reducer's select coercion rejects any
+  value the field table does not offer, which is the house rule for every select, and a
+  silent normalisation in one field would break it for all of them.
+- **The signal scale is keyed to margin, and its steps are absolute.** The band index comes
+  from dB *over the receiver sensitivity*, never dBm, so moving the sensitivity slider cannot
+  recolour a map that describes the same antenna over the same ground; and the thresholds are
+  never normalised to the best cell on screen, because two screenshots of two different links
+  would stop being comparable. Four steps, ordered by lightness (L* 93/74/53/31) because
+  lightness is the axis colour blindness keeps, and no more than four because the best gap a
+  red-through-yellow path can offer is 19.5 / 12.5 / 9.5 CIEDE2000 for 3 / 4 / 5 steps: a fifth
+  would be a colour indistinguishable from its neighbour. Both predecessors are refused by
+  measurement, not taste - `tests/unit/palette.test.js` fails the thresholds this app shipped
+  for months ("every step must occur on an ordinary link") and fails a top step nobody reaches
+  (30/15/5/0 lands on 0.2 % of an ordinary link's cells).
+  A colour claim is only as good as its ruler, so the ruler is calibrated in the same file
+  against published CIEDE2000 rows - including the blue-sign-flip pair that catches a missing
+  rotation term - and shared through `tests/harness/colour.js` rather than copied, because a
+  ruler duplicated per test file drifts into whatever it was copied beside.
+  The gradient these steps replaced was keyed the same way and was still unreadable: its stops
+  sat at L* 76/89/76, its two ends 0.4 apart, its middle the brightest pixel on the map, and
+  its legend rows were thirds of its own ramp - a design that could only be checked by asking
+  whether a reader could tell two cells apart, which nobody had done.
+- **Two views, two vocabularies of colour.** The signal steps are warm and the zone ramp is
+  not: violet through mint (`#663f81` / `#be77e2` / `#3effb7`, L* 34/61/90, neighbours 26.5 and
+  40.9 CIEDE2000 apart at the tightest), because the two views are switched and a colour that
+  means "clear zone" cannot also mean "comfortable link". The zone ramp used to be purple /
+  amber / green, and its amber `#e8c33c` sat 10.7 from the yellow signal step - close enough
+  that switching views moved cells without moving meaning - while the old ramp itself was only
+  9.4 apart at its tightest under protanopia. The palette test now refuses any pair across the
+  two scales below 12 CIEDE2000 in any simulated eye (measured floor 15.7, yellow against mint)
+  and any two zone states below 12 (floor 26.5). Colour names are declared once, in
+  `COLOURS`, and the DOM legend, the drape and the tests all read that one table, so a hue
+  cannot be retyped into one of the three and quietly diverge.
 - **A shadow starts at 0 dB, and the ray has to walk the mesh to see one.** Terrain
   shadowing is `propagation/diffraction.js`: a signed screen parameter (`v` positive where
   ground stands above the ray, negative where the ray has room) run through the fitted
@@ -630,6 +664,15 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   the tools wait on this), `errors`, `version`, `app`. DOM layout may change;
   this API is the contract, so anything a test needs permanently gets added here
   rather than scraped.
+- **The three claims that are not state, and so live only in the DOM.** The rule above is not
+  pedantry, it is the reason a re-skin cannot break the suite - but three user-facing claims
+  are not in the state at all, and reading `window.__sim` for them would be testing a shadow:
+  the About dialog's provenance text (it is deliberately not app state), the *sentence* the
+  curvature row chooses for a given mast height (`describeEarth()` returns facts; the HUD
+  decides which half to say), and the legend's rows - words, swatch colours and swatch
+  alphas. Those may be read from the document, and nothing else may: a test that reads a
+  number out of the panel instead of `coverage()` is asserting the formatting of a value the
+  API already reports, and it will pass while the value rots.
 - Use `withApp(async (session) => { ... })` so the Chromium instance and the
   server are always torn down, even on a failed assertion. The session uses
   `SIM_URL` (exported by `tools/test.js`, one shared server per suite) and falls
