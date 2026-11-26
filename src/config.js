@@ -157,6 +157,13 @@ export const RF = Object.freeze({
   noLinkAlpha: 0.22,
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
+  /**
+   * Top of the continuous range-gradient scale, in dB of margin over the receiver
+   * sensitivity. Deliberately the same figure as the largest `levelMarginsDb`, so the
+   * banded view and the gradient view disagree about where the edges are - that is the
+   * whole reason for having both - but never about what "strong" means.
+   */
+  gradientMaxMarginDb: 45,
 });
 
 /** Antenna placement + aiming limits. */
@@ -309,6 +316,19 @@ export const PATHS = Object.freeze({
  */
 export const COLOURS = Object.freeze({
   levels: Object.freeze(['#1b7f4d', '#5fb85f', '#e8c33c', '#e08b2f']),
+  /**
+   * The continuous range gradient: warm yellow where the link has room to spare, pale
+   * yellow as that room closes, pink for a link that only just makes the receiver. The
+   * request was for exactly this - "yellow for strong range, light yellow for weaker,
+   * pink for very weak" - because four flat bands hide the thing people actually want to
+   * read off a map, which is *how much margin* a spot has.
+   *
+   * These hues belong to this view alone: the zone ramp (`fresnel*` below) is purple /
+   * amber / green and the band ramp is `levels` above, and a unit test refuses to let a
+   * gradient stop collide with a zone colour. A colour that means two things in two
+   * switchable views is a bug you cannot see.
+   */
+  gradientStops: Object.freeze({ strong: '#e8b32a', mid: '#f4e08e', weak: '#f0a8bf' }),
   noLink: Object.freeze('#2a2f38'),
   /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */
   fresnelObstructed: Object.freeze('#a24bd0'),

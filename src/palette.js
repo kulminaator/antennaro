@@ -134,6 +134,86 @@ export function fresnelZoneLegendItems(stats = {}) {
 }
 
 /**
+ * The three stops of the range gradient, weakest last. Read in order: strong link,
+ * margin shrinking, link only just made.
+ */
+const GRADIENT_STRONG = hexToRgb(COLOURS.gradientStops.strong);
+const GRADIENT_MID = hexToRgb(COLOURS.gradientStops.mid);
+const GRADIENT_WEAK = hexToRgb(COLOURS.gradientStops.weak);
+
+/**
+ * Colour for the continuous range-gradient view, from a link margin in dB.
+ *
+ * Margin is the only honest thing to ramp a coverage map against: the absolute dBm moves
+ * with the receiver's sensitivity slider, and a map keyed to it would change colour
+ * because you changed a spec sheet. Margin says how much room the link has left, which is
+ * what "strong" and "weak" mean to a person choosing a site - yellow with room to spare,
+ * pale yellow as it closes, pink for a link that survives by a decibel or two.
+ *
+ * Piecewise linear through the three stops, clamped at both ends, and `out`-writing like
+ * `fresnelZoneRgb` because the drape calls this 30 000 times a rebuild.
+ *
+ * @param {number} marginDb RSSI minus the receiver sensitivity (negative = no link)
+ * @param {number[]} [out] written to, when given
+ * @returns {number[]} rgb triple, 0..1
+ */
+export function rangeGradientRgb(marginDb, out = null) {
+  const top = Math.max(1, RF.gradientMaxMarginDb);
+  const t = clamp01((Number.isFinite(marginDb) ? marginDb : 0) / top);
+  // Exact at the ends: `mixRgb` interpolates, and `a + (b - a) * 1` is not always `b` in
+  // floating point, which would make the legend's own swatch differ from the map's by an
+  // increment nobody can see and everybody can fail a test over.
+  const rgb = t >= 1 ? GRADIENT_STRONG
+    : t <= 0 ? GRADIENT_WEAK
+      : t >= 0.5
+    ? mixRgb(GRADIENT_MID, GRADIENT_STRONG, (t - 0.5) / 0.5)
+      : mixRgb(GRADIENT_WEAK, GRADIENT_MID, t / 0.5);
+  if (!out) return rgb.slice();
+  out[0] = rgb[0]; out[1] = rgb[1]; out[2] = rgb[2];
+  return out;
+}
+
+/**
+ * Legend for the gradient. The rows are still the band boundaries - the sweep counts
+ * cells per band and those counts must keep adding up - but each colour is the gradient
+ * sampled *at* that boundary, so the swatch is the colour a cell at the top of that band
+ * actually gets painted, not a colour the ramp never produces. Below sensitivity and
+ * out of budget are unchanged: they are not strengths of link, they are the absence of
+ * one, and they keep their alpha contract (faint = asked and lost, none = never asked).
+ */
+export function rangeGradientLegendItems(coverage) {
+  const rgb = [0, 0, 0];
+  const items = coverage.margins.map((margin, band) => ({
+    band,
+    colour: rgbToHex(rangeGradientRgb(margin, rgb)),
+    label: band === 0
+      ? `strong: ${margin.toFixed(0)} dB or more over the receiver`
+      : `>= ${margin.toFixed(0)} dB over${band === coverage.margins.length - 1 ? ' (pink: at the limit)' : ''}`,
+    count: coverage.stats.levelCounts[band] ?? 0,
+    alpha: 1,
+  }));
+  const last = coverage.margins.length;
+  const excluded = coverage.stats.budgetExcludedCells ?? 0;
+  items.push({
+    band: last,
+    colour: COLOURS.noLink,
+    label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (faint: terrain stops the link)`,
+    count: Math.max(0, (coverage.stats.levelCounts[last] ?? 0) - excluded),
+    alpha: RF.noLinkAlpha,
+  });
+  if (excluded > 0) {
+    items.push({
+      band: last,
+      colour: COLOURS.noLink,
+      label: 'out of budget - not measured, not painted',
+      count: excluded,
+      alpha: 0,
+    });
+  }
+  return items;
+}
+
+/**
  * Radiation-pattern colour: hot at the peak lobe, cold in the nulls.
  * @param {number} db absolute gain in dBi
  * @param {number} peakDbi peak gain of the design
