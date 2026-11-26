@@ -103,59 +103,59 @@ export const RF = Object.freeze({
   defaultRxSensitivityDbm: -80,
   /**
    * The study range: how far from the mast the coverage is evaluated. The default is the
-   * map's half-diagonal (3677 m) rounded up, so by default the whole map is evaluated and
-   * the edge of the colour is the link's own maximum. Lower it and it becomes a declared
-   * limit: a ring is drawn wherever it could bind, and the read-out names it.
+   * map's half-diagonal (3677 m) rounded up, so the edge of the colour is the link's own
+   * maximum. Lower it and it becomes a declared limit: a ring is drawn where it could bind.
    */
   defaultMaxRangeM: 3800,
-  /* Past the map on purpose: a mast in a corner has 7354 m of ground on the other side, so
-     a 6 km work area is a limit somebody can genuinely ask for - and it costs nothing where
-     it cannot bind, because the sweep only ever walks the grid that exists. */
+  /* Past the map on purpose: a mast in a corner has 7354 m of ground, so a 6 km work area is
+     a limit somebody can genuinely ask for - and it costs nothing where it cannot bind. */
   maxRangeLimitsM: Object.freeze({ min: 100, max: 6000 }),
   clutterLossDb: 0,
   earthRadiusM: 6_371_000,
   kFactor: 1.413, // standard atmosphere refraction model for the terrain LOS bulge
-  profileSamples: 96,
   /**
-   * A path is only reliable when at least this fraction of the *first Fresnel zone* is clear
-   * of the ground. 0.6 (60 % of r1) is the conventional criterion; it is a flag on the link,
-   * not an extra loss term - the dB already come from the diffraction parameter.
+   * Ceiling on the samples one ray walk takes; `pathSamples()` in rf.js asks for one sample per
+   * terrain cell, so this only binds on paths longer than the map is wide. Measured along the
+   * longest line a legal corner mast can look over, on crests one to three cells wide slid
+   * through the phase of the sample grid: one per cell reads within 1.9 dB of that path walked
+   * dense where the old 96 read 6.5 dB short, and finer than the mesh buys nothing.
+   */
+  profileMaxSamples: 2 * WORLD.gridSize,
+  /**
+   * A path is only reliable when at least this fraction of the *first Fresnel zone* is clear of
+   * the ground. 0.6 (60 % of r1) is the conventional criterion; a flag on the link, not a loss
+   * term - the dB already come from the diffraction parameter.
    */
   fresnelClearFraction: 0.6,
   /**
-   * Height above the ground of the *receiving* terminal the zone is judged against. Not a
-   * fudge - a stated assumption, because the answer depends on it: against a receiver lying
-   * on the ground the zone collapses at the receiver and flat earth is always inside it (a
-   * 10 m mast is only Fresnel-clear within 2.2*(h1+h2)/lambda = 89 m at 868 MHz). A rooftop
-   * terminal is what "the link holds" is really claiming.
+   * Height above the ground of the *receiving* terminal the zone is judged against. Not a fudge
+   * but a stated assumption, because the answer depends on it: judged against a receiver lying on
+   * the ground the zone collapses there - a 10 m mast is Fresnel-clear within 2.2*(h1+h2)/lambda
+   * = 89 m at 868 MHz - so "the link holds" is really claiming a terminal on a rooftop.
    */
   fresnelRxHeightM: 4,
   /**
    * How near to an antenna a sample has to be to be excused, per verdict. One cause for two
    * windows: `sqrt(d1 d2 / (d1 + d2))` collapses at an antenna, so the dive into the
    * terminal's own ground is judged against a zone a centimetre wide. The fraction excuses
-   * sub-ray crests at both ends; the metres excuse the receiver's footing, only at its end.
+   * sub-ray crests at both ends, the metres the receiver's footing at its end only.
    */
   fresnelEndpointGuard: 0.1,
   diffractionEndpointGuard: 0.1,
   diffractionNearEndM: 30,
   /**
-   * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex.
-   * The ground needs ~15 m cells to look like land; a ray walk over every one of
-   * 121 801 of them measured 734 ms in Node, which is far too slow to re-run while
-   * a slider is dragged. Stride 2 (about 30 m cells) keeps the coverage shape - a
-   * link boundary is kilometres wide - at a fraction of the cost.
+   * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex. The ground
+   * needs ~15 m cells to look like land, and a ray walk over all 121 801 of them measured 734
+   * ms in Node - far too slow to re-run while a slider is dragged. Stride 2 (~30 m cells) keeps
+   * the shape, since a link boundary is kilometres wide, for a fraction of the cost.
    */
   coverageStride: 2,
   /**
-   * Alpha of the drape where the ground was consulted and the link failed. Faint,
-   * never blank: that rim is the reach this terrain actually allows, and blank is
-   * reserved for places nothing was asked about.
-   *
-   * No "how far below sensitivity do we still paint" threshold is needed to make it
-   * appear. The pre-filter's test is the free-space bound, so the points that get
-   * walked and still fail are precisely those the *terrain* defeated - the halo is a
-   * consequence of the method, not a distance someone typed in.
+   * Alpha of the drape where the ground was consulted and the link failed. Faint, never
+   * blank: that rim is the reach this terrain actually allows, and blank stays reserved for
+   * places nothing was asked about. No depth threshold is needed to make it appear - the
+   * pre-filter dismisses on the free-space bound, so what is walked and still fails is
+   * precisely what the terrain defeated.
    */
   noLinkAlpha: 0.22,
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */

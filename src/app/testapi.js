@@ -171,6 +171,7 @@ export function installTestApi(options) {
       const profile = rayProfile(field, site, { x, y: field.sample(x, z), z }, {
         freqHz: resolveFrequencyHz(controller.state().frequencyKey),
         kFactor: options.kFactor,
+        samples: options.samples,
       });
       return {
         distanceM: profile.totalDistance,

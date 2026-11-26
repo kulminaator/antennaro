@@ -7,6 +7,7 @@
  */
 
 import { RF } from '../config.js';
+import { clamp } from '../math/scalar.js';
 
 /** Re-exported for convenience; the number itself lives in src/config.js. */
 export const SPEED_OF_LIGHT_MPS = RF.speedOfLightMps;
@@ -154,4 +155,28 @@ export function levelIndexFor(rssiDbm, sensitivityDbm, margins = levelMarginsDb(
     if (rssiDbm >= sensitivityDbm + margins[i]) return i;
   }
   return margins.length;
+}
+
+const SAMPLES_PER_CELL = 1;
+const MIN_PATH_SAMPLES = 12;
+
+/**
+ * How many samples a ray walk takes over a path this far, measured along the ground.
+ *
+ * The count is derived rather than typed because the thing a ray walk has to resolve is the
+ * terrain mesh. One sample per terrain cell is where that mesh saturates: measured against
+ * crests one to three cells wide slid through the phase of the sample grid, one sample per
+ * cell reads within 1.9 dB of the same path walked dense on the longest line the map can
+ * hold, half a sample per cell reads the same 1.9 dB, and the old 96-sample cap - four to
+ * five cells apart out there - read 6.5 dB short. `RF.profileMaxSamples` carries the cost of
+ * that rule; it is a ceiling on nonsense path lengths, not a limit this map reaches.
+ *
+ * One function exists so that the coverage sweep, `tracePath`, `fresnelStatus` and
+ * `window.__sim.rayTo` all walk the same ray. When `rayTo` used the plain cap instead, it
+ * reported 8.77 dB for a cell the picture showed as 8.46 dB - three tenths of a decibel of
+ * argument between the map and the tool used to check it.
+ */
+export function pathSamples(horizontalM, cellSizeM, maxSamples = RF.profileMaxSamples) {
+  if (!(cellSizeM > 0) || !(horizontalM > 0)) return MIN_PATH_SAMPLES;
+  return clamp(Math.round(horizontalM / cellSizeM) * SAMPLES_PER_CELL, MIN_PATH_SAMPLES, maxSamples);
 }

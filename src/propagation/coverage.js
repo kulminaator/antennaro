@@ -14,26 +14,25 @@
  *   can shrink the work area to save time) but its default covers the map. A disc we
  *   chose must never look like the antenna's reach: when it bites, `stats.limitingFactor`
  *   says so and the view draws the ring.
- * - **Coarser than the ground.** `RF.coverageStride` points at every n-th terrain
- *   vertex: landforms need ~15 m vertices to look like land while a link boundary is
- *   kilometres wide. Walking all 121 800 of them measured 734 ms in Node.
+ * - **Coarser than the ground.** `RF.coverageStride` points at every n-th terrain vertex:
+ *   a link boundary is kilometres wide, while landforms need ~15 m vertices to look like land.
  *
  * A point whose **free-space loss alone** already breaks the budget is flagged
- * `budgetExcluded` and no ray is walked for it. That is not an approximation: diffraction
- * and clutter only subtract, so such a point cannot link and the stored value is the
- * upper bound it failed to beat. `tests/unit/coverage.test.js` proves the shortcut
- * leaves the linked set identical; keep that test true.
+ * `budgetExcluded` and no ray is walked for it. Not an approximation: diffraction and clutter
+ * only subtract, so such a point cannot link and the stored value is the upper bound it failed
+ * to beat. `tests/unit/coverage.test.js` proves the shortcut leaves the linked set identical.
  *
  * Each walked point also records its **first Fresnel zone** clearance against
- * `RF.fresnelClearFraction` - a reliability flag, not another loss term, because the dB
- * already come from the same Fresnel/Kirchhoff ratio and charging it twice would punish
- * the same ridge twice.
+ * `RF.fresnelClearFraction` - a reliability flag, not another loss term, because the dB already
+ * come from the same Fresnel/Kirchhoff ratio and charging it twice would punish one ridge twice.
  */
 
 import { RF } from '../config.js';
 import { toCompass } from '../math/vec3.js';
 import { clamp, mean, percentile } from '../math/scalar.js';
-import { freeSpaceLossDb, freeSpaceRangeM, levelIndexFor, levelMarginsDb } from './rf.js';
+import {
+  freeSpaceLossDb, freeSpaceRangeM, levelIndexFor, levelMarginsDb, pathSamples,
+} from './rf.js';
 import { tracePath } from './pathtrace.js';
 import { createSectorTally, describeEarth, describeLimits, markClippedSectors } from './coveragestats.js';
 
@@ -154,7 +153,7 @@ export function computeCoverage(options) {
       let clippedByRange = false;
       let clippedByMap = false;
       if (!excluded) {
-        const steps = clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
+        const steps = pathSamples(horizontal, field.cellSize);
         const traced = tracePath(field, from, { x, y: h, z }, {
           freqHz, samples: steps, rxHeightM, guard: RF.fresnelEndpointGuard,
         });

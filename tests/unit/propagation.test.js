@@ -19,8 +19,8 @@ import { approxEqual } from '../../src/math/scalar.js';
 import { HeightField } from '../../src/terrain/heightfield.js';
 import {
   earthBulgeM, eirpDbm, freeSpaceLossDb, freeSpaceRangeM, frequencyLabel, fresnelRadiusM, levelIndexFor,
-  levelMarginsDb, linkMarginDb, radioHorizonM, receivedDbm, resolveFrequencyHz, rfSummary, wavelengthM,
-  SPEED_OF_LIGHT_MPS,
+  levelMarginsDb, linkMarginDb, pathSamples, radioHorizonM, receivedDbm, resolveFrequencyHz,
+  rfSummary, wavelengthM, SPEED_OF_LIGHT_MPS,
 } from '../../src/propagation/rf.js';
 import {
   diffractionLossDb, hasLineOfSight, obstructionLossDb, rayProfile, requiredHeightForClearance,
@@ -122,7 +122,7 @@ test('rf: coverage bands are ordered thresholds above the sensitivity floor', ()
 test('los: a clear path over flat ground has no excess', () => {
   const to = { x: 800, y: 0, z: 0 };
   const profile = rayProfile(FLAT, SITE, to);
-  assert.equal(profile.points.length, RF.profileSamples + 1);
+  assert.equal(profile.points.length, pathSamples(800, FLAT.cellSize) + 1);
   assert.equal(profile.maxExcess, 0, 'nothing sticks up through the ray');
   assert.ok(approxEqual(profile.totalDistance, Math.hypot(800, -10), 1e-9));
   assert.equal(hasLineOfSight(FLAT, SITE, to), true);

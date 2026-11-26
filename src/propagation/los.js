@@ -29,7 +29,7 @@
 
 import { RF } from '../config.js';
 import { clamp } from '../math/scalar.js';
-import { earthBulgeM, fresnelRadiusM, wavelengthM } from './rf.js';
+import { earthBulgeM, fresnelRadiusM, pathSamples, wavelengthM } from './rf.js';
 
 /**
  * Sample the terrain against the straight ray from `from` (in the air) to `to`.
@@ -46,8 +46,9 @@ import { earthBulgeM, fresnelRadiusM, wavelengthM } from './rf.js';
  *   diffractionExcess:number, diffractionDistance:number, totalDistance:number}}
  */
 export function rayProfile(field, from, to, options = {}) {
+  const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
   const {
-    samples = RF.profileSamples,
+    samples = pathSamples(horizontal, field.cellSize),
     kFactor = RF.kFactor,
     earthRadiusM = RF.earthRadiusM,
     freqHz = null,
@@ -242,7 +243,7 @@ export function obstructionLossDb(field, from, to, freqHz, options = {}) {
   const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
   if (horizontal < minDistanceM) return 0;
   // One sample per terrain cell along the path is enough; more is wasted work.
-  const steps = options.samples ?? clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
+  const steps = options.samples ?? pathSamples(horizontal, field.cellSize);
   return profileObstructionDb(rayProfile(field, from, to, { ...options, samples: steps }), freqHz);
 }
 
@@ -287,7 +288,7 @@ export function fresnelStatus(field, from, to, freqHz, options = {}) {
     return { clearanceRatio: Infinity, distanceM: 0, radiusM: 0, rxHeightM, clearFraction, clear: true };
   }
   const terminal = { x: to.x, y: to.y + rxHeightM, z: to.z };
-  const steps = options.samples ?? clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
+  const steps = options.samples ?? pathSamples(horizontal, field.cellSize);
   const profile = rayProfile(field, from, terminal, { ...options, samples: steps, freqHz, guard });
   const ratio = profile.minClearance;
   return {

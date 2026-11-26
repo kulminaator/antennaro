@@ -26,8 +26,10 @@ import { resolveSite } from '../../src/terrain/site.js';
 import { createAntennaModel } from '../../src/antenna/model.js';
 import { createDefaultParams } from '../../src/antenna/catalogue.js';
 import { computeCoverage } from '../../src/propagation/coverage.js';
+import { pathSamples } from '../../src/propagation/rf.js';
 import { createInitialState } from '../../src/app/state.js';
 import { fresnelRadiusM, wavelengthM } from '../../src/propagation/rf.js';
+import { ANTENNA, RF, WORLD } from '../../src/config.js';
 
 const FREQ = 868e6;
 
@@ -41,6 +43,7 @@ const profileWithWorst = (diffractionExcess) => ({
   diffractionD1: midPath.d1,
   diffractionD2: midPath.d2,
 });
+
 
 test('diffraction: the loss climbs through the shadow line instead of stepping over it', () => {
   const r1 = fresnelRadiusM(midPath.d1, midPath.d2, FREQ);
@@ -231,4 +234,50 @@ test('diffraction: on the map the app ships, ground only ever subtracts', () => 
     `both regimes have to exist on this map for the loop above to mean anything (${charged} charged, ${clear} clear)`);
   assert.ok(freeSpace.stats.linkedCells >= ground.stats.linkedCells,
     'turning the ground off cannot leave less of the map served');
+});
+
+test('diffraction: the ray walk is dense enough to see the mesh it walks over', () => {
+  // A ray sampled too coarsely steps clean over a narrow hill and charges nothing for the
+  // ground in the way. The app does not sample at a fixed count: `pathSamples()` gives one
+  // sample per terrain cell along the path, because the thing a ray walk can resolve is the
+  // mesh it is reading, and no cell of ground should be able to hide a crest. What that is
+  // worth was measured on the longest path the map can hold - a legal corner mast looking at
+  // the opposite corner - over ridges from one to three cells wide, each slid through the
+  // phase of the sample grid: at the old 96-sample cap (4.9 cells apart) the worst case was
+  // 6.5 dB short of the same path walked dense, at one sample per cell it is 1.9 dB, and
+  // finer than the mesh afterwards buys almost nothing. Dense answers are computed here.
+  const cell = WORLD.worldSize / (WORLD.gridSize - 1);
+  const corner = ANTENNA.siteLimitsM.max;
+  const far = { x: corner, y: 0, z: corner };
+  const dist = Math.hypot(far.x + corner, far.z + corner);
+  const steps = pathSamples(dist, cell);
+  assert.ok(dist / steps <= 1.05 * cell,
+    `the longest path gets a sample per terrain cell, got one every ${(dist / steps).toFixed(1)} m`);
+  assert.ok((7 * cell) / pathSamples(7 * cell, cell) <= cell,
+    'and a short path never steps wider than a cell either');
+
+  let worstDb = 0;
+  let coarseWorstDb = 0;
+  for (const sigma of [15, 30]) {
+    for (const crestM of [6, 16]) {
+      for (const shift of [0, 0.25, 0.5, 0.75]) {
+        // Slide the ridge by fractions of a *coarse* sample interval, so it is deliberately
+        // between the samples of an old 96-sample walk and not sitting on one.
+        const at = (shift * dist) / 96 / Math.SQRT2;
+        const field = new HeightField({ size: WORLD.gridSize, worldSize: WORLD.worldSize })
+          .fillFromFunction((x, z) => crestM * Math.exp(-(((x - at) ** 2 + (z - at) ** 2) / (2 * sigma ** 2))));
+        const mast = resolveSite(field, { x: -corner, z: -corner, heightM: ANTENNA.defaultHeightM });
+        const walk = (n) => profileObstructionDb(rayProfile(field, mast, far, { samples: n, freqHz: FREQ }), FREQ);
+        const dense = walk(4096);
+        worstDb = Math.max(worstDb, Math.abs(walk(steps) - dense));
+        coarseWorstDb = Math.max(coarseWorstDb, Math.abs(walk(96) - dense));
+      }
+    }
+  }
+  assert.ok(worstDb < 2.5,
+    `the app's walk was up to ${worstDb.toFixed(2)} dB away from a dense walk of the same paths`);
+  // The test has to be able to fail: the same paths walked at the old cap do fail it.
+  assert.ok(coarseWorstDb > worstDb + 1.5,
+    `96 samples gave ${coarseWorstDb.toFixed(2)} dB of error against ${worstDb.toFixed(2)} at the shipped rule - `
+    + 'if that gap closes, this test is measuring nothing');
 });
