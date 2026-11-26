@@ -91,11 +91,14 @@ export const PRESETS = Object.freeze([
       designId: 'biquad-reflector',
       params: Object.freeze({ turns: 2, reflectorSpacingLambda: 0.25, beamTiltDeg: 0 }),
       aim: Object.freeze({ azimuthDeg: 270, tiltDeg: 2 }),
-      // 25 m, yet the bumps still cut the link at 1.3 km while the budget allows 3.0 km.
-      heightM: 25,
+      // The biquad's gain is now derived from its 69-degree beam (8.1 dBi, not the 12.4 it
+      // used to claim), so at 25 m the bumps leave almost nothing lit. 32 m and a slightly
+      // keener receiver give it 517 linked points - and the story is still the point: a
+      // 3.32 km budget, ground that lets it reach 1.36 km.
+      heightM: 32,
       maxRangeM: RF.defaultMaxRangeM,
       txPowerDbm: 10,
-      rxSensitivityDbm: -80,
+      rxSensitivityDbm: -85,
     }),
   }),
 ]);

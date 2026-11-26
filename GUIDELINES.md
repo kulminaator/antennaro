@@ -290,8 +290,19 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   antenna moves. If a future feature wants the ground to depend on the antenna, that
   is where it was already tried and removed.
 - **Antenna pattern** is separable azimuth × elevation, evaluated per direction.
-  Catalogue entries carry `gainDbi(params)` and `pattern(params)`; the model
-  adds aim, tilt and electrical downtilt, and clamps to `PATTERN_FLOOR_DB`.
+  Catalogue entries carry `pattern(params)` and, for directional designs,
+  `beamwidths(params)`; the model adds aim, tilt and electrical downtilt, and clamps to
+  `PATTERN_FLOOR_DB`.
+- **A directional design's gain is derived from its beam, never typed next to it**:
+  `gain = krausDirectivityDbi(H, V) + 10*log10(ANTENNA.apertureEfficiency[id])`, using the
+  same `beamwidths(params)` the pattern is drawn from. Kraus's `41253 / (H * V)` is an
+  *upper* bound - efficiency may never exceed 1 - and it does not apply to a 360 degree
+  plane, so the two omni designs keep an array-factor gain
+  (`2.15 + 10*log10(sections) - 1.0`). Two gain models in one file is deliberate; do not
+  "unify" them into one formula that fits neither. The bug this rule exists to prevent: a
+  69 x 69 degree biquad charging the link budget with 12.4 dBi when its ceiling is 9.4,
+  which made a small wide antenna outrange a long Yagi and looked to users like every
+  design predicted the same map. Enforced by `tests/unit/antennaphysics.test.js`.
 - **Coverage** evaluates the link budget per cell: EIRP toward the cell, minus
   free-space loss, minus knife-edge diffraction over the sampled ground profile
   (with `kFactor` Earth bulge), minus clutter. Levels are **margin over the

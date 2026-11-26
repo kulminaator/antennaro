@@ -189,21 +189,22 @@ of the five is cut off by the study range or by the edge of the map, and a unit 
 if one ever is (`coverage: no preset is cut off by our own limits`).
 
 - **Reach down the valley** - long Yagi pointed south, tilted into the valley floor (the
-  picture above). 2.54 km of link against a 2.58 km budget, and 99 % of those linked
+  picture above). 2.48 km of link against a 2.50 km budget, and 99 % of those linked
   points keep the first zone clear: an open valley is good real estate.
 - **Mountain shadow** - a high omni looking north; watch the dead zone appear behind the
   ridge, and the second dead zone in the far range's shadow. 7064 linked points, last one
   at 2.04 km of a 2.05 km budget.
 - **Down the flat field** - Yagi east, where the link budget rather than the ground is
-  the limit: the last link sits at 1913 m of a 1913 m budget, and 92 % of the linked
+  the limit: the last link sits at 2004 m of a 2018 m budget, and 91 % of the linked
   points are zone-clear. This only works with the mast at 25 m; the same antenna at 10 m
-  dies at 837 m, because a terminal on the ground has a radio horizon.
-- **Over the bumps** - biquad west: 3.05 km of budget, and the ground lets it reach
-  1.30 km. Gain helps; grazing rays over the humps do not.
+  dies at 897 m and keeps only 21 % of its few links zone-clear, because a terminal on the
+  ground has a radio horizon.
+- **Over the bumps** - biquad west: 3.32 km of budget, and the ground lets it reach
+  1.36 km. Gain helps; grazing rays over the humps do not.
 - **Sector around the site** - patch panel with electrical downtilt: the beam is tipped
-  into the ground, so the served ring hugs the mast. 3571 linked points, the last at
-  2.86 km against a 2.92 km budget. Along the depressed boresight the first 200 m keep
-  their first Fresnel zone clear and nothing past 400 m does - 56 % of its linked points
+  into the ground, so the served ring hugs the mast. 3838 linked points, the last at
+  3.01 km against a 3.08 km budget. Along the depressed boresight the first 200 m keep
+  their first Fresnel zone clear and nothing past 400 m does - 54 % of its linked points
   are zone-clear, the worst of the five, because a panel aiming at the dirt cuts its own
   zone.
 
@@ -225,7 +226,10 @@ ridge can cost 2 dB on one path and 25 dB on another.
 
 At the default 10 dBm into a receiver that hears −80 dBm, the five designs have these
 free-space ranges, and that is the order the pictures follow when the ground allows it:
-dipole 0.94 km, collinear 1.67 km, patch 1.56 km, Yagi 2.20 km, biquad 3.05 km.
+Yagi 2.20 km, biquad 1.86 km, collinear 1.67 km, patch 1.57 km, dipole 0.94 km. A
+directional design's gain here is *derived from the beam it draws* (see
+[Antenna physics](#antenna-physics-why-a-wide-antenna-cannot-have-long-reach) below), so
+no slider can buy a gain its beamwidth would not survive.
 
 ### What the edge of the colour is
 
@@ -261,16 +265,47 @@ ground cannot rescue the link. `coverage: the budget pre-filter cannot move the 
 boundary` proves it on the real map - same linked set, same bands, bit-identical
 decibels at every walked point, and every dismissed point demonstrably unreachable.
 
+### Antenna physics: why a wide antenna cannot have long reach
+
+Gain and beamwidth are the same fact stated twice. An antenna that puts 12.4 dBi into a
+beam 69 degrees wide in both planes is not a strong antenna, it is two numbers that were
+never reconciled - a 69 x 69 degree beam holds about 9.4 dBi, and that ceiling is
+arithmetic, not a preference. This app now derives every directional design's gain from
+the beamwidths it draws, times an aperture efficiency for the losses a real build has
+(0.60 for a Yagi, 0.75 for a biquad, 0.55 for a patch; `ANTENNA.apertureEfficiency`), so
+the lobe on screen and the decibels in the link budget cannot disagree:
+
+| design | peak gain | -3 dB beamwidth | free-space range at 10 dBm / -80 dBm |
+| --- | --- | --- | --- |
+| Yagi (7 directors) | 9.6 dBi | 42 x 66 deg | 2.20 km |
+| Biquad with plate reflector | 8.1 dBi | 69 x 69 deg | 1.86 km |
+| Collinear (4 sections) | 7.2 dBi | 360 x 45 deg | 1.67 km |
+| Patch panel | 6.7 dBi | 72 x 68 deg | 1.57 km |
+| Half-wave dipole | 2.2 dBi | 360 x 78 deg | 0.94 km |
+
+The two omni designs keep an array-factor gain instead - a half-wave dipole is 2.15 dBi and
+N in-phase sections add `10*log10(N)` less a decibel for the feed - because a 360 degree
+azimuth plane is not a main lobe and the beam-to-gain arithmetic above does not apply to it.
+The reflector plate on the biquad still earns its keep, but in the front-to-back ratio
+(17 dB at a close plate, 26 dB at a far one), which is what a plate actually buys.
+
 ### Why two antennas of different gain can look the same size
 
 They are not the same, and the numbers say so; but on this ground the difference is often
-not in *range*. At the map centre with the default mast height, the Yagi, the biquad and
-the patch all stop at 899 m even though their budgets are 2.20 km, 3.05 km and 1.56 km:
-their beams run straight into the rising ground around the centre. Put them on the flat
-field with the mast at 40 m and each one reaches within a few per cent of its own
-free-space figure, and the ratios of their reaches match the ratios of their budgets to
-within 5 % - both halves of that are browser tests, so the app cannot quietly stop
-showing the difference.
+not in *range*. On the flat field west of centre with the mast at 40 m, the five designs
+reach 0.93, 1.39, 1.66, 1.70 and 2.17 km in exactly the order of their gains. The dipole,
+collinear and Yagi each finish within 1.5 % of their own free-space figures; the patch and
+the biquad get to 89 % and 91 % of theirs, because a beam that narrow-loud still has edges
+and those edges find rising ground at the far end of the field. That ordering is a browser
+test, so the app cannot quietly stop showing the difference.
+
+Move the same antennas to the map centre at the default 10 m mast and the order scrambles:
+the Yagi reaches 0.96 km of its 2.20 km budget, the patch 0.93 km of 1.57 km, and the
+biquad - lowest gain of the three - reaches furthest at 1.24 km of 1.86 km. Nothing is
+broken. A narrow beam pointed at the rise east of the centre drives straight into it, while
+a wide beam spills past the same rise onto ground that is still in sight. Gain is a
+property of the antenna; range is a property of the antenna *and* the ground, and the map
+is where you see which of them is answering.
 
 ### Decibels are not the same as a working link
 
