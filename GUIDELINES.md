@@ -46,8 +46,9 @@ src/             application source, layered (see §3)
   core/          eventbus, frame loop
   terrain/       height field, generators, terrain mesh
   antenna/       catalogue, pattern maths, aim frames, model, meshes
-  propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, one path's
-                 two questions (`pathtrace`), coverage sweep, coverage bookkeeping
+  propagation/   rf algebra, line-of-sight/diffraction/Fresnel clearance, the multi-edge
+                 screen sum (`diffraction`), one path's two questions (`pathtrace`),
+                 coverage sweep, coverage bookkeeping
                  (`coveragestats`), coverage mesh, Fresnel zone mesh
   app/           state reducer, presets, controller, reports (coverage + summaries),
                  actions, viewport, camera, pointer
@@ -187,7 +188,14 @@ mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
 how a failed link is painted (`RF.noLinkAlpha`, with `COLOURS.rangeLimit` for the ring
 that names the work area), the Fresnel criterion
 (`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
-is stated for - and `RF.fresnelEndpointGuard`), the `FRESNEL` block (mesh density,
+is stated for - and `RF.fresnelEndpointGuard`), how far a ray walk samples
+(`RF.profileMaxSamples`, which is a ceiling on absurd path lengths and not a limit this
+map reaches - the real rule is `pathSamples()` in `rf.js`: **one sample per terrain
+cell**, because a crest 15 m wide does not exist for a walk that samples every 100 m, and
+the difference measured on this map is 6.5 dB of worst-case error against 1.9 dB), the
+diffraction model (`RF.diffractionEndpointGuard` and `RF.diffractionNearEndM`, which keep
+the two ray ends out of the screen list, and `RF.diffractionEdgeLimit` - how many of the
+screens found along a path are actually superposed), the `FRESNEL` block (mesh density,
 opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`), the
 `COLOURS.fresnel*` stops of the zone ramp, the range gradient
 (`RF.gradientMaxMarginDb` - measured, not guessed: margin only falls 20 dB per decade of
@@ -222,8 +230,12 @@ that nobody would ever tune from the panel (`ORBIT_SPEED`, `HUD_REFRESH_MS`). Th
 two borderline cases are deliberately declared next to the maths they belong to -
 `PATTERN_FLOOR_DB` in `antenna/pattern.js` and `NEAR_FIELD_SKIP_FACTOR` in
 `propagation/coverage.js` - because moving them to config would separate a model
-from the constant that defines where the model stops being meaningful. Both are
-named, exported or commented, and pinned by tests; neither is a magic number
+from the constant that defines where the model stops being meaningful. A third joins
+them in `propagation/diffraction.js`: `KIRCHHOFF_FIT_FLOOR_V`, the value of the signed
+screen parameter below which the fitted Kirchhoff curve is no longer used at all. It is
+not a knob - it is where the fit stops being a fit - and putting it in `config.js` would
+invite a tuning that the physics does not support. All three are
+named, exported or commented, and pinned by tests; none is a magic number
 inline in an expression.
 
 ## 5. Coordinates and frames
@@ -319,8 +331,9 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   which made a small wide antenna outrange a long Yagi and looked to users like every
   design predicted the same map. Enforced by `tests/unit/antennaphysics.test.js`.
 - **Coverage** evaluates the link budget per cell: EIRP toward the cell, minus
-  free-space loss, minus knife-edge diffraction over the sampled ground profile
-  (with `kFactor` Earth bulge), minus clutter. Levels are **margin over the
+  free-space loss, minus the diffracted loss over the sampled ground profile - screens
+  found on a `kFactor` Earth, superposed, see the shadow note below - minus clutter.
+  Levels are **margin over the
   receiver sensitivity**, so the legend moves when the user changes sensitivity.
   The sweep runs over the **whole map** on a grid that is a deliberate decimation of the
   ground (`RF.coverageStride`: 15 m terrain, 30 m coverage, 90 ms instead of 734 ms for
@@ -404,20 +417,70 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   inside each row: the day the ramp top and the RSSI band boundaries stopped coinciding,
   sampling the ramp at band boundaries produced two legend rows in one colour, which is a
   legend that describes a picture the map does not paint.
-- **The earth is round and the app says so.** `rf.js` owns `earthBulgeM(d1, d2)` and
+- **A shadow starts at 0 dB, and the ray has to walk the mesh to see one.** Terrain
+  shadowing is `propagation/diffraction.js`: a signed screen parameter (`v` positive where
+  ground stands above the ray, negative where the ray has room) run through the fitted
+  Kirchhoff/Lee curve, so the loss grows out of nothing as the ray begins to be covered and
+  passes the ~6 dB grazing figure at the shadow line. It used to charge nothing until the ray
+  was under the ground and then jump to the diffraction of a buried ray, which drew a hard
+  0-to-6 dB line across the map where the physics has a curve; the fit is used down to
+  `KIRCHHOFF_FIT_FLOOR_V = -0.78` and floored above it. Two more rules belong with it.
+  **A path is sampled at the resolution of the ground it walks over** - `pathSamples()` in
+  `rf.js`, one sample per terrain cell, with `RF.profileMaxSamples` only as a ceiling on absurd
+  lengths - because a narrow crest that no sample lands on cannot be found by *any* later pass
+  over the samples: the plan here was a refinement pass around the worst sample, and it is
+  unfixable by construction, since a crest no sample lands on is not the worst sample and there
+  is nothing to refine around. (The headline that motivated it - a 20 m ridge between samples
+  54 m apart charging 0 dB against 11.2 dB - was measured under the old all-or-nothing rule;
+  with the continuous screen above the same miss costs a few decibels, which is smaller and
+  still not acceptable.) Sampling at the mesh cuts the worst error a path can carry from 6.5 dB
+  to 1.9 dB, and finer than the mesh changes nothing, because there is no finer ground to see;
+  the rule is one function so that the sweep and `__sim.rayTo` cannot
+  disagree (they had: 8.77 dB reported where the map painted 8.46). **And screens accumulate**
+  - contiguous obstructed samples collapse into screens (`screenEdges`, so a long slope costs
+  one screen and not one per sample), the **tallest** `RF.diffractionEdgeLimit` of them are
+  superposed Deygout-style - each measured from the shadow the screens before it cast - and
+  the sum is floored at the most significant screen alone, which is what keeps a
+  cancellation-heavy sum from ever reporting a *cheaper* path than one ridge standing by
+  itself. 29.8 % of the paths the default configuration walks cross two or more screens
+  (72.2 % on the loudest link the panel allows), which is why this is not a corner: it moved
+  22.1 % of the cells of the default map, by up to 15.7 dB. What is *not* true, and was
+  assumed here first: the sum is not monotone in the height of a **near** screen - lifting the
+  ridge you look over deepens the shadow behind it (13.31 dB with an 8 m near ridge, 9.99 dB
+  with a 12 m one). Bullington's max-of-singles is not better (non-monotone and non-reciprocal
+  by 3 dB), so the behaviour is documented, pinned by `tests/unit/multiedge.test.js`, and
+  asserted as monotone only in the **last** screen, where it genuinely is.
+- **The earth is round, and the ray bows *down*.** `rf.js` owns `earthBulgeM(d1, d2)` and
   `radioHorizonM(h1, h2)` (`Infinity` for a flat earth, because a flat earth has no
   horizon), `los.js` walks rays over that bulge, and `coveragestats.describeEarth()` puts
-  `kFactor`, `earthBulgeUnderMaxLinkM` and `radioHorizonM` in the stats so the HUD can
-  quote what the curvature was worth instead of leaving the reader to suspect the map. The
-  honest finding, measured: on a 5.2 km map the bulge is centimetres, the horizon is off
-  the picture for every legal mast and terminal, and coverage is never ended by curvature
-  - pinned by `tests/unit/curvature.test.js`, including the flat-plane extreme (lowest
-  mast, absurd budget, still `map-edge`). Do not stage a horizon-limited demo to make the
-  row interesting. Two related rules: **neither end of a ray may be the obstacle**
+  `kFactor`, `earthBulgeUnderMaxLinkM`, `radioHorizonM`, `groundHorizonM` and `worldSizeM` in
+  the stats so the HUD can quote what the curvature was worth instead of leaving the reader to
+  suspect the map. The convention that had the sign wrong for months, in writing, because it is
+  the kind of bug that hides: the **height field is a planar datum**, so the equivalent-round-earth
+  transform leaves the ground where it is and bends the **ray** - `rayY = lerp(from, to) - bulge`,
+  minus, always. Adding the bulge lifted every ray over every obstacle and made the earth help
+  the link; nothing looked wrong, because coverage still worked. It is now pinned by the one
+  fact that cannot be gotten wrong twice: at the radio horizon of the two heights a path is
+  walked between, `rayProfile` reports a ray that exactly grazes the ground, clear inside that
+  horizon and obstructed by the earth itself beyond it (`tests/unit/raycurvature.test.js`, with
+  a `kFactor: 0` control for the same path). The honest finding, re-measured, has two halves:
+  curvature still **never ends the coverage picture** on a 5.2 km map - flat plane, the lowest
+  mast, an absurd budget, still `map-edge` - but the earth is the *obstruction* for 2232 cells
+  at the panel's 0.5 m mast (all of them 3 km or farther out) and for none at 1 m. So quote
+  both horizons: `radioHorizonM` (mast plus `RF.fresnelRxHeightM`) is off this map for every
+  legal mast, while `groundHorizonM` - the same formula against a terminal lying on the ground -
+  is inside it for any mast below about 2 m, and the HUD's `beyondMap` sentence appends that
+  distance when it is. `coverage: the earth does hide part of this map, from the mast height
+  that can see it` pins both directions, and
+  `browser: at a low mast the curvature row says what the earth is hiding` reads the panel
+  itself, because which sentence is printed is presentation. Do not stage a horizon-limited
+  demo to make the row interesting; and do not let the reassuring half silence the other one.
+  Two related rules: **neither end of a ray may be the obstacle**
   (the transmitter is in the air and the receiver is the endpoint - including them made
   every clear path report a block at its own far end), and *Terrain shadowing
-  (diffraction loss)* is a **named** flat-earth mode: it suppresses dB, not the curved
-  zone walk, and its label says exactly that.
+  (diffraction loss)* is a **named** flat-earth mode: it suppresses every diffracted dB - the
+  screens, the accumulation, all of it - but not the curved zone walk, and its label says
+  exactly that.
 - `app/reports.js` computes the reference link the volume is drawn around - the boresight
   out to where it meets the ground, one receiver height above it - and `propagation/fresnelmesh.js` (L4) turns
   that link into a tube. `FRESNEL.radialExaggeration` is the only reason it is
