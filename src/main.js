@@ -8,7 +8,8 @@
  *
  * URL parameters (all optional, meant for testing and shareable links):
  *   ?design=yagi&seed=1234&azimuth=90&tilt=-4&height=12&siteX=400&preset=valley-reach
- *   &view=bands|gradient|zone   how the coverage is painted
+ *   &view=steps|zone   how the coverage is painted; `bands` and `gradient` are still taken as
+ *                    `steps`, which replaced both of them
  *   &fresnel=1       the Fresnel-zone volume on, and the coverage view set to `zone`
  *   &manual=1        do not auto-start the animation loop (headless tests)
  *   &nohud=1         do not create the read-out panel
@@ -25,6 +26,16 @@ import { createAbout } from './ui/about.js';
 import { createHud } from './ui/hud.js';
 
 const HUD_REFRESH_MS = 400;
+
+/**
+ * Coverage views that no longer exist. `bands` and `gradient` were two readings of the same
+ * signal strength - four flat steps, and a continuous ramp between them - and the ramp was the
+ * one nobody could read: its stops sat at L* 76/89/76, its two ends 0.4 apart, and under
+ * deuteranopia it separated 23 % of the cells on a default map. One stepped scale replaces both,
+ * so old links (bookmarks, screenshots, the README) still land on the picture they meant.
+ * Translated here, at the URL boundary: the reducer is strict about select values on purpose.
+ */
+const LEGACY_COVERAGE_VIEWS = Object.freeze(['bands', 'gradient']);
 
 function readInitialState(params) {
   const initialState = {};
@@ -50,7 +61,10 @@ function readInitialState(params) {
   // version wrote `initialState.display = { showFresnel: true }`, which silently switched
   // the coverage overlay, the pattern and the labels off as well.
   const display = { ...initialState.display };
-  if (params.get('view')) display.coverageView = String(params.get('view'));
+  if (params.get('view')) {
+    const view = String(params.get('view'));
+    display.coverageView = LEGACY_COVERAGE_VIEWS.includes(view) ? 'steps' : view;
+  }
   if (params.has('fresnel')) {
     const on = params.get('fresnel') !== '0';
     display.showFresnel = on;

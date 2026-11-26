@@ -17,3 +17,10 @@ Nothing outside the alias table mentions the deleted view, and old links still r
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- `view=gradient` never hid the pattern any more - that special-casing went with the view
+  separation work - so this step is only the alias table plus the URL doc line.
+- The legend click key is `${index}:${colour}`, built by the controller and compared against the
+  controller's own `__levels` entries; the HUD's DOM `data-level` attribute is the label string and
+  never reaches the handler. To be re-checked when the app boots again: tests/browser/interaction
+  .test.js covers legend isolate/mute (step-011), and any legend-present browser test in step-007.
