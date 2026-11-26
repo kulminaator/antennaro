@@ -143,3 +143,32 @@ against summing the eight tallest it costs 0.6 dB of mean but up to 29.1 dB on i
 paths (7.3 % of paths lose >1 dB, 2.1 % lose >10 dB, all on cells already far past dead). No
 cell crosses the sensitivity line at either configuration, so 3 stands - as a stated model
 choice, now asserted: `edgeLimit: 1` must equal the tallest screen alone.
+
+## Task closed
+
+`npm run verify`: `vendor ok - three 0.187.0, three.module.min.js 732 KiB, license + notice
+present`, `lint ok - 45 src, 15 tools, 27 tests file(s)`, `all 26 test file(s) passed in
+71422 ms`.
+
+Sweep cost over the whole task, median of three on one probe: default configuration
+57 ms -> 46 ms (mesh sampling, which over-sampled short paths less) -> 49 ms (multi-edge);
+the loudest whole-map sweep 172 ms -> 226 ms -> 270 ms.
+
+One sentence each, defect -> fix -> test:
+1. The earth bulged the wrong way into the ray, so curvature helped links instead of hiding
+   ground - subtract it, anchor both ray ends, and tie the quoted horizon to the grazing ray;
+   `tests/unit/raycurvature.test.js`.
+2. A shadow began at 6 dB - charge the loss from the signed screen parameter so it grows out of
+   0 dB and crosses ~6 dB at the shadow line; `diffraction: the loss climbs through the shadow
+   line instead of stepping over it`.
+3. Narrow crests were invisible to a 54 m sample grid, and no refinement pass can find a crest
+   no sample lands on - walk at one sample per terrain cell through one shared `pathSamples()`;
+   `diffraction: the ray walk is dense enough to see the mesh it walks over`.
+4. Ridges behind ridges were free - sum screens Deygout-style in the new
+   `src/propagation/diffraction.js`, floored at the most significant screen alone, wired through
+   `profileObstructionDb` so the map and `__sim.rayTo` cannot disagree;
+   `tests/unit/multiedge.test.js`.
+5. The curvature row said "the earth curves away long before this map ends" at a 0.5 m mast
+   where 2232 cells are earth-obstructed - it now also quotes the horizon of a terminal lying on
+   the ground when that is inside the map;
+   `browser: at a low mast the curvature row says what the earth is hiding`.

@@ -16,14 +16,17 @@ are: the map never reshapes itself to suit the antenna. Put the mast on a ridge 
 it stands on the ridge, with the ground falling away beside it.
 
 ![An omni dipole at the centre of a 5.2 km map, painted in the range gradient: a warm
-core right at the mast, pale yellow as the link's margin shrinks, and pink for the points
-that only just make the receiver - which is almost the whole lit area, because this budget
-is 0.94 km and there is nowhere to hide. The wide pale band beyond the pink is ground the
-sweep asked about and lost to the terrain, painted faint on purpose; beyond that the map is
-bare, because the antenna's own budget cannot reach it and it was never measured. The
-read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km", "836
-of 30624 points (2.7 % of the map)", "29.6 % of ground a link could reach", and under it
-"Curvature - k 1.41 - the ray bows 0.012 m over the last 0.94 km link".](docs/screenshot.png)
+core right at the mast, pale yellow arms where the link still has room, and pink for the
+points that only just make the receiver - 770 of the 836 linked cells, because this budget
+is 0.94 km and there is nowhere to hide. The wedge missing on the right is the west: this
+antenna is omnidirectional, so a direction with no colour is ground, not gain (0 % of the
+walked points link in each of SW, W and NW). The wide translucent band beyond the pink is
+ground the sweep asked about and lost to the terrain, painted faint on purpose; beyond that
+the map is bare, because the antenna's own budget cannot reach it and it was never measured.
+The read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km",
+"836 of 30624 points (2.7 % of the map)", "29.6 % of ground a link could reach", "73.7 %
+(> 6 dB diffracted)", and under it "Curvature - k 1.41 - the ray bows 0.012 m over the last
+0.94 km link; the earth curves away long before this map ends".](docs/screenshot.png)
 
 ## Run it
 
@@ -199,7 +202,14 @@ limited by a bad link can be told apart from one limited by a URL that asked for
 impossible. `?range=99999&siteX=99999` on a 5.2 km map, for instance, applies 6000 m - the
 widest work area there is, past the map itself - and 2500 m of east offset, and says so.
 
-![The valley scenario in the range gradient: a 10-director Yagi aimed south, yellow where the link has room near the mast, pale yellow down the valley floor, and pink as it dies at 2.48 km of a 2.50 km budget - in the middle of the map, not at its edge. The mountain side stays bare.](docs/screenshot-valley.png)
+![The same map in the *Reach down the valley* scenario: a 10-director Yagi 24 m above the
+centre, azimuth 180 and 6 deg of mechanical tilt, so the beam runs down the valley to the
+south - the drape is a tongue, not a disc. 19 cells have 20 dB or more to spare (the warm
+core at the mast), 209 have 10-20 dB along the valley floor, and 1791 are the dying pink rim
+that ends at 2481 m on a bearing of 181 deg against a 2.50 km free-space budget: the picture
+ends in the middle of the map, not at its edge. The rising ground behind the mast stays
+bare, and the read-out says so - 2019 of 30624 points, 84.2 % of the ground a link could
+reach.](docs/screenshot-valley.png)
 
 ## The five designs
 
@@ -420,7 +430,7 @@ colour (the remaining 20 are a band higher); the gradient splits the same 816 in
 58 weaker and 770 at the limit, and that split is the difference between "it links"
 and "it links, this far, with this much to spare".
 
-| ![The valley scenario in the signal-bands view: 1958 of its 2019 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 two bands above that.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2019 linked points, in the range gradient: 19 strong near the mast, 209 with room to spare, 1791 at the dying pink rim.](docs/screenshot-valley.png) |
+| ![The valley scenario in the signal-bands view: 1958 of its 2019 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 two bands above that. The read-out is identical to the gradient picture - best -48.1, median -77.4, worst -119.4 dBm - because a view changes a cell's colour and nothing else.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2019 linked points, in the range gradient: 19 strong near the mast, 209 with room to spare, 1791 at the dying pink rim, and a warm core you can only see once the bands are taken away.](docs/screenshot-valley.png) |
 | --- | --- |
 | *signal bands* | *range gradient* |
 
@@ -542,7 +552,7 @@ largest zone the antenna has to keep clear anywhere it is looking. Its radius is
 widened by a fixed factor so it is visible next to a five-kilometre map; at
 `FRESNEL.radialExaggeration: 1` you would see the truth, which is a hairline.
 
-![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it (99.8 % of the linked points are clear - an open valley is good real estate), and the pale translucent band along the boresight is the zone volume itself. Every number in the read-out is identical to the valley picture above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
+![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it, with a few purple patches where the ground stands above the ray - 99.8 % of the 2019 linked points are clear and only 5 are cut, because an open valley is good real estate - and the pale translucent band running out along the beam is the first-zone volume itself. Every number in the read-out is identical to the valley pictures above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
 
 Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
 cut outright - the ground stands above the ray. The zone legend also carries the
