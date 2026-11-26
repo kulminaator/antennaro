@@ -20,6 +20,8 @@ import { APP, PATHS } from '../config.js';
 const ABOUT = Object.freeze({
   /** Public web address of the source, not the SSH remote someone would push to. */
   repoUrl: 'https://github.com/kulminaator/antennaro',
+  /** Where the same files run for anyone who would rather click than clone. */
+  homepageUrl: 'https://kulminaator.github.io/antennaro/',
   licence: 'MIT',
   /** Licence of *this* simulator, relative to the page. */
   licencePath: 'LICENSE',
@@ -37,6 +39,7 @@ export function aboutFacts() {
   return Object.freeze({
     version: APP.version,
     repoUrl: ABOUT.repoUrl,
+    homepageUrl: ABOUT.homepageUrl,
     licence: ABOUT.licence,
     licencePath: ABOUT.licencePath,
     copyright: ABOUT.copyright,
@@ -126,6 +129,7 @@ export function createAbout(options = {}) {
   dialog.appendChild(versionLine);
 
   const list = el('dl', 'about-list');
+  list.appendChild(row('Try it', [link(facts.homepageUrl, facts.homepageUrl)]));
   list.appendChild(row('Source', [link(facts.repoUrl, facts.repoUrl)]));
   list.appendChild(row('Licence', [
     el('span', null, `${facts.licence} - full text in `),

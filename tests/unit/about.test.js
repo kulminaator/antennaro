@@ -27,6 +27,24 @@ test('about: the source link is a public web address, not a push remote', () => 
   assert.match(facts.repoUrl, /^https:\/\/github\.com\/[^/]+\/[^/]+$/, 'must be browsable as typed');
   assert.ok(!facts.repoUrl.endsWith('.git'), 'a .git url is for pushing, and 404s in a browser');
   assert.ok(!facts.repoUrl.endsWith('/'), 'a trailing slash is an accident, not a style');
+});
+
+test('about: the live deployment is the same project as the source', () => {
+  const facts = aboutFacts();
+  const repo = new URL(facts.repoUrl);
+  const home = new URL(facts.homepageUrl);
+  assert.match(facts.homepageUrl, /^https:\/\//, 'a link people click must not need a clone');
+  const [owner, repository] = repo.pathname.split('/').filter(Boolean);
+  // GitHub's rule for a project page: the owner moves into the hostname and the
+  // repository becomes the first path segment. If that ever stops being true, the
+  // link in the About dialog is broken and this is where we find out.
+  assert.equal(home.hostname.split('.')[0], owner, 'same owner');
+  assert.ok(home.hostname.endsWith('.github.io'), 'a project page, not some other host');
+  assert.equal(home.pathname.split('/').filter(Boolean)[0], repository, 'same repository');
+});
+
+test('about: the licence id agrees with package.json', () => {
+  const facts = aboutFacts();
   const pkg = JSON.parse(readFileSync(join(TOOL_PATHS.root, 'package.json'), 'utf8'));
   assert.equal(facts.licence, pkg.licence ?? pkg.license, 'the dialog and package.json agree');
   assert.equal(pkg.license, 'MIT');

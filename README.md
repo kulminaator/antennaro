@@ -141,7 +141,8 @@ map), **Save PNG** (download the current view), **Reset all** (everything, the s
 included).
 
 At the foot of the panel, **About** opens a small dialog with the three things that
-are not physics: where the source lives (https://github.com/kulminaator/antennaro),
+are not physics: where it runs (https://kulminaator.github.io/antennaro/), where the
+source lives (https://github.com/kulminaator/antennaro),
 the licence this simulator ships under (MIT, `LICENSE`), and the fact that the picture
 is drawn by three.js - MIT-licensed, vendored into `vendor/three/`, whose copyright
 notice and full licence text the dialog quotes from the files that travel with the
