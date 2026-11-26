@@ -21,9 +21,9 @@ that only just make the receiver - which is almost the whole lit area, because t
 is 0.94 km and there is nowhere to hide. The wide pale band beyond the pink is ground the
 sweep asked about and lost to the terrain, painted faint on purpose; beyond that the map is
 bare, because the antenna's own budget cannot reach it and it was never measured. The
-read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km", "844
-of 30624 points (2.8 % of the map)", "29.8 % of ground a link could reach", and under it
-"Curvature - k 1.41, the ray bows 0.012 m over the last 0.93 km link".](docs/screenshot.png)
+read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km", "836
+of 30624 points (2.7 % of the map)", "29.6 % of ground a link could reach", and under it
+"Curvature - k 1.41 - the ray bows 0.012 m over the last 0.94 km link".](docs/screenshot.png)
 
 ## Run it
 
@@ -114,7 +114,7 @@ link)`), plus a row for the bare "out of budget - not measured, not painted" are
 Changing sensitivity moves the boundaries - the colours mean "margin over what the client
 can hear", not "signal quality" in the abstract. In the **range gradient** view the same
 ground is counted three ways instead of four, against the ramp's own scale: on the default
-map 6 points have 20 dB or more to spare, 56 have 10-20, 782 have 0-10, 1984 were measured
+map 8 points have 20 dB or more to spare, 58 have 10-20, 770 have 0-10, 1992 were measured
 and lost, and 27 796 were never measured. In the **zone** view it is three rows - cut,
 partly cut, clear - quoting the receiver height the verdict was computed for, plus the
 same unmeasured row and a line saying that faint means measured-and-failed. Every legend
@@ -232,24 +232,25 @@ coverage view you had picked, and `?preset=valley-reach&fresnel=1` still gets yo
 picture (`panel: a scenario chooses ground and antenna, never the coverage view`).
 
 - **Reach down the valley** - long Yagi pointed south, tilted into the valley floor (the
-  picture above). 2.48 km of link against a 2.50 km budget, and 99 % of those linked
+  picture above). 2.48 km of link against a 2.50 km budget, and 99.8 % of those 2019 linked
   points keep the first zone clear: an open valley is good real estate.
 - **Mountain shadow** - a high omni looking north; watch the dead zone appear behind the
-  ridge, and the second dead zone in the far range's shadow. 7064 linked points, last one
-  at 2.04 km of a 2.05 km budget.
+  ridge, and the second dead zone in the far range's shadow. 7019 linked points, last one
+  at 2.04 km of a 2.04 km budget - the only preset whose farthest link is the budget itself
+  to the metre, because two ridges now charge what they take.
 - **Down the flat field** - Yagi east, where the link budget rather than the ground is
-  the limit: the last link sits at 2004 m of a 2018 m budget, and 91 % of the linked
+  the limit: the last link sits at 2000 m of a 2020 m budget, and 95 % of its 1806 linked
   points are zone-clear. This only works with the mast at 25 m; the same antenna at 10 m
-  dies at 897 m and keeps only 21 % of its few links zone-clear, because a terminal on the
+  dies at 750 m and keeps only 24 % of its 289 links zone-clear, because a terminal on the
   ground has a radio horizon.
 - **Over the bumps** - biquad west: 3.32 km of budget, and the ground lets it reach
-  1.36 km. Gain helps; grazing rays over the humps do not.
+  1.42 km across 534 points. Gain helps; grazing rays over the humps do not.
 - **Sector around the site** - patch panel with electrical downtilt: the beam is tipped
-  into the ground, so the served ring hugs the mast. 3838 linked points, the last at
-  3.01 km against a 3.08 km budget. Along the depressed boresight the first 200 m keep
-  their first Fresnel zone clear and nothing past 400 m does - 54 % of its linked points
-  are zone-clear, the worst of the five, because a panel aiming at the dirt cuts its own
-  zone.
+  into the ground, so the served ring hugs the mast. 2806 linked points, the last at
+  2.20 km against a 3.08 km budget. It has the lowest zone-clear share of the five
+  (72.8 %), and the reason is distance, not the tilt: the 2044 cells that keep the zone
+  clear sit a median 911 m out, the 762 that fail a median 1310 m - the downtilt costs this
+  antenna range, and the outer ring is where the ground gets into the zone.
 
 ## What the numbers mean
 
@@ -263,9 +264,12 @@ RSSI = transmitter power - feeder loss + antenna gain toward that cell
 Antenna gain comes from a model of each design's pattern, evaluated in the
 direction of the cell, so pointing matters and so does tilt. Free-space loss uses
 the real wavelength for your band: doubling distance or doubling frequency costs
-about 6 dB. Terrain shadowing is modelled as knife-edge diffraction along the
-actual ground profile, using standard-atmosphere Earth curvature - which is why a
-ridge can cost 2 dB on one path and 25 dB on another.
+about 6 dB. Terrain shadowing is knife-edge diffraction walked along the actual
+ground profile on a standard-atmosphere curved earth, and it is charged where the ray
+really crosses more than one obstruction: the profile is cut into screens - runs of
+samples the ray cannot pass - and the screens are added in the **Deygout** way, each one
+measured from the shadow the screens before it cast. Which is why a ridge can cost 2 dB
+on one path and 25 dB on another, and why the second ridge behind it is no longer free.
 
 At the default 10 dBm into a receiver that hears −80 dBm, the five designs have these
 free-space ranges, and that is the order the pictures follow when the ground allows it:
@@ -273,6 +277,53 @@ Yagi 2.20 km, biquad 1.86 km, collinear 1.67 km, patch 1.57 km, dipole 0.94 km. 
 directional design's gain here is *derived from the beam it draws* (see
 [Antenna physics](#antenna-physics-why-a-wide-antenna-cannot-have-long-reach) below), so
 no slider can buy a gain its beamwidth would not survive.
+
+### How a shadow begins, and how fine the ground has to be
+
+Two details of that diffraction were got wrong here first, and both are worth stating.
+
+**A shadow starts at 0 dB.** A ray that clears a ridge by a metre costs a fraction of a dB; a
+ray that exactly grazes it costs about 6 dB, which is what a knife edge charges at zero
+clearance. This app used to charge nothing at all until the ray dipped *below* the ground and
+then jump to the diffraction of a buried ray, so a cell crossing a brow went from 0 dB to
+about 6 dB in one 30 m step: a hard line on the map where the physics has a curve. The screen
+parameter is signed now - positive where ground stands above the ray, negative where the ray
+has room - and it runs continuously through zero, so the loss grows from nothing as the ray
+begins to be covered and passes the grazing figure at the shadow line. A ray that merely
+clips a crest is no longer free, and a ray that clears it by a metre is no longer charged as
+though it were buried.
+
+**The ray walk samples the mesh it walks over.** A crest 15 m wide is simply not there for a
+ray that samples every 100 m, and this map has crests that narrow: with the old fixed sample
+cap a path could be mis-stated by 6.5 dB because the one sample that mattered fell in the
+valley either side of the ridge. A path is now walked at **one sample per terrain cell** -
+15 m here - with `RF.profileMaxSamples` left as a ceiling on absurd path lengths rather than a
+limit this map reaches. That takes the worst case to 1.9 dB, and sampling finer than the mesh
+buys literally nothing, because there is no finer ground to see. The rule lives in one
+function, `pathSamples()`, so the sweep and `window.__sim.rayTo` cannot disagree; and
+`diffraction: the ray walk is dense enough to see the mesh it walks over` slides a ridge
+across the old coarse grid by fractions of a cell and fails if the coarse walk ever stops
+being measurably worse - which is how this test notices the day someone weakens the rule.
+
+The last piece is what happens when a path crosses more than one obstruction. Contiguous runs
+of obstructed samples collapse into *screens* - a long slope is one screen, not one charged
+sample after another - and each screen is diffracted from the shadow the screens before it
+cast: Deygout's method, with the total floored at whatever the single worst screen costs
+alone. Broken ground offers more screens than are worth superposing, so the **three tallest**
+are kept (`RF.diffractionEdgeLimit`) and the rest dropped. That cap is worth 0.6 dB of the
+mean and moves no cell across the sensitivity line on either the default or the loudest
+configuration - but it is a choice, not a free optimisation: on 2 % of the paths from the
+default mast the screens it discards would have added more than 10 dB, all of them on cells
+already deep in shadow, and `diffraction: the first screen is charged in full, the ones
+behind it are not` pins that the cap keeps the tallest rather than the earliest.
+
+How often any of this matters, measured: **29.8 %** of the paths the default configuration
+walks cross two or more screens (844 of 2828), and on the loudest link the panel allows -
+43 dBm into a −124 dBm receiver, where every cell on the map gets walked - **72.2 %**. Adding
+the second screen moved 22.1 % of the cells of the default map, by up to 15.7 dB, and it is
+why the ridge behind a ridge is no longer free. One visible consequence: the read-out's
+**Shadowed cells** line - the share of walked cells diffracted by more than 6 dB - now reads
+73.7 % on the default configuration, where most of those cells still link.
 
 ### What the edge of the colour is
 
@@ -300,8 +351,8 @@ which one did:
 
 Two shares are printed, because one number without its denominator is how a small link on
 a big map gets read as a broken antenna: *Cells with link* is the share of the whole map
-(the default dipole serves 844 of 30624 evaluated points - 2.8 %), while *Served within
-reach* is the share of the ground where a link was physically possible at all (29.8 %).
+(the default dipole serves 836 of 30624 evaluated points - 2.7 %), while *Served within
+reach* is the share of the ground where a link was physically possible at all (29.6 %).
 The Fresnel percentages are stated over a third denominator, the linked set, because a
 zone verdict about a point that cannot receive anything is not information.
 
@@ -335,18 +386,19 @@ The reflector plate on the biquad still earns its keep, but in the front-to-back
 ### Why two antennas of different gain can look the same size
 
 They are not the same, and the numbers say so; but on this ground the difference is often
-not in *range*. On the flat field west of centre with the mast at 40 m, the five designs
-reach 0.93, 1.39, 1.66, 1.70 and 2.17 km in exactly the order of their gains. The dipole,
-collinear and Yagi each finish within 1.5 % of their own free-space figures; the patch and
-the biquad get to 89 % and 91 % of theirs, because a beam that narrow-loud still has edges
-and those edges find rising ground at the far end of the field. That ordering is a browser
+not in *range*. Up the east-looking corridor from the centre, with the mast at the tallest
+the panel allows (40 m), the five designs reach 0.93, 1.56, 1.67, 1.86 and 2.18 km in
+exactly the order of their gains - dipole, patch, collinear, biquad, Yagi - and every one of
+them finishes within 1 % of its own free-space figure. On ground that flat and that clear,
+gain is the only thing answering, and the biquad bug would have shown up here as a design
+reaching past a wider-beamed one with less gain. That ordering is a browser
 test, so the app cannot quietly stop showing the difference.
 
-Move the same antennas to the map centre at the default 10 m mast and the order scrambles:
-the Yagi reaches 0.96 km of its 2.20 km budget, the patch 0.93 km of 1.57 km, and the
-biquad - lowest gain of the three - reaches furthest at 1.24 km of 1.86 km. Nothing is
-broken. A narrow beam pointed at the rise east of the centre drives straight into it, while
-a wide beam spills past the same rise onto ground that is still in sight. Gain is a
+Move the same antennas to the map centre at the default 10 m mast, still aimed east, and the
+order scrambles: the Yagi reaches 0.81 km of its 2.20 km budget, the patch 0.93 km of 1.57
+km, and the biquad - lowest gain of the three - reaches furthest at 0.97 km of 1.86 km.
+Nothing is broken. A narrow beam pointed at the rise east of the centre drives straight into
+it, while a wide beam spills past the same rise onto ground that is still in sight. Gain is a
 property of the antenna; range is a property of the antenna *and* the ground, and the map
 is where you see which of them is answering.
 
@@ -363,21 +415,21 @@ message is not a matter of taste.
 | **Fresnel zone clearance** | how much of the first Fresnel zone has the ground left me? | purple (zone cut) through amber (partly cut) to green (`>= 60 %` clear) |
 
 The gradient is there because the bands hide the thing people actually read off a map. On
-the default configuration the banded view paints 828 of the 844 linked cells in *one*
-colour (the remaining 16 are a band higher); the gradient splits the same 828 into 6 strong,
-56 weaker and 782 at the limit, and that split is the difference between "it links"
+the default configuration the banded view paints 816 of the 836 linked cells in *one*
+colour (the remaining 20 are a band higher); the gradient splits the same 816 into 8 strong,
+58 weaker and 770 at the limit, and that split is the difference between "it links"
 and "it links, this far, with this much to spare".
 
-| ![The valley scenario in the signal-bands view: 1963 of its 2024 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 a band above that.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2024 linked points, in the range gradient: 20 strong near the mast, 207 with room to spare, 1797 at the dying pink rim.](docs/screenshot-valley.png) |
+| ![The valley scenario in the signal-bands view: 1958 of its 2019 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 two bands above that.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2019 linked points, in the range gradient: 19 strong near the mast, 209 with room to spare, 1791 at the dying pink rim.](docs/screenshot-valley.png) |
 | --- | --- |
 | *signal bands* | *range gradient* |
 
 The scale is deliberately absolute:
 `RF.gradientMaxMarginDb` is 30 dB of margin, not "the best cell on this map", because a
 ramp that quietly re-normalises itself to whatever is on screen makes two screenshots of
-two different links incomparable. 30 dB is measured, not chosen - over the disc a link
-actually lights up, margin spans 0-28 dB on the default dipole, 0-55 on the flat-field
-scenario and 18-112 on the loudest link the panel allows, and a top of 45 painted nearly
+two different links incomparable. 30 dB is measured, not chosen - over the ground a link
+actually lights up, margin spans 0-30 dB on the default dipole, 0-34 on the flat-field
+scenario and 12-107 on the loudest link the panel allows, and a top of 45 painted nearly
 every map pink.
 
 The three views are presentation, not physics, and one browser test insists:
@@ -386,42 +438,58 @@ The three views are presentation, not physics, and one browser test insists:
 object is `deepEqual` at every stop, while the pixels do move. Switching a view repaints
 the grid the sweep already computed; it does not run a second model.
 
-### The earth is round, and now it says so
+### The earth is round, and now it hides things
 
 Rays are traced over a curved earth: the standard `k = 1.413` effective radius, the same
-figure the knife-edge diffraction uses, so the profile a ridge is measured against already
-bows. A read-out row called **Curvature** states what that curvature was worth on the
-longest link you have, in metres, and compares the smooth-earth radio horizon with the map
-you are actually looking at. On the default configuration that is
-`k 1.41 - the ray bows 0.012 m over the last 0.93 km link; the earth curves away long
-before this map ends`. On the loudest link the panel allows (43 dBm into a −124 dBm
-receiver) the last link is 3.68 km, the bulge under it 0.19 m, and the horizon 35 km -
-still four times off this 5.2 km map.
+figure the diffraction uses, so the profile a ridge is measured against already bows. The
+height field is a planar datum, so the transform leaves the ground where it is and bends the
+**ray** down toward it - which is the direction that matters. For a long time this app did
+the opposite, adding the bulge to the ray instead of subtracting it: every ray was lifted
+over every obstacle and the round earth was quietly helping the link. `rayProfile` now
+reports a ray that exactly grazes the ground at the radio horizon of the two heights it is
+walked between - clear inside it, the earth itself the obstruction beyond it - and
+`tests/unit/raycurvature.test.js` pins exactly that, because a sign is the one thing a
+propagation model can get wrong without anything looking broken.
 
-That is the honest version of a feature that would rather have been dramatic, and it was
-tested rather than asserted: a featureless plane, the lowest mast the panel allows (0.5 m),
-and a budget of 11 820 km still links every point of the map, the farthest being 3.68 km
-away at a corner (`coverage: the earth is never what ends the coverage inside this map`).
-The horizon the row quotes is the textbook one, computed for the *terminal height you set*
-- 21.9 km for the default 10 m mast with a 4 m terminal, 11.5 km for a 0.5 m mast with a 4 m
-terminal, 35.3 km for the loudest configuration - and all of those are off this 5.2 km map.
-So the curvature row exists to say so with a number, rather than to let a reader stare at a
-flat-looking map and suspect it is missing something.
+What the curve is worth here depends entirely on how high the mast is, and both halves of
+that are measured rather than asserted. Over a featureless plane with the loudest budget the
+panel allows (43 dBm into a −124 dBm receiver, a free-space budget of eleven thousand
+kilometres) every mast height still links every point of the map, the farthest being 3677 m
+away at a corner - so the curvature is not what *ends* a picture on this map, and
+`coverage: the earth is never what ends the coverage inside this map` keeps it that way. But
+at the panel's lowest mast, 0.5 m, **the earth is the obstruction for 2232 of those
+points**, every one of them between 3024 m and the corner at 3677 m, which is exactly where a
+0.5 m mast loses sight of a terminal standing on the ground: 3.0 km. Raise the mast to one
+metre and the count is nil. `coverage: the earth does hide part of this map, from the mast
+height that can see it` pins the other half.
 
-What the curved earth *does* change inside this map is the grazing geometry - it is why a
-ray that would clear a low ridge on flat ground does not clear it here, and why the worst
-clearance on a long path is worse than a flat-earth calculator says. It is not optional
-either: Fresnel verdicts are walked over the curved surface even when *Terrain shadowing
-(diffraction loss)* is off, and a unit test compares the two
+So there are two horizons in play and the read-out quotes both. The one it names is the
+textbook radio horizon for the mast and the *zone receiver height* - 21.9 km at the default
+10 m mast with a 4 m terminal, 35.3 km for the loudest configuration, 11.5 km even for a
+0.5 m mast with a terminal up at 4 m - and all of those are off this 5.2 km map. The other
+one, against a terminal lying on the ground, is 3.0 km at 0.5 m of mast and inside the map
+until the mast passes about 2 m. On the default configuration the row reads
+`k 1.41 - the ray bows 0.012 m over the last 0.94 km link; the earth curves away long before
+this map ends`; at 0.5 m the same row adds `a terminal on the ground is out of sight past
+3.00 km`, because at that height it is no longer a fact about textbooks.
+
+What the curve does to the decibels on real ground is small, and it is worth knowing how
+small: on the default configuration, of the 2828 cells whose path the sweep walked, three
+differ from the same map with a flat earth by more than 0.05 dB, the worst by 1.24 dB at
+870 m. Curvature is not a drama knob here. What it does is decide *which side of a ridge
+brow* a cell sits on - and once a screen is behind a screen, that is where the multi-edge
+sum above starts to compound ([What the numbers mean](#what-the-numbers-mean)). It is not
+optional either: Fresnel verdicts are walked over the curved surface even when *Terrain
+shadowing (diffraction loss)* is off, and a unit test compares the two
 (`coverage: switching the terrain off for dB does not flatten the earth for the zone` -
 0.228 against 0.156 first-zone radii on a grazing path).
 
 And the reason a real low mast dies in an empty valley - the horizon - is still visible
 here as a *height* effect, because it is the same geometry seen from the inside: the flat
--field scenario at 10 m of mast links 314 points and reaches 897 m of a 2018 m budget, at
-21 % zone-clear; lift the same antenna to 25 m and it links 2057 points over 2004 m at
-91 % zone-clear. Nothing about the horizon moved. What moved is that the ray and its first
-zone now have room to pass over the ground between.
+field scenario at 10 m of mast links 289 points and reaches 750 m of a 2020 m budget, at
+24 % zone-clear; lift the same antenna to the 25 m the preset ships with and it links 1806
+points over 2000 m at 95 % zone-clear. Nothing about the horizon moved. What moved is that
+the ray and its first zone now have room to pass over the ground between.
 
 ### Decibels are not the same as a working link
 
@@ -444,8 +512,8 @@ extra loss term. Charging the same ridge twice would be a bug, not a model.
 
 The point of reporting both is the population where they disagree: cells that make
 their link budget with the zone cut. On the default map at 868 MHz the omni dipole
-links 844 points and 117 of them (13.9 %) do it with the first zone cut - links that
-work on paper and misbehave in the field. Stated the other way round, 86.1 % of the
+links 836 points and 101 of them (12.1 %) do it with the first zone cut - links that
+work on paper and misbehave in the field. Stated the other way round, 87.9 % of the
 linked points are zone-clear; the 27796 points the budget dismissed are not in that
 number, because the app never asked the ground about them.
 
@@ -454,8 +522,8 @@ app rather than hidden in a constant:
 
 - **It depends on the band.** A longer wavelength is a fatter zone, so more of it to
   cut. With the same ground and the same receiver, of the points that actually link:
-  70.6 % clear at 433 MHz, 86.1 % at 868 MHz, 93.7 % at 2.4 GHz, 100 % at 5.8 GHz. Read
-  that last one carefully: at 5.8 GHz only 12 points link at all on the default
+  77.1 % clear at 433 MHz, 87.9 % at 868 MHz, 92.9 % at 2.4 GHz, 93.3 % at 5.8 GHz. Read
+  that last one carefully: at 5.8 GHz only 15 points link at all on the default
   configuration, because a 140 m budget leaves almost nothing to have an opinion about.
   The percentage is honest; the sample is the story.
 - **It depends on how high the receiving terminal is.** Measured against a receiver
@@ -474,7 +542,7 @@ largest zone the antenna has to keep clear anywhere it is looking. Its radius is
 widened by a fixed factor so it is visible next to a five-kilometre map; at
 `FRESNEL.radialExaggeration: 1` you would see the truth, which is a hairline.
 
-![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it (98.9 % of the linked points are clear - an open valley is good real estate), and the pale translucent band along the boresight is the zone volume itself. Every number in the read-out is identical to the valley picture above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
+![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it (99.8 % of the linked points are clear - an open valley is good real estate), and the pale translucent band along the boresight is the zone volume itself. Every number in the read-out is identical to the valley picture above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
 
 Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
 cut outright - the ground stands above the ray. The zone legend also carries the
@@ -491,9 +559,25 @@ reflections and multipath fading (the zone flag hints at where ground reflection
 would matter, it does not compute it), building and tree clutter (approximated by
 one flat "clutter loss" slider), rain and vegetation loss, antenna noise and
 interference, receiver desensitisation, terrain-pipe losses inside the valley
-beyond diffraction, multi-point and terrain-reflected propagation models beyond the
-single knife edge, and everything about the return path (this is one-way RSSI).
+beyond diffraction, ducting and temperature-inversion propagation, urban
+empirical models (Okumura-Hata and friends), and everything about the return path
+(this is one-way RSSI). Terrain shadowing itself is a *knife-edge* model, applied
+per obstruction and summed Deygout-style along the path: it knows about several ridges
+in a row now, but it does not know that ground can also *reflect*, that a real surface
+has a reflection coefficient and a grazing angle, or that two paths arriving a
+microsecond apart are not the same as one path that is 6 dB quieter.
 The hardware geometry is drawn to be recognisable, not to scale.
+
+Two honest oddities in the diffraction model are worth naming, because both can look like
+bugs if you go looking for monotonicity. Deygout's sum is floored at whatever the single
+worst screen costs on its own, so the total never falls below one screen; but it is not
+monotone in the height of a *near* screen, because lifting the ridge you are looking over
+throws a deeper shadow on everything behind it - measured here as 13.31 dB with an 8 m near
+ridge and 9.99 dB with a 12 m one, from the same mast. The alternative considered here,
+Bullington's rule of taking the worst single-screen loss along the path, is neither monotone
+nor reciprocal - the same two ridges driven from opposite ends disagreed by 3 dB - so it is
+not the safer choice, only a different mistake. Both behaviours are pinned by
+`tests/unit/multiedge.test.js` rather than hidden.
 
 Two limits of the *tool* are worth naming here as well, because both can be mistaken for
 physics. The study range is a work area chosen for the sweep - 3800 m by default, which is

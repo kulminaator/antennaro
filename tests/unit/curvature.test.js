@@ -141,3 +141,22 @@ test('coverage: the curvature facts it reports are the ones rf.js computes', () 
   assert.equal(radioHorizonM(2, 1, 0), Infinity, 'a flat earth has no horizon at all');
   assert.ok(radioHorizonM(40, 4) > radioHorizonM(10, 4), 'lifting the mast lengthens the horizon');
 });
+
+test('coverage: the curvature facts carry the horizon a terminal on the ground has', () => {
+  const field = planeField();
+  const tall = sweep(field, { ...LOUDEST, heightM: 12 });
+  assert.equal(tall.stats.groundHorizonM, radioHorizonM(tall.site.heightM, 0),
+    'the second horizon is the same formula with the far end on the ground');
+  assert.ok(tall.stats.groundHorizonM < tall.stats.radioHorizonM,
+    'and it is always the shorter of the two');
+  // The reason the row carries it at all: at the lowest mast the comfortable horizon is off
+  // this map while the ground-level one is inside it. If a future change makes the map
+  // smaller than both, or the low mast's horizon larger than the map, the HUD clause this
+  // fact feeds stops applying - and this assertion says so instead of going quiet.
+  const low = sweep(field, { ...LOUDEST, heightM: ANTENNA.heightLimitsM.min });
+  assert.ok(low.stats.groundHorizonM < low.stats.worldSizeM,
+    `a ${ANTENNA.heightLimitsM.min} m mast should lose a ground-level terminal inside the map, `
+    + `got ${low.stats.groundHorizonM.toFixed(0)} m of ${low.stats.worldSizeM.toFixed(0)}`);
+  assert.ok(low.stats.radioHorizonM > low.stats.worldSizeM,
+    'while the horizon for a terminal with any height is still off it');
+});

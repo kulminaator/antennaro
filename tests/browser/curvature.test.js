@@ -147,3 +147,35 @@ test('browser: the app lowers its ray by exactly the earth, wherever the path is
     assert.deepEqual(session.errors(), []);
   });
 });
+
+test('browser: at a low mast the curvature row says what the earth is hiding', async () => {
+  await withApp(async (session) => {
+    await session.settle();
+    const hud = () => session.evaluate(String.raw`(() => {
+      const line = document.querySelector('.hud').innerText.split('\n');
+      const at = line.indexOf('Curvature');
+      return at < 0 ? 'no curvature row' : line[at + 1];
+    })()`);
+
+    // Read straight off the panel, because which sentence gets printed is presentation, not
+    // state - `__sim` has the facts, the row has the wording, and the wording is the part
+    // that used to be half a story.
+    const tall = await hud();
+    assert.ok(!tall.includes('out of sight past'),
+      `a 10 m mast keeps a ground-level terminal inside this map, so the row must not warn: ${tall}`);
+
+    await session.patch({ heightM: ANTENNA.heightLimitsM.min });
+    await session.settle();
+    const stats = await session.sim('coverage');
+    const low = await hud();
+    assert.ok(Math.abs(stats.groundHorizonM - groundTerminalHorizonM(ANTENNA.heightLimitsM.min)) < 1e-6,
+      'the row is built from the geometric horizon of a terminal lying on the ground');
+    assert.ok(stats.groundHorizonM < stats.worldSizeM && stats.radioHorizonM > stats.worldSizeM,
+      'that horizon is inside this map while the one with a receiver on it is off it');
+    assert.ok(low.includes('out of sight past'),
+      `so the short mast's row has to say so, and it says: ${low}`);
+    assert.ok(low.includes(`${(stats.groundHorizonM / 1000).toFixed(2)} km`),
+      `naming the distance it quotes, not a vague warning: ${low}`);
+    assert.deepEqual(session.errors(), []);
+  });
+});

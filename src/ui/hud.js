@@ -74,7 +74,13 @@ const km = (metres) => `${(metres / 1000).toFixed(2)} km`;
  */
 const CURVATURE_SENTENCES = Object.freeze({
   beyondMap: (c) => `k ${c.kFactor.toFixed(2)} - the ray bows ${shortMetres(c.earthBulgeUnderMaxLinkM)} `
-    + `over the last ${km(c.maxLinkedRangeM)} link; the earth curves away long before this map ends`,
+    + `over the last ${km(c.maxLinkedRangeM)} link; the earth curves away long before this map ends`
+    // ... except to a terminal lying on the ground, whose horizon is inside this map for any
+    // mast below about 2 m. A short mast has that horizon, and then it is the sentence worth
+    // reading: the curve is hiding ground, right here.
+    + (c.groundHorizonM > 0 && c.groundHorizonM < c.worldSizeM
+      ? `; a terminal on the ground is out of sight past ${km(c.groundHorizonM)}`
+      : ''),
   horizonBeyondLink: (c) => `k ${c.kFactor.toFixed(2)} - ray bows ${shortMetres(c.earthBulgeUnderMaxLinkM)} `
     + `over ${km(c.maxLinkedRangeM)}; a smooth earth would let these heights reach ${km(c.radioHorizonM)}`,
   horizonBinding: (c) => `k ${c.kFactor.toFixed(2)} - the smooth-earth horizon ${km(c.radioHorizonM)} is `
@@ -210,8 +216,10 @@ export function createHud(options) {
     // The binding limit in words. When it is `'budget'` that is good news: the picture
     // ends where the link does. Otherwise the user is looking at a border of the app.
     set('rangeLimit', (LIMIT_SENTENCES[cov.limitingFactor] ?? LIMIT_SENTENCES.budget)(cov));
-    // Which of the two curvature numbers has anything to say about this picture. On a map
-    // smaller than the horizon - every map this app draws - that is the "beyondMap" one.
+    // Which of the curvature numbers has anything to say about this picture. On a map
+    // smaller than the horizon - which it is for every mast with a terminal that has any
+    // height at all - that is the "beyondMap" sentence, and that sentence carries its own
+    // clause for the horizon a ground-level terminal really does cross inside the map.
     set('curvature', cov.linkedCells === 0
       ? CURVATURE_SENTENCES.noLink(cov)
       : (cov.radioHorizonM <= cov.maxLinkedRangeM

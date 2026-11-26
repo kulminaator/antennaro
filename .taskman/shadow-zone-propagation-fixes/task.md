@@ -130,3 +130,16 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
   mesh instead of stepping over it, 6.5 dB -> 1.9 dB worst case (step-009); and ridges
   accumulate, moving **22.1 %** of cells by up to **15.7 dB**, because **72 %** of paths from the
   default mast cross two or more screens (step-012).
+
+### Correction to the step-012 note (measured in step-014)
+
+The "72 % of paths cross two or more screens" above is the **loudest** configuration (43 dBm
+into -124 dBm, 22117 of 30624 walked paths = 72.2 %). For the **default** mast and budget it is
+844 of 2828 walked paths = **29.8 %**. The "22.1 % of cells moved, up to 15.74 dB" figure is the
+default configuration and stands.
+
+And the `diffractionEdgeLimit: 3` cap keeps the **three tallest** screens, not the first three:
+against summing the eight tallest it costs 0.6 dB of mean but up to 29.1 dB on individual
+paths (7.3 % of paths lose >1 dB, 2.1 % lose >10 dB, all on cells already far past dead). No
+cell crosses the sensitivity line at either configuration, so 3 stands - as a stated model
+choice, now asserted: `edgeLimit: 1` must equal the tallest screen alone.

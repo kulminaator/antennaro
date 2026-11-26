@@ -108,7 +108,8 @@ export function describeLimits(options) {
  *
  * @param {{siteHeightM:number, maxLinkedRangeM:number, rxHeightM?:number, kFactor?:number,
  *   worldSizeM?:number}} options
- * @returns {{kFactor:number, earthBulgeUnderMaxLinkM:number, radioHorizonM:number, worldSizeM:number}}
+ * @returns {{kFactor:number, earthBulgeUnderMaxLinkM:number, radioHorizonM:number,
+ *   groundHorizonM:number, worldSizeM:number}}
  */
 export function describeEarth(options) {
   const {
@@ -122,6 +123,12 @@ export function describeEarth(options) {
     earthBulgeUnderMaxLinkM: earthBulgeM(half, half, kFactor),
     /** How far a link of these two heights reaches over a perfectly smooth earth. */
     radioHorizonM: radioHorizonM(siteHeightM, rxHeightM, kFactor),
+    /**
+     * The same horizon with the far end lying on the ground, which is the horizon a low mast
+     * really has: 3.0 km at 0.5 m, and therefore *inside* this map, while the comfortable
+     * number above is off it. A curvature line that quotes only the tall one tells half.
+     */
+    groundHorizonM: radioHorizonM(siteHeightM, 0, kFactor),
     /** The map those two numbers have to be read against, from the terrain itself. */
     worldSizeM: worldSizeM,
   };

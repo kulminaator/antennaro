@@ -168,6 +168,14 @@ test('diffraction: the first screen is charged in full, the ones behind it are n
   assert.ok(capped <= multi + 0.1 && capped > 0,
     `edgeLimit 1 must cost no more than the full sum: ${capped} vs ${multi} dB`);
   assert.ok(RF.diffractionEdgeLimit >= 2, 'the shipped cap has to allow superposition at all');
+  // Which screens survive the cap is a model choice, not an optimisation detail: keeping the
+  // first three along the path and keeping the three tallest differ by up to 29 dB on the
+  // shipped map (measured over an 8712-path grid from the default mast, on 2 % of paths).
+  // The tallest are kept, so a short cap discards the *least* significant screens.
+  const tallest = Math.max(...ridges.map((ridge) => lossOf(one(ridge))));
+  assert.ok(Math.abs(capped - tallest) < 0.1,
+    `edgeLimit 1 has to be the tallest screen on its own: ${capped.toFixed(2)} vs ${tallest.toFixed(2)} dB `
+    + '- if this moves, the cap is cutting by path order, not by significance');
 });
 
 /**
