@@ -158,20 +158,18 @@ export const RF = Object.freeze({
    * precisely what the terrain defeated.
    */
   noLinkAlpha: 0.22,
-  /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
-  levelMarginsDb: Object.freeze([45, 30, 15, 0]),
-  /** How the drape is painted: `'bands'`, `'gradient'` or `'zone'` - one field with three
-     values, so no two switches can disagree about the picture. */
-  defaultCoverageView: 'gradient',
   /**
-   * Top of the gradient scale in dB of margin - measured, not guessed. Margin falls 20 dB
-   * per decade of distance, so the disc a link lights up spans only tens of dB: a default
-   * dipole's cells run 0-28 (median 4), a study-range-limited collinear 0-55, the loudest
-   * link the panel allows 18-112. At 45 nearly every map came out pink; 30 dB - a decade
-   * and a half inside the link's own edge - puts the thirds where the ground is. Absolute:
-   * never normalised to the picture in front of you, or screenshots stop comparing.
+   * The four steps of the signal scale, as link-margin (dB) over the receiver sensitivity,
+   * strongest first, and the words the legend calls them. Placed on the measured margin
+   * distribution (presets: median 2.9-5.1 dB, 78-92 % of linked cells under 10 dB) because the
+   * old 45/30/15/0 painted 93-98 % of every map one colour; absolute, never normalised to the
+   * picture in front of you, or screenshots stop comparing.
    */
-  gradientMaxMarginDb: 30,
+  levelMarginsDb: Object.freeze([8, 3, 1, 0]),
+  levelNames: Object.freeze(['comfortable', 'good', 'marginal', 'at the limit']),
+  /** How the drape is painted: `'steps'` or `'zone'` - one field with two values, so no two
+     switches can disagree about the picture. */
+  defaultCoverageView: 'steps',
 });
 
 /** Antenna placement + aiming limits. */
@@ -323,25 +321,27 @@ export const PATHS = Object.freeze({
  * Kept in L0 so the WebGL overlay and the HUD legend read the same truth.
  */
 export const COLOURS = Object.freeze({
-  levels: Object.freeze(['#1b7f4d', '#5fb85f', '#e8c33c', '#e08b2f']),
-  /* The range gradient, as asked for: yellow where the link has room, pale yellow as the
-     room closes, pink for a link that only just makes the receiver - flat bands hide how
-     much margin a spot has. These hues belong to this view alone (the zone ramp below is
-     purple / amber / green, the bands are `levels` above); a unit test refuses a collision,
-     because one colour meaning two things in two switchable views is a bug nobody sees. */
-  gradientStops: Object.freeze({ strong: '#e8b32a', mid: '#f4e08e', weak: '#f0a8bf' }),
+  /* The signal scale, strongest first: yellow where the link has room, red where it survives by
+     a decibel or two. Ordered by lightness - 93/74/53/31 - because that is what an eye reads as
+     "more" (the gradient these replace sat at L* 76/89/76, its two ends 0.4 apart), and measured:
+     neighbours 22.8/11.5/15.1/18.0 CIEDE2000 apart under normal/deuteranopic/protanopic/tritanopic
+     vision, every step >= 24 from bare terrain, from the faint asked-and-lost wash and from the
+     zone ramp. Four is the ceiling for this hue path: 3/4/5 steps top out at 19.5/12.5/9.5. */
+  levels: Object.freeze(['#fff046', '#f6a600', '#d35900', '#980011']),
   noLink: Object.freeze('#2a2f38'),
   /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */
-  fresnelObstructed: Object.freeze('#a24bd0'),
+  fresnelObstructed: Object.freeze('#663f81'),
   /** The semi-transparent first-Fresnel-zone volume of the antenna. */
   fresnelVolume: Object.freeze('#79d6ff'),
   /**
-   * The other two stops of the zone ramp, between `fresnelObstructed` (cut) and a
-   * criterion met with room. Named rather than borrowed from `levels`: a zone state
-   * is not a signal level, and the two must never be confused for one another.
+   * The other two stops of the zone ramp, between `fresnelObstructed` (cut) and a criterion met
+   * with room. A zone state is not a signal level, so the middle stop is no longer amber: the old
+   * `#e8c33c` sat 10.7 dE00 from the yellow step above, in two views the user switches between,
+   * and the old ramp (L* 49/80/75) was 9.4 apart under protanopia. Violet through mint,
+   * L* 34/61/90, is 26.5 apart at its worst over the models tested.
    */
-  fresnelPartial: Object.freeze('#e8c33c'),
-  fresnelClear: Object.freeze('#3fd07a'),
+  fresnelPartial: Object.freeze('#be77e2'),
+  fresnelClear: Object.freeze('#3effb7'),
   /**
    * The study-range ring: the app's own work-area boundary. Deliberately outside
    * the coverage ramp, so a circle we chose can never be read as signal.

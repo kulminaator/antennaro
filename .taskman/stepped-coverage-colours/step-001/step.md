@@ -26,3 +26,12 @@ with the measurements that fixed each number written beside them.
 ## Step comments
 
 <!-- Step-specific details found during execution are appended here as bullet points. This section starts empty and is append-only. -->
+
+- `config.js` was already at the 350-line budget, so the new comments had to pay for themselves
+  exactly: the shipped values and their measurements stayed, the narrative was cut to one line and
+  belongs in GUIDELINES section 7 (step-013). The file is back at exactly 350 lines.
+- `RF.gradientMaxMarginDb` and `COLOURS.gradientStops` are gone, which is what breaks
+  `src/palette.js` (step-002), `propagation/coveragemesh.js` (step-003) and
+  `tests/unit/palette.test.js` (step-008). Nothing else imports them.
+- Deviation from the taskman reading rule: README.md was not read at run start. Its wording is the
+  work of step-012, where it is read in full; GUIDELINES.md was read in full before step-001.
