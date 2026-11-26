@@ -156,6 +156,36 @@ export function beamwidthFromShape(shapeFn, { maxDeg = 179, steps = 1790 } = {})
 }
 
 /**
+ * Kraus's approximation constant, in square degrees: a beam of -3 dB widths
+ * `H` and `V` degrees has a directivity of about `41253 / (H * V)`.
+ *
+ * Named here rather than in `config.js` for the same reason as `PATTERN_FLOOR_DB`:
+ * it is the definition of the formula, not a knob. Tuning it would not make a
+ * weak antenna stronger, it would make the model lie.
+ */
+export const KRAUS_CONSTANT_DEG2 = 41253;
+
+/**
+ * Directivity (dBi) implied by a pair of -3 dB beamwidths, in degrees.
+ *
+ * This is what the catalogue turns a drawn beam into a claimed gain with:
+ * `gain = krausDirectivityDbi(H, V) + 10*log10(apertureEfficiency)`. Deriving gain
+ * from the beam - instead of typing a gain that happens to look good next to it - is
+ * the only reason a wide antenna can no longer claim a long reach: 69 x 69 degrees
+ * holds 9.4 dBi, and no arithmetic gets to say 12.4.
+ *
+ * Kraus is an **upper** bound for a main-lobe-dominated pattern (a real build sits
+ * under it: taper, feed loss, mismatch), and it is *not valid for an omnidirectional
+ * plane* - a 360 degree azimuth cut is not a main lobe, so omni designs take their
+ * gain from the array factor instead. See GUIDELINES.md §7 "Antenna pattern".
+ */
+export function krausDirectivityDbi(hBeamwidthDeg, vBeamwidthDeg) {
+  const h = Math.max(0.5, hBeamwidthDeg);
+  const v = Math.max(0.5, vBeamwidthDeg);
+  return 10 * Math.log10(KRAUS_CONSTANT_DEG2 / (h * v));
+}
+
+/**
  * Map a pattern level to a 0..1 radius for drawing the 3D lobe.
  * Monotone in `db`: 1 at the peak gain, 0 at or below the clip level.
  */

@@ -27,6 +27,7 @@ import {
 } from '../../src/antenna/catalogue.js';
 import { createAntennaModel } from '../../src/antenna/model.js';
 import { wavelengthM } from '../../src/propagation/rf.js';
+import { krausDirectivityDbi } from '../../src/antenna/pattern.js';
 
 /**
  * The invariant, written here rather than imported, so the test is the definition of
@@ -149,3 +150,18 @@ test('antenna physics: gains stay in the range these designs are measured at', (
 function getAntenna(id) {
   return ANTENNA_CATALOGUE.find((entry) => entry.id === id);
 }
+
+test('antenna physics: the model uses the Kraus arithmetic this test believes', () => {
+  // Hand-worked: 41253 / (60 * 60) = 11.46 -> 10.59 dBi.
+  const worked = 10 * Math.log10(41253 / 3600);
+  assert.ok(Math.abs(krausDirectivityDbi(60, 60) - worked) < 1e-9,
+    `60 x 60 deg must be ${worked.toFixed(2)} dBi, got ${krausDirectivityDbi(60, 60).toFixed(2)}`);
+  assert.equal(krausDirectivityDbi(40, 70), krausDirectivityDbi(70, 40), 'the two planes are symmetric');
+  assert.ok(krausDirectivityDbi(30, 60) > krausDirectivityDbi(40, 60), 'narrower H, more directivity');
+  assert.ok(krausDirectivityDbi(60, 30) > krausDirectivityDbi(60, 40), 'narrower V, more directivity');
+  assert.ok(Number.isFinite(krausDirectivityDbi(0, 0)), 'a degenerate width cannot divide by zero');
+  for (const [h, v] of [[10, 20], [45, 65], [70, 70], [100, 100]]) {
+    assert.equal(krausDirectivityDbi(h, v), beamImpliedDirectivityDbi(h, v),
+      'the shipped formula must match the one the invariants are stated with');
+  }
+});

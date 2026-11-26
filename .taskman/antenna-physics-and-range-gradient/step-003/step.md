@@ -31,3 +31,18 @@ catalogue to call.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- `src/antenna/pattern.js` gains `KRAUS_CONSTANT_DEG2 = 41253` and
+  `krausDirectivityDbi(hBeamwidthDeg, vBeamwidthDeg)`, placed after
+  `beamwidthFromShape` because together they are one story: measure a beam, ask what it
+  is worth. Both are exported; `pattern.js` stays L1 and allocation-free.
+- The constant is deliberately a module-local named constant, like `PATTERN_FLOOR_DB`:
+  `GUIDELINES.md §4` allows a constant beside the maths it defines, and a Kraus constant
+  in `config.js` would read like a knob that can make an antenna stronger.
+- Clamped at 0.5 deg per plane so a degenerate beamwidth yields a large finite number
+  instead of `Infinity` - a design cannot buy infinite gain by claiming no beam at all.
+- New test `antenna physics: the model uses the Kraus arithmetic this test believes`
+  passes: hand-worked 60 x 60 deg = 10.59 dBi, symmetry in the two planes, monotone in
+  both, finite for a degenerate input, and equal to the test file's own local formula at
+  four probe points - so the shipped model and the invariants cannot drift apart.
+- The three design-wide invariants are still red, on purpose: they are step-005's job.
