@@ -101,3 +101,34 @@ numbers re-measured from the running app.
   The honest deliverable for the user's "make the curvature relevant even in the valley" is
   the app *saying* how much curvature is worth on the link being looked at - and saying that
   here it is centimetres, so the ridge is what is hiding the signal, not the planet.
+
+## Closing notes
+
+- **Curvature never binds here, and `radioHorizonM` is quoted at the terminal height you
+  set** (sharpened in step-019): `radioHorizonM(0.5, 0)` is 3.0 km, which *is* inside a
+  5.2 km map, so "the horizon is always off the map" is only true of the horizon the app
+  quotes (its receiver is 4 m up by default, 11.5 km even at a 0.5 m mast). The claim that
+  survives measurement is the model-level one - a flat plane, the lowest mast and an absurd
+  budget still links every point of the map and ends `map-edge` - and that is what
+  `tests/unit/curvature.test.js` pins, so the HUD cannot start implying the planet ended
+  somebody's coverage.
+- **`gradientMaxMarginDb: 45` was wrong and the fix was a measurement** (step-017): margin
+  falls 20 dB per decade of distance, so the linked disc spans 0-28 dB (default dipole),
+  0-55 (flat-field) or 18-112 (loudest link); at 45 dB almost every map came out pink. 30 dB
+  is a decade and a half inside the link's own edge, absolute, never normalised per picture.
+  The legend rows moved to thirds of the ramp for the same reason: sampling the ramp at RSSI
+  band boundaries with a lower top gave two rows in one colour.
+- **Presets carry no `display` block, deliberately** (step-018): `?preset=` is applied after
+  the boot state, so a preset that chose a view would silently overrule `?view=` and
+  `?fresnel=1` - the exact combination the docs screenshot is taken from.
+- Closed by step-021. `npm run verify` green (vendor ok, lint ok on 43 src / 15 tools /
+  23 tests files, **22 test files** in 56.8 s). What the task was opened for: the biquad's
+  12.40 dBi came from a 69 x 69 degree beam that can hold 9.4, so a wide antenna outranged a
+  long Yagi; gain is now derived from the beam the design draws
+  (`krausDirectivityDbi(H, V) + 10*log10(efficiency)`), and the five designs reach 932 /
+  1393 / 1664 / 1696 / 2167 m in gain order, live, each at its own budget. The user's
+  "yellow for strong, light yellow for weaker, pink at the limit" is one of three values of
+  `display.coverageView` - bands, gradient, zone - painted from one field, each with a legend
+  that counts exactly the pixels it describes (6 / 56 / 782 / 1984 faint / 27 796 unmeasured
+  on the default map), and switching between them moves not one decibel. The curvature is
+  reported instead of dramatised: `k 1.41 - the ray bows 0.012 m over the last 0.93 km link`.

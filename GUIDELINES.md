@@ -182,7 +182,15 @@ that names the work area), the Fresnel criterion
 (`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
 is stated for - and `RF.fresnelEndpointGuard`), the `FRESNEL` block (mesh density,
 opacity, `radialExaggeration`, `rampMaxRatio`, `groundSearchStepM`), the
-`COLOURS.fresnel*` stops of the zone ramp, the study-range ring
+`COLOURS.fresnel*` stops of the zone ramp, the range gradient
+(`RF.gradientMaxMarginDb` - measured, not guessed: margin only falls 20 dB per decade of
+distance, so 45 dB painted nearly every map pink, and 30 dB is a decade and a half inside
+a link's own edge - and `COLOURS.gradientStops`), `RF.defaultCoverageView`, and
+`ANTENNA.apertureEfficiency` / `apertureEfficiencyDefault`, which are not decoration:
+they *are* the gain of every directional design
+(`gain = krausDirectivityDbi(H, V) + 10*log10(efficiency)`), so pattern and link budget
+cannot disagree, and an efficiency above 1 would be a design with more gain than its own
+beam can hold, the study-range ring
 (`VIEW.rangeRingSamples` / `rangeRingLiftM` / `rangeRingOpacity`), camera
 defaults, colours, path names and every timeout. The UI schema and the state
 reducer read the same ranges, so a slider can never disagree with the physics.
@@ -361,13 +369,45 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   must not move the RSSI: pinned by a unit test and a browser test), once to the
   raised terminal for the zone. A cell can be badly diffracted *and* zone-clear, and
   that is geography, not a bug to reconcile.
-- **The zone has its own colour view.** `propagation/coveragemesh.js` paints either
-  the signal bands or the zone ramp (`palette.fresnelZoneRgb`), switched by
-  `display.showFresnel`; it is a mode rather than a marking laid over the bands
-  because only a minority of cells meet the criterion, and a flag painted on the RSSI
-  colours would be one hue over the whole map. `app/reports.js` computes the
-  reference link the volume is drawn around - the boresight out to where it meets the
-  ground, one receiver height above it - and `propagation/fresnelmesh.js` (L4) turns
+- **One drape, three readings.** `display.coverageView` is a select with exactly
+  `bands | gradient | zone`, and `propagation/coveragemesh.js` paints from that one field -
+  `coverageRgb`, `rangeGradientRgb` on margin over sensitivity, or `palette.fresnelZoneRgb`.
+  It is a *mode*, never a marking laid over another view: only a minority of cells meet the
+  zone criterion, and the gradient would tint the bands into one unreadable hue, so a pixel
+  must mean exactly one thing. The **alpha channel is the same in all three** - that part of
+  the message is not a matter of taste - the legend is chosen by the same field
+  (`coverageLegendItems` / `rangeGradientLegendItems` / `fresnelZoneLegendItems`, each with
+  its own title and each counting every point the sweep can account for), and switching a
+  view may not move a single decibel: `browser: the coverage view repaints the drape, and no
+  view changes a decibel` walks the three views and requires the whole coverage stats object
+  to be `deepEqual` at every stop. `display.showFresnel` is now only the *volume*; a control
+  that both drew a tube and recoloured the map was a control whose label lied. A scenario
+  never picks a view - presets carry no `display` block, so `?preset=...&fresnel=1` still
+  reaches the zone picture and the panel keeps the last view the user chose.
+- **The gradient is keyed to margin, and its scale is absolute.** `rangeGradientRgb` takes
+  dB *over the receiver sensitivity*, never dBm, so moving the sensitivity slider cannot
+  recolour a map that describes the same antenna over the same ground; and it is never
+  normalised to the best cell on screen, because two screenshots of two different links
+  would stop being comparable. Its three legend rows are thirds of its own ramp, sampled
+  inside each row: the day the ramp top and the RSSI band boundaries stopped coinciding,
+  sampling the ramp at band boundaries produced two legend rows in one colour, which is a
+  legend that describes a picture the map does not paint.
+- **The earth is round and the app says so.** `rf.js` owns `earthBulgeM(d1, d2)` and
+  `radioHorizonM(h1, h2)` (`Infinity` for a flat earth, because a flat earth has no
+  horizon), `los.js` walks rays over that bulge, and `coveragestats.describeEarth()` puts
+  `kFactor`, `earthBulgeUnderMaxLinkM` and `radioHorizonM` in the stats so the HUD can
+  quote what the curvature was worth instead of leaving the reader to suspect the map. The
+  honest finding, measured: on a 5.2 km map the bulge is centimetres, the horizon is off
+  the picture for every legal mast and terminal, and coverage is never ended by curvature
+  - pinned by `tests/unit/curvature.test.js`, including the flat-plane extreme (lowest
+  mast, absurd budget, still `map-edge`). Do not stage a horizon-limited demo to make the
+  row interesting. Two related rules: **neither end of a ray may be the obstacle**
+  (the transmitter is in the air and the receiver is the endpoint - including them made
+  every clear path report a block at its own far end), and *Terrain shadowing
+  (diffraction loss)* is a **named** flat-earth mode: it suppresses dB, not the curved
+  zone walk, and its label says exactly that.
+- `app/reports.js` computes the reference link the volume is drawn around - the boresight
+  out to where it meets the ground, one receiver height above it - and `propagation/fresnelmesh.js` (L4) turns
   that link into a tube. `FRESNEL.radialExaggeration` is the only reason it is
   visible next to a 5.2 km map; at 1 it is a hairline, and the docs say so.
 - **Layout follows the window:** `app/controller.js` watches the canvas with a
