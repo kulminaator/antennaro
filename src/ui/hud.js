@@ -21,6 +21,7 @@ const STAT_ROWS = Object.freeze([
   Object.freeze({ key: 'wavelength', label: 'Wavelength' }),
   Object.freeze({ key: 'fsRange', label: 'Free-space range' }),
   Object.freeze({ key: 'rangeLimit', label: 'Range limit' }),
+  Object.freeze({ key: 'curvature', label: 'Curvature' }),
   Object.freeze({ key: 'link', label: 'Cells with link' }),
   Object.freeze({ key: 'avail', label: 'Served within reach' }),
   Object.freeze({ key: 'maxRange', label: 'Max linked range' }),
@@ -46,6 +47,32 @@ const LIMIT_SENTENCES = Object.freeze({
 });
 
 const km = (metres) => `${(metres / 1000).toFixed(2)} km`;
+
+/**
+ * How the earth's shape shows up in this picture. Two numbers are in play and they pull
+ * in opposite directions: the bulge under the longest link is centimetres on a map this
+ * small, while the smooth-earth horizon is several maps wide - so the honest sentence is
+ * usually "the curve is real and it is not your problem". It is printed anyway, with the
+ * factor that produced it, because a reader who suspects the round earth is hiding their
+ * signal should be able to do the arithmetic and see.
+ */
+const CURVATURE_SENTENCES = Object.freeze({
+  beyondMap: (c) => `k ${c.kFactor.toFixed(2)} - the ray bows ${shortMetres(c.earthBulgeUnderMaxLinkM)} `
+    + `over the last ${km(c.maxLinkedRangeM)} link; the earth curves away long before this map ends`,
+  horizonBeyondLink: (c) => `k ${c.kFactor.toFixed(2)} - ray bows ${shortMetres(c.earthBulgeUnderMaxLinkM)} `
+    + `over ${km(c.maxLinkedRangeM)}; a smooth earth would let these heights reach ${km(c.radioHorizonM)}`,
+  horizonBinding: (c) => `k ${c.kFactor.toFixed(2)} - the smooth-earth horizon ${km(c.radioHorizonM)} is `
+    + `inside the last link ${km(c.maxLinkedRangeM)}: the curve, not the budget, ends it`,
+  noLink: (c) => `k ${c.kFactor.toFixed(2)} - nothing linked, so nothing curved over`,
+});
+
+/** Metres, with enough decimals to be meaningful: this term is small at this scale. */
+function shortMetres(value) {
+  if (!(value > 0)) return '0 m';
+  if (value < 0.1) return `${value.toFixed(3)} m`;
+  if (value < 10) return `${value.toFixed(2)} m`;
+  return `${value.toFixed(1)} m`;
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -162,6 +189,15 @@ export function createHud(options) {
     // The binding limit in words. When it is `'budget'` that is good news: the picture
     // ends where the link does. Otherwise the user is looking at a border of the app.
     set('rangeLimit', (LIMIT_SENTENCES[cov.limitingFactor] ?? LIMIT_SENTENCES.budget)(cov));
+    // Which of the two curvature numbers has anything to say about this picture. On a map
+    // smaller than the horizon - every map this app draws - that is the "beyondMap" one.
+    set('curvature', cov.linkedCells === 0
+      ? CURVATURE_SENTENCES.noLink(cov)
+      : (cov.radioHorizonM <= cov.maxLinkedRangeM
+        ? CURVATURE_SENTENCES.horizonBinding(cov)
+        : (cov.radioHorizonM <= cov.worldSizeM
+          ? CURVATURE_SENTENCES.horizonBeyondLink(cov)
+          : CURVATURE_SENTENCES.beyondMap(cov))));
     // Two shares, each labelled with what it is a share *of*: the map, and the ground
     // where a link was even possible. Quoting one number without its denominator is how
     // a big map next to a small link gets read as a poor antenna.

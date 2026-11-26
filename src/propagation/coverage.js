@@ -285,7 +285,9 @@ export function computeCoverage(options) {
       clippedByRangeCells,
       clippedByMapCells,
     }),
-    ...describeEarth({ siteHeightM: site.heightM, maxLinkedRangeM, rxHeightM }),
+    ...describeEarth({
+      siteHeightM: site.heightM, maxLinkedRangeM, rxHeightM, worldSizeM: field.worldSize,
+    }),
   };
 
   return {

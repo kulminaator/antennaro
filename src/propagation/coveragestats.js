@@ -106,11 +106,14 @@ export function describeLimits(options) {
  * the ray is a chord and a ridge top is thin - but it cannot end a link over ground this
  * small, and a UI that let you believe otherwise would be selling a mystery.
  *
- * @param {{siteHeightM:number, maxLinkedRangeM:number, rxHeightM?:number, kFactor?:number}} options
- * @returns {{kFactor:number, earthBulgeUnderMaxLinkM:number, radioHorizonM:number}}
+ * @param {{siteHeightM:number, maxLinkedRangeM:number, rxHeightM?:number, kFactor?:number,
+ *   worldSizeM?:number}} options
+ * @returns {{kFactor:number, earthBulgeUnderMaxLinkM:number, radioHorizonM:number, worldSizeM:number}}
  */
 export function describeEarth(options) {
-  const { siteHeightM, maxLinkedRangeM, rxHeightM = RF.fresnelRxHeightM, kFactor = RF.kFactor } = options;
+  const {
+    siteHeightM, maxLinkedRangeM, rxHeightM = RF.fresnelRxHeightM, kFactor = RF.kFactor, worldSizeM = 0,
+  } = options;
   const half = Math.max(0, maxLinkedRangeM) / 2;
   return {
     /** The refraction factor the walk used, so the two numbers below can be re-derived. */
@@ -119,6 +122,8 @@ export function describeEarth(options) {
     earthBulgeUnderMaxLinkM: earthBulgeM(half, half, kFactor),
     /** How far a link of these two heights reaches over a perfectly smooth earth. */
     radioHorizonM: radioHorizonM(siteHeightM, rxHeightM, kFactor),
+    /** The map those two numbers have to be read against, from the terrain itself. */
+    worldSizeM: worldSizeM,
   };
 }
 
