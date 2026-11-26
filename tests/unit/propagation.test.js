@@ -176,3 +176,75 @@ test('los: diffraction loss is monotone, ~6 dB at grazing and zero when clear', 
   assert.ok(approxEqual(diffractionLossDb(10, 300, 700, '868'), diffractionLossDb(10, 700, 300, '868'), 1e-12),
     'the edge position is symmetric in d1/d2');
 });
+
+test('los: neither end of the ray is allowed to be the obstacle', () => {
+  // The transmitter is in the air and the receiver sits on the ground it is being
+  // measured against, so "the ground at the far end" is not a thing that can cut the
+  // ray: it *is* the ray's endpoint. If either end were judged, a perfectly flat world
+  // would report an obstruction of exactly zero on every single path - which reads as
+  // "clear" only until someone asks why maxExcess is never negative.
+  const to = { x: 3600, y: 0, z: 0 };
+  const profile = rayProfile(FLAT, SITE, to, { freqHz: '868' });
+  assert.equal(hasLineOfSight(FLAT, SITE, to), true);
+  assert.equal(obstructionLossDb(FLAT, SITE, to, '868'), 0);
+  assert.equal(profile.maxExcess, 0, 'the ray touches the receiver ground, it is not in it');
+  assert.ok(profile.maxExcessDistance < profile.totalDistance, 'the worst point is not the receiver itself');
+  assert.equal(profile.points.at(-1).terrainY, to.y, 'the last sample is the receiver, not the terrain');
+  assert.ok(profile.points.at(-1).excess <= 0, 'and it is never counted as an obstruction');
+  assert.equal(profile.points[0].terrainY, 0, 'the first sample still reports the ground under the mast');
+  assert.equal(profile.points[0].clearance, Infinity, 'the zone has no width at the antenna, so no verdict');
+  assert.equal(profile.points.at(-1).clearance, Infinity, 'nor at the receiver');
+
+  // Same thing on real ground: a receiver at the bottom of a swale, with the rim behind
+  // it. The rim is beyond the receiver and must not appear on this path at all.
+  const swale = new HeightField({ size: 81, worldSize: 2000 })
+    .fillFromFunction((x) => (x > 1100 ? 30 : (x > 900 ? 30 - (1100 - x) * 0.15 : 0)));
+  const low = { x: 900, y: 0, z: 0 };
+  assert.equal(hasLineOfSight(swale, SITE, low), true, 'a wall behind the receiver is not on the path');
+  assert.equal(obstructionLossDb(swale, SITE, low, '868'), 0);
+});
+
+test('los: the ground a receiver stands on is not an obstacle, unless it is a plateau', () => {
+  // A receiver at the top of a hill sees everything, however low its transmitter is 1 km
+  // away: the flank falls away faster than the chord arrives. If the ray's own endpoint
+  // were judged as an obstruction, this path - worst excess -3 m, nowhere near the ground
+  // - would report the knife-edge loss of a grazing ray, about 6 dB, on every clear path
+  // in the app. That is what this first half pins.
+  const cone = new HeightField({ size: 201, worldSize: 2000 })
+    .fillFromFunction((x, z) => {
+      const r = Math.hypot(x - 800, z);
+      return r < 120 ? (120 - r) * 0.45 : 0;
+    });
+  const apex = { x: 800, y: cone.sample(800, 0), z: 0 };
+  assert.ok(apex.y > 40, `the receiver is on a 40 m hill (${apex.y.toFixed(0)} m)`);
+  for (const txY of [10, 20, 40, 80]) {
+    const from = { x: 0, y: txY, z: 0 };
+    const profile = rayProfile(cone, from, apex, { freqHz: '868' });
+    assert.ok(profile.worstExcess < -1,
+      `a 1 km path to a hilltop misses the ground by ${(-profile.worstExcess).toFixed(1)} m (tx at ${txY} m)`);
+    assert.equal(hasLineOfSight(cone, from, apex), true, `tx at ${txY} m sees the summit`);
+    assert.equal(obstructionLossDb(cone, from, apex, '868'), 0, 'and pays nothing for it');
+  }
+
+  // The exception is real physics, not an endpoint bug: stand in the middle of a flat
+  // tableland and the plateau's own far edge is a ridge in front of you. A 10 m mast 800 m
+  // below is 3.2 m under that edge, and the shadow is ~14 dB. The blocking point is on the
+  // edge, strictly inside the path, and both of the ways out of it behave like a hill:
+  // climb, or stand up.
+  const mesa = new HeightField({ size: 201, worldSize: 2000 }).fillFromFunction((x, z) => {
+    const off = Math.abs(x - 800);
+    if (off < 60 && Math.abs(z) < 400) return 54;
+    return off < 120 ? 54 * (1 - (off - 60) / 60) : 0;
+  });
+  const top = { x: 800, y: mesa.sample(800, 0), z: 0 };
+  const low = { x: 0, y: 10, z: 0 };
+  const buried = rayProfile(mesa, low, top, { freqHz: '868' });
+  assert.ok(buried.worstExcess > 1, `the plateau's edge is above the ray (${buried.worstExcess.toFixed(1)} m)`);
+  assert.ok(buried.maxExcessDistance > 0 && buried.maxExcessDistance < buried.totalDistance - 1,
+    `and it is the far edge that blocks, not the receiver (${buried.maxExcessDistance.toFixed(0)} m of ${buried.totalDistance.toFixed(0)})`);
+  assert.ok(obstructionLossDb(mesa, low, top, '868') > 10, 'which costs real dB');
+  assert.equal(hasLineOfSight(mesa, { x: 0, y: 60, z: 0 }, top), true, 'a mast above the plateau horizon sees it');
+  assert.equal(hasLineOfSight(mesa, low, { x: top.x, y: top.y + 4, z: 0 }), true,
+    'so does the same 10 m mast, when the receiver is 4 m off the ground');
+  assert.equal(hasLineOfSight(mesa, low, top), false, 'while a receiver lying on the plateau floor does not');
+});

@@ -25,7 +25,10 @@ import { fresnelRadiusM, wavelengthM } from './rf.js';
 
 /**
  * Sample the terrain against the straight ray from `from` (in the air) to `to`.
- * `excess` > 0 means the ground cuts the ray by that many metres.
+ * `excess` > 0 means the ground cuts the ray by that many metres. Both ends are excluded
+ * from the obstruction search: `maxExcess` is the worst of the samples in between, floored
+ * at 0, so a clear path reports 0 and a blocking point somewhere inside the path rather
+ * than at the receiver.
  * @param {import('../terrain/heightfield.js').HeightField} field
  * @param {{x:number,y:number,z:number}} from
  * @param {{x:number,y:number,z:number}} to
@@ -62,16 +65,19 @@ export function rayProfile(field, from, to, options = {}) {
     const rayY = from.y + dy * t + bulge;
     const terrainY = i === n ? to.y : field.sample(x, z);
     const excess = i === 0 ? -Infinity : terrainY - rayY;
-    // Neither end is an obstacle: the transmitter is in the air and the receiver
-    // sits on the ground it is measured against, so their clearance is not a thing
-    // that can be cut. Only the samples in between can.
+    // Neither end is an obstacle, and neither end competes for the title. The
+    // transmitter is in the air; the ground at the receiver *is* the ray's endpoint, so
+    // judging it would make a flat, empty world report its worst obstruction at the
+    // receiver - 0 m deep - and hand every clear path a "blocking point" at its own far
+    // end. Only the samples in between can cut a ray or a zone.
     const isEnd = i === 0 || i === n;
     const judged = !isEnd && distance > guard * total && distance < (1 - guard) * total;
     const radiusM = freqHz && !isEnd ? fresnelRadiusM(d1, d2, freqHz) : 0;
     const clearance = isEnd || !(radiusM > 0) ? Infinity : (rayY - terrainY) / radiusM;
     points[i] = { x, z, distance, terrainY, rayY, excess, fresnelRadiusM: radiusM, clearance };
-    if (excess > maxExcess) {
-      maxExcess = excess;
+    const worst = isEnd ? -Infinity : excess;
+    if (worst > maxExcess) {
+      maxExcess = worst;
       maxExcessDistance = distance;
     }
     if (judged && clearance < minClearance) {
@@ -81,7 +87,13 @@ export function rayProfile(field, from, to, options = {}) {
   }
   return {
     points,
-    maxExcess: Number.isFinite(maxExcess) ? maxExcess : 0,
+    maxExcess: Number.isFinite(maxExcess) ? Math.max(0, maxExcess) : 0,
+    /**
+     * The same worst sample before it was floored, so a caller can tell "clear" from
+     * "grazing": a ray that misses the ground everywhere has a negative worst excess,
+     * one that touches it exactly has 0, and only then does knife-edge loss begin.
+     */
+    worstExcess: Number.isFinite(maxExcess) ? maxExcess : -Infinity,
     maxExcessDistance,
     d1: maxExcessDistance,
     d2: Math.max(0, total - maxExcessDistance),
@@ -117,14 +129,27 @@ export function diffractionLossDb(excessM, d1, d2, freqHz) {
  * `freqHz` (or `fresnelStatus`) when the zone occupancy is wanted as well.
  * @returns {number} dB of extra loss, 0 when the path is clear
  */
+/**
+ * What an already-walked profile costs, in dB.
+ *
+ * A path whose ray misses the ground everywhere costs nothing, and that is decided here
+ * rather than by handing `diffractionLossDb` a worst excess of 0: the knife-edge formula
+ * returns about 6 dB at exactly 0, which is correct for a ray grazing a summit and wrong
+ * for a ray that never came near the ground. Keeping the decision in one function means
+ * `obstructionLossDb` and `pathtrace.js` cannot disagree about it.
+ */
+export function profileObstructionDb(profile, freqHz) {
+  if (!(profile.worstExcess >= 0)) return 0;
+  return diffractionLossDb(profile.maxExcess, profile.d1, profile.d2, freqHz);
+}
+
 export function obstructionLossDb(field, from, to, freqHz, options = {}) {
   const { minDistanceM = 1, samples } = options;
   const horizontal = Math.hypot(to.x - from.x, to.z - from.z);
   if (horizontal < minDistanceM) return 0;
   // One sample per terrain cell along the path is enough; more is wasted work.
   const steps = options.samples ?? clamp(Math.round(horizontal / field.cellSize) * 2, 12, RF.profileSamples);
-  const profile = rayProfile(field, from, to, { ...options, samples: steps });
-  return diffractionLossDb(profile.maxExcess, profile.d1, profile.d2, freqHz);
+  return profileObstructionDb(rayProfile(field, from, to, { ...options, samples: steps }), freqHz);
 }
 
 /** True when the ray clears the terrain everywhere (no positive excess). */
@@ -209,8 +234,11 @@ export function firstFresnelEnvelope(distanceM, freqHz, steps) {
 export function requiredHeightForClearance(field, from, to, options = {}) {
   const profile = rayProfile(field, from, to, options);
   const clearance = options.clearanceM ?? 0;
-  if (profile.maxExcess <= clearance) {
-    return { clearanceM: clearance, requiredHeightM: 0, blockingDistanceM: profile.maxExcessDistance };
+  if (profile.worstExcess <= clearance) {
+    // Nothing blocks this path, so it has no blocking point to report. Reporting the
+    // shallowest interior sample instead would read as "the obstacle is 2 km away"
+    // about a path that is clear all the way.
+    return { clearanceM: clearance, requiredHeightM: 0, blockingDistanceM: 0 };
   }
   return {
     clearanceM: clearance,

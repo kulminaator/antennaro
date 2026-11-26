@@ -12,7 +12,7 @@
  */
 
 import { RF } from '../config.js';
-import { diffractionLossDb, rayProfile } from './los.js';
+import { profileObstructionDb, rayProfile } from './los.js';
 
 /**
  * @param {import('../terrain/heightfield.js').HeightField} field
@@ -35,7 +35,7 @@ export function tracePath(field, from, to, options) {
     ? zoneProfile
     : rayProfile(field, from, to, { samples, freqHz });
   return {
-    obstructionDb: diffractionLossDb(groundProfile.maxExcess, groundProfile.d1, groundProfile.d2, freqHz),
+    obstructionDb: profileObstructionDb(groundProfile, freqHz),
     clearanceRatio: zoneProfile.minClearance,
   };
 }

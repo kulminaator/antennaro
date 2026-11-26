@@ -34,3 +34,51 @@ round the right way.
 
 <!-- Step-specific details found during execution are appended here as bullet
      points. This section starts empty and is append-only. -->
+
+- Read `src/propagation/los.js` first: the **clearance** walk already skipped both ends
+  (`isEnd` guarded `clearance` and the judged window), but the **obstruction** search did
+  not: `maxExcess` was the max over *all* samples including the receiver end, whose excess
+  is exactly 0 by construction. On any path that is clear everywhere, the receiver end
+  therefore *won* the search, so `maxExcess === 0` with `maxExcessDistance === totalDistance`
+  and `d2 === 0`. Two consequences, one cosmetic and one a lie waiting to happen:
+  - every clear path reported a "blocking point" at its own far end, and
+    `requiredHeightForClearance()` echoed it as `blockingDistanceM` ("the obstacle is
+    3600 m away", about a clear path);
+  - `diffractionLossDb(0, d1, 0)` returned 0 dB only *because* `d2 <= 0` short-circuits
+    it. Move that zero anywhere - or hand the same 0 to a caller that already has real
+    `d1`/`d2` - and a clear path is charged the ~6 dB of a grazing knife edge. The old
+    code was safe by accident.
+- `rayProfile` now excludes both ends from the obstruction search and floors `maxExcess`
+  at 0 (its published contract, already pinned by an older test). It also returns
+  **`worstExcess`**, the same worst sample before flooring, so callers can tell *clear*
+  from *grazing* - which is exactly what the accidental safety above could not.
+- New single place for that decision: **`profileObstructionDb(profile, freqHz)`**, used by
+  both `obstructionLossDb` and `pathtrace.js` (which used to call `diffractionLossDb` with
+  `maxExcess/d1/d2` itself - the two callers can no longer disagree about clear vs grazing).
+  `requiredHeightForClearance` now reports `blockingDistanceM: 0` when nothing blocks.
+- Two new tests in `tests/unit/propagation.test.js` (178 -> 250 lines):
+  - `los: neither end of the ray is allowed to be the obstacle`: flat ground out to 3.6 km
+    - clear, 0 dB, `maxExcess === 0` (the ray *touches* the receiver ground, it is not in
+    it), the worst point is not the receiver, the last sample *is* the receiver, both ends
+    carry `clearance === Infinity` (a zone with no width gets no verdict), and a rim
+    *behind* the receiver never appears on the path.
+  - `los: the ground a receiver stands on is not an obstacle, unless it is a plateau`.
+    My first version of this test asserted the opposite and was wrong, which is worth
+    recording: I expected a low transmitter to be shadowed by the flank of the cone whose
+    summit holds the receiver. It is not, and cannot be - the flank falls away faster than
+    the chord arrives, so the ray misses the ground by 3-4 m at every transmitter height.
+    What *does* produce the effect is a **flat tableland**: stand in the middle of a plateau
+    and its own far edge is a ridge in front of you. Measured there: worst excess +3.21 m
+    at 743 m of a 800 m path (the edge, strictly inside the path), ~14 dB, cleared by a
+    60 m mast, and cleared from the same 10 m mast by a receiver 4 m off the ground - which
+    is the same fact the Fresnel receiver-height assumption exists for.
+- Measured the discretisation version of the same thing while writing it: on a 14.9 m grid
+  the interpolated summit of a cone is a small plateau, so a receiver at the sampled apex
+  can sit ~0.25 m under the chord that ends on it and be charged ~6 dB. On a 10 m grid with
+  the apex exactly on a node the same path is clear by 3.3 m. Left alone deliberately - the
+  model's terrain *is* the sampled surface, the receiver's height is read from that same
+  surface, and a half-cell flat top above a grazing chord is the mesa case above, not a bug.
+- Verified: `npm run test:unit` -> all 13 files pass; `npm run lint` ok;
+  `node tools/test.js --browser` -> all 5 files pass in 52 s, so the whole-map coverage
+  numbers the docs quote did not move (the dB a path pays is unchanged: the cases that
+  changed were clear paths reporting 0 dB by accident, still 0 dB, now by decision).
