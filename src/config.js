@@ -158,13 +158,13 @@ export const RF = Object.freeze({
    * precisely what the terrain defeated.
    */
   noLinkAlpha: 0.22,
-  /**
-   * The four steps of the signal scale, as link-margin (dB) over the receiver sensitivity,
-   * strongest first, and the words the legend calls them. Placed on the measured margin
-   * distribution (presets: median 2.9-5.1 dB, 78-92 % of linked cells under 10 dB) because the
-   * old 45/30/15/0 painted 93-98 % of every map one colour; absolute, never normalised to the
-   * picture in front of you, or screenshots stop comparing.
-   */
+  /** How opaque the coverage drape sits over the terrain. A step has to survive it, which is
+     what the palette test measures: every step stays >= 24 CIEDE2000 from bare ground. */
+  overlayOpacity: 0.88,
+  /* The four steps of the signal scale, as link-margin (dB) over the receiver sensitivity, strongest
+     first, plus the words the legend calls them. Placed on the measured margin distribution (presets:
+     median 2.9-5.1 dB, 78-92 % of linked cells under 10 dB) - the old 45/30/15/0 painted 93-98 % of
+     every map one colour. Absolute: never normalised, or screenshots stop comparing. */
   levelMarginsDb: Object.freeze([8, 3, 1, 0]),
   levelNames: Object.freeze(['comfortable', 'good', 'marginal', 'at the limit']),
   /** How the drape is painted: `'steps'` or `'zone'` - one field with two values, so no two
@@ -321,12 +321,12 @@ export const PATHS = Object.freeze({
  * Kept in L0 so the WebGL overlay and the HUD legend read the same truth.
  */
 export const COLOURS = Object.freeze({
-  /* The signal scale, strongest first: yellow where the link has room, red where it survives by
-     a decibel or two. Ordered by lightness - 93/74/53/31 - because that is what an eye reads as
-     "more" (the gradient these replace sat at L* 76/89/76, its two ends 0.4 apart), and measured:
-     neighbours 22.8/11.5/15.1/18.0 CIEDE2000 apart under normal/deuteranopic/protanopic/tritanopic
-     vision, every step >= 24 from bare terrain, from the faint asked-and-lost wash and from the
-     zone ramp. Four is the ceiling for this hue path: 3/4/5 steps top out at 19.5/12.5/9.5. */
+  /* The signal scale, strongest first: yellow where the link has room, red where it survives by a
+     decibel or two. Ordered by lightness - 93/74/53/31 - since that is what an eye reads as "more"
+     (the gradient these replace sat at L* 76/89/76, ends 0.4 apart) and measured, not eyeballed:
+     closest neighbours 22.8/11.5/15.1/21.6 CIEDE2000 (normal/deutan/protan/tritan), every step >= 24
+     from bare terrain and from the faint wash, 15.7 from the nearest zone colour. Four is this hue
+     path's ceiling - 3/4/5 steps top out at 19.5/12.5/9.5, so a fifth is a colour like its neighbour. */
   levels: Object.freeze(['#fff046', '#f6a600', '#d35900', '#980011']),
   noLink: Object.freeze('#2a2f38'),
   /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */
@@ -334,11 +334,10 @@ export const COLOURS = Object.freeze({
   /** The semi-transparent first-Fresnel-zone volume of the antenna. */
   fresnelVolume: Object.freeze('#79d6ff'),
   /**
-   * The other two stops of the zone ramp, between `fresnelObstructed` (cut) and a criterion met
-   * with room. A zone state is not a signal level, so the middle stop is no longer amber: the old
-   * `#e8c33c` sat 10.7 dE00 from the yellow step above, in two views the user switches between,
-   * and the old ramp (L* 49/80/75) was 9.4 apart under protanopia. Violet through mint,
-   * L* 34/61/90, is 26.5 apart at its worst over the models tested.
+   * The other two stops of the zone ramp, between `fresnelObstructed` (cut) and a criterion met with
+   * room. A zone state is not a signal level, so the middle stop is no longer amber: `#e8c33c` sat
+   * 10.7 dE00 from the yellow step above, in two views the user switches between, and the old ramp
+   * (L* 49/80/75) was 9.4 apart under protanopia. Violet through mint is 26.5/40.9 apart at worst.
    */
   fresnelPartial: Object.freeze('#be77e2'),
   fresnelClear: Object.freeze('#3effb7'),

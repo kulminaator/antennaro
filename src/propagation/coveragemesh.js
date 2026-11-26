@@ -40,7 +40,7 @@ export function createCoverageOverlay(field) {
   const material = new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.88,
+    opacity: RF.overlayOpacity,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
