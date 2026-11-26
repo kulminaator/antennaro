@@ -12,6 +12,8 @@
 
 import { APP } from '../config.js';
 import { sampleCoverage } from '../propagation/coverage.js';
+import { profileObstructionDb, rayProfile } from '../propagation/los.js';
+import { resolveFrequencyHz } from '../propagation/rf.js';
 import { cameraPose, pickGround } from './pick.js';
 
 /**
@@ -157,6 +159,29 @@ export function installTestApi(options) {
     pixelStats,
     /** Control-panel widget keys currently rendered. */
     controls: () => (globalThis.__simControls ? globalThis.__simControls.fieldKeys() : []),
+    /**
+     * The app's own ray from the current antenna to the ground at (x, z) - the profile the
+     * decibels were charged against, not a summary of them. Pass `{ kFactor: 0 }` to ask
+     * the same question of a flat earth: the difference between the two answers is what the
+     * curvature is worth on that one path, which is otherwise invisible from the outside.
+     */
+    rayTo: (x, z, options = {}) => {
+      const site = controller.site();
+      const field = controller.terrainField();
+      const profile = rayProfile(field, site, { x, y: field.sample(x, z), z }, {
+        freqHz: resolveFrequencyHz(controller.state().frequencyKey),
+        kFactor: options.kFactor,
+      });
+      return {
+        distanceM: profile.totalDistance,
+        maxExcess: profile.maxExcess,
+        worstExcess: profile.worstExcess,
+        maxExcessDistanceM: profile.maxExcessDistance,
+        minClearance: profile.minClearance,
+        minClearanceDistanceM: profile.minClearanceDistance,
+        obstructionDb: profileObstructionDb(profile, resolveFrequencyHz(controller.state().frequencyKey)),
+      };
+    },
     /**
      * The About dialog - source, licence and the three.js notice. Deliberately not part
      * of `state()`: an open dialog is not a property of the simulation.

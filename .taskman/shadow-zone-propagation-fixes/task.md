@@ -81,3 +81,8 @@ four docs screenshots regenerated and their captions rewritten from the pixels, 
 - `computeCoverage` does not accept a `kFactor`, so "curved versus flat" comparisons have
   to re-walk paths with `rayProfile(..., { kFactor: 0 })` beside the sweep rather than
   running the sweep twice.
+
+- `window.__sim.rayTo(x, z, { kFactor })` exists now (`src/app/testapi.js`): the app's own
+  ray to a ground point, with the curvature optionally switched off. It is how curvature
+  gets attributed to a specific path over real terrain, and GUIDELINES section 9 still
+  needs it added to the method list. (step-006)
