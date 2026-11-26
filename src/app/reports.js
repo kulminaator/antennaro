@@ -116,6 +116,13 @@ export function createReports(accessors) {
   }
 
   /** What the scene is made of: geometry counts, placement, visibility. */
+  /** The view the drape is painted in - asked of the controller, so a test can assert
+      which colours are on screen without scraping pixels. */
+  function coverageViewOf() {
+    const view = getState().display?.coverageView;
+    return view === 'gradient' || view === 'zone' ? view : 'bands';
+  }
+
   function sceneInfo() {
     const field = getField();
     const site = getSite();
@@ -133,6 +140,8 @@ export function createReports(accessors) {
       mastHeightM: rigInfo.mastHeightM,
       patternVisible: rigInfo.patternVisible,
       coverageVisible: mapObjects.overlay.mesh.visible,
+      /** Which question the drape's colours answer: `bands | gradient | zone`. */
+      coverageView: coverageViewOf(),
       /** Our work-area boundary: `{ visible, radiusM, canBind }`. */
       rangeRing: mapObjects.ring.info(),
       labelsVisible: mapObjects.labels.group.visible,

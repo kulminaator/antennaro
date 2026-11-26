@@ -90,7 +90,7 @@ export function createController(options) {
     getViewportInfo: () => viewport.info(),
     getCameraState: () => viewport.cameraState(),
     onCoverage: (coverage) => {
-      mapObjects.overlay.update(field, coverage, { zoneView: state.display.showFresnel === true });
+      mapObjects.overlay.update(field, coverage, { view: state.display.coverageView });
       // The ring is the boundary of the area this result was computed over, so it is
       // refreshed with the result - and it follows the mast for free, because moving
       // the mast recomputes coverage.
@@ -105,7 +105,7 @@ export function createController(options) {
 
   const dirty = { terrain: true, antenna: true, coverage: true };
   let lastCoverageMs = 0;
-  let lastZoneView = false;
+  let lastPaintedView = null; // any value that is not a view name, so the first switch repaints
 
   /**
    * Everything the height field depends on - and the site is deliberately not one of
@@ -154,13 +154,13 @@ export function createController(options) {
     mapObjects.terrain.setWireframe(state.display.showWireframe);
     mapObjects.labels.group.visible = state.display.showSectors;
     fresnel.setVisible(state.display.showFresnel === true);
-    // The zone shares the coverage drape rather than adding a second one, so turning
-    // it over means repainting the drape in the other language.
-    const zoneView = state.display.showFresnel === true;
-    if (zoneView !== lastZoneView) {
-      lastZoneView = zoneView;
+    // The three views share one drape rather than adding three, so switching view
+    // means repainting it in the other language.
+    const view = state.display.coverageView;
+    if (view !== lastPaintedView) {
+      lastPaintedView = view;
       const coverage = reports.coverage();
-      if (coverage) mapObjects.overlay.update(field, coverage, { zoneView });
+      if (coverage) mapObjects.overlay.update(field, coverage, { view });
     }
   }
 

@@ -12,8 +12,8 @@ import assert from 'node:assert/strict';
 
 import { COLOURS, FRESNEL, RF } from '../../src/config.js';
 import {
-  coverageLegendItems, fresnelZoneLegendItems, fresnelZoneRgb, hexToRgb, rangeGradientLegendItems,
-  rangeGradientRgb, rgbToHex,
+  coverageLegendItems, gradientLegendStops, fresnelZoneLegendItems, fresnelZoneRgb, hexToRgb,
+  rangeGradientLegendItems, rangeGradientRgb, rgbToHex,
 } from '../../src/palette.js';
 import { generateTerrain } from '../../src/terrain/generators.js';
 import { resolveSite } from '../../src/terrain/site.js';
@@ -92,27 +92,53 @@ test('palette: the gradient clamps, and can be told where to write', () => {
 test('palette: the gradient legend paints the colours the map paints, and counts honestly', () => {
   const coverage = coverageFixture();
   const items = rangeGradientLegendItems(coverage);
-  assert.equal(items.length, coverage.margins.length + 2, 'one row per band, plus lost and never-asked');
+  const stops = gradientLegendStops();
+  assert.equal(items.length, stops.length + 2, 'one row per third of the ramp, plus lost and never-asked');
 
-  // Every swatch must be a colour the ramp actually produces at that boundary.
+  // A swatch must be a colour the ramp produces *inside* its own row, and the rows must
+  // look different from each other: the legend of a continuous ramp with two identical
+  // swatches says nothing, which is what happened when the rows were the RSSI bands and
+  // the ramp top sat below a band boundary.
   const rgb = [0, 0, 0];
-  items.slice(0, coverage.margins.length).forEach((item, band) => {
-    const expected = rgbToHex(rangeGradientRgb(coverage.margins[band], rgb));
-    assert.equal(item.colour, expected, `band ${band} swatch is the ramp at its own boundary`);
+  const hexes = items.slice(0, stops.length).map((item, index) => {
+    const stop = stops[index];
+    assert.ok(stop.value >= stop.min && stop.value < stop.max, `row ${index} samples its own range`);
+    assert.equal(item.colour, rgbToHex(rangeGradientRgb(stop.value, rgb)), `row ${index} is the ramp at its own stop`);
     assert.equal(item.alpha, 1, 'a working link is painted solid');
-    assert.ok(item.count >= 0);
+    return item.colour;
   });
+  assert.equal(new Set(hexes).size, hexes.length, 'the three rows are three different colours');
 
-  const faint = items[coverage.margins.length];
+  const faint = items[stops.length];
   assert.equal(faint.alpha, RF.noLinkAlpha, 'asked and lost stays faint');
   const never = items[items.length - 1];
   assert.equal(never.alpha, 0, 'never asked stays unpainted');
   assert.equal(never.colour, COLOURS.noLink);
+  // The legend counts the lost cells itself; that count has to agree with the sweep's
+  // below-sensitivity tally once the never-asked cells are taken out of it.
+  const last = coverage.margins.length;
+  assert.equal(faint.count, (coverage.stats.levelCounts[last] ?? 0) - coverage.stats.budgetExcludedCells,
+    'the ramp view and the banded view agree about how many links the ground stopped');
 
   const total = items.reduce((sum, item) => sum + item.count, 0);
   assert.equal(total, coverage.stats.walkedCells + coverage.stats.budgetExcludedCells,
     'the legend counts every point the sweep can account for, no more and no fewer');
   assert.ok(coverage.stats.budgetExcludedCells > 0, 'this fixture must actually exercise the excluded row');
+
+  // Only linked cells ride the ramp, and their margins have to fall in the row they are
+  // counted in - the same arithmetic the drape colours by.
+  const buckets = [0, 0, 0];
+  let linked = 0;
+  for (let i = 0; i < coverage.rssi.length; i += 1) {
+    if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) continue;
+    const margin = coverage.rssi[i] - coverage.sensitivityDbm;
+    if (margin < 0) continue;
+    linked += 1;
+    const index = stops.findIndex((stop) => margin >= stop.min && margin < stop.max);
+    buckets[index < 0 ? buckets.length - 1 : index] += 1;
+  }
+  assert.deepEqual(items.slice(0, 3).map((item) => item.count), buckets, 'each row counts its own margins');
+  assert.ok(linked > 0, 'this fixture must link something');
 
   // The banded legend still exists and counts the same ground.
   const banded = coverageLegendItems(coverage);
@@ -142,7 +168,12 @@ test('palette: the gradient and the Fresnel zone view never share a colour', () 
 
   const coverage = coverageFixture();
   const zoneItems = fresnelZoneLegendItems(coverage.stats);
-  const gradientItems = rangeGradientLegendItems(coverage).slice(0, coverage.margins.length);
+  // The zone legend must account for the whole drape too, including the ground it never
+  // painted: three clearance rows over the measured paths, plus the never-measured row.
+  assert.equal(zoneItems.reduce((sum, item) => sum + item.count, 0),
+    coverage.stats.walkedCells + coverage.stats.budgetExcludedCells,
+    'the zone legend counts every point the sweep can account for');
+  const gradientItems = rangeGradientLegendItems(coverage).slice(0, gradientLegendStops().length);
   for (const zoneItem of zoneItems) {
     for (const signalItem of gradientItems) {
       assert.notEqual(zoneItem.colour, signalItem.colour,

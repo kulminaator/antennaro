@@ -158,17 +158,20 @@ export const RF = Object.freeze({
   /** Coverage ramp bands, as link-margin (dB) above the receiver sensitivity. */
   levelMarginsDb: Object.freeze([45, 30, 15, 0]),
   /**
-   * How the drape is painted: `'bands'` (the four RSSI steps), `'gradient'` (continuous
-   * yellow-through-pink against link margin) or `'zone'` (first Fresnel zone clearance).
-   * One field with three values, so no two switches can disagree about the picture.
+   * How the drape is painted: `'bands'` (the four RSSI steps), `'gradient'` (yellow through
+   * pink against link margin) or `'zone'` (first Fresnel zone clearance). One field, three
+   * values, so no two switches can disagree about the picture.
    */
   defaultCoverageView: 'gradient',
   /**
-   * Top of the gradient scale in dB of margin. Deliberately the same figure as the largest
-   * `levelMarginsDb`, so the two views can disagree about where the edges are - the whole
-   * reason for having both - but never about what "strong" means.
+   * Top of the gradient scale in dB of margin - measured, not guessed. Margin falls 20 dB
+   * per decade of distance, so the disc a link lights up spans only tens of dB: a default
+   * dipole's cells run 0-28 (median 4), a study-range-limited collinear 0-55, the loudest
+   * link the panel allows 18-112. At 45 nearly every map came out pink; 30 dB - a decade
+   * and a half inside the link's own edge - puts the thirds where the ground is. Absolute:
+   * never normalised to the picture in front of you, or screenshots stop comparing.
    */
-  gradientMaxMarginDb: 45,
+  gradientMaxMarginDb: 30,
 });
 
 /** Antenna placement + aiming limits. */
@@ -321,14 +324,11 @@ export const PATHS = Object.freeze({
  */
 export const COLOURS = Object.freeze({
   levels: Object.freeze(['#1b7f4d', '#5fb85f', '#e8c33c', '#e08b2f']),
-  /**
-   * The range gradient: yellow where the link has room, pale yellow as the room closes,
-   * pink for a link that only just makes the receiver - "yellow for strong range, light
-   * yellow for weaker, pink for very weak", because flat bands hide how much margin a spot
-   * has. These hues belong to this view alone (the zone ramp below is purple / amber /
-   * green, the bands are `levels` above) and a unit test refuses a collision: a colour
-   * that means two things in two switchable views is a bug nobody can see.
-   */
+  /* The range gradient, as asked for: yellow where the link has room, pale yellow as the
+     room closes, pink for a link that only just makes the receiver - flat bands hide how
+     much margin a spot has. These hues belong to this view alone (the zone ramp below is
+     purple / amber / green, the bands are `levels` above); a unit test refuses a collision,
+     because one colour meaning two things in two switchable views is a bug nobody sees. */
   gradientStops: Object.freeze({ strong: '#e8b32a', mid: '#f4e08e', weak: '#f0a8bf' }),
   noLink: Object.freeze('#2a2f38'),
   /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */

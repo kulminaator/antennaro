@@ -8,7 +8,10 @@
  * Each coverage vertex is draped onto the terrain height *underneath it*, so the
  * coarser overlay still hugs the real surface.
  *
- * Vertex colours carry the message, and every alpha means something:
+ * One mode decides the *colour* of a cell - `bands`, `gradient` or `zone` - and it is a
+ * mode, not a marking: the three views answer different questions, and laying one over
+ * another would make a pixel mean two things. The **alpha** is the same in all three and
+ * carries the part of the message that is not a matter of taste:
  * - `1` where the link works;
  * - `NO_LINK_ALPHA` (`RF.noLinkAlpha`) where the ground was asked and the link failed
  *   - the faint rim is the reach the terrain actually allows, so it is shown, softly;
@@ -19,7 +22,7 @@
 
 import * as THREE from 'three';
 import { RF, VIEW } from '../config.js';
-import { coverageRgb, fresnelZoneRgb } from '../palette.js';
+import { coverageRgb, fresnelZoneRgb, rangeGradientRgb } from '../palette.js';
 
 /** Terrain vertex index a coverage vertex sits on, clamped to the last row/column. */
 function terrainIndex(field, stride, gx, gz) {
@@ -116,10 +119,13 @@ export function createCoverageOverlay(field) {
    * Repaint from a coverage result, building the geometry if the grid changed.
    * @param {object} sourceField
    * @param {object} coverage
-   * @param {{zoneView?:boolean}} [options] `zoneView` paints first-Fresnel-zone state
-   *   instead of signal bands. A mode rather than a marking laid over the bands: only
-   *   a small share of the map meets the clearance criterion, so painting the flag on
-   *   top of the RSSI colours would wash the drape in one hue.
+   * @param {{view?:'bands'|'gradient'|'zone'}} [options] which question the colours
+   *   answer: `bands` the four RSSI steps, `gradient` how much margin the link has left
+   *   (yellow through pink), `zone` how much of the first Fresnel zone the ground leaves
+   *   clear. A mode rather than a marking laid over the bands: only a small share of the
+   *   map meets the clearance criterion, so painting it on top of the RSSI colours would
+   *   wash the drape in one hue - and the same argument says the gradient may not be a
+   *   tint over the bands, because then no pixel has one meaning.
    */
   function update(sourceField, coverage, options = {}) {
     const stride = coverage.stride ?? 1;
@@ -128,7 +134,11 @@ export function createCoverageOverlay(field) {
     }
     const target = grid.colour.array;
     const lastBand = coverage.margins.length;
-    const zoneView = options.zoneView === true;
+    const view = options.view === 'gradient' || options.view === 'zone' ? options.view : 'bands';
+    // The band colours are a handful of values reused 30 000 times a repaint, indexed by
+    // band - including the last band, which is "below sensitivity" and gets `noLink`.
+    const bandColours = coverage.margins.map((_, band) => coverageRgb(band));
+    bandColours.push(coverageRgb(coverage.margins.length));
     const rgb = [0, 0, 0];
     for (let i = 0; i < grid.size * grid.size; i += 1) {
       if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) {
@@ -145,9 +155,17 @@ export function createCoverageOverlay(field) {
         continue;
       }
       const band = coverage.level[i];
-      const source = zoneView
-        ? fresnelZoneRgb(coverage.fresnelClearance[i])
-        : coverageRgb(band);
+      let source;
+      if (view === 'zone') {
+        source = fresnelZoneRgb(coverage.fresnelClearance[i], rgb);
+      } else if (view === 'gradient') {
+        // Margin, not dBm: the legend and the ramp are keyed to how much room the link
+        // has over *this* receiver, so moving the sensitivity slider cannot recolour a
+        // map that describes the same antenna over the same ground.
+        source = rangeGradientRgb(coverage.rssi[i] - coverage.sensitivityDbm, rgb);
+      } else {
+        source = bandColours[Math.min(band, lastBand)];
+      }
       target[i * 4] = source[0];
       target[i * 4 + 1] = source[1];
       target[i * 4 + 2] = source[2];

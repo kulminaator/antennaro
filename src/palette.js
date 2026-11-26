@@ -130,6 +130,20 @@ export function fresnelZoneLegendItems(stats = {}) {
       label: `clear: judged to a terminal ${rxHeightM} m above the ground`,
       count: stats.fresnelClearCells ?? 0,
     },
+    // The clearance rows above count every path the ground was asked about - links that
+    // work and links the ground stopped alike - so the two absences the drape also shows
+    // have to be named here too, or the faint rim and the bare far ground would be
+    // pixels with no row. The faint rim is described in the card's note, because its
+    // cells are already counted once by clearance and must not be counted twice.
+    ...(Number.isFinite(stats.budgetExcludedCells) && stats.budgetExcludedCells > 0
+      ? [{
+        band: 3,
+        colour: rgbToHex(ZONE_CUT),
+        label: 'out of budget - not measured, not painted',
+        count: stats.budgetExcludedCells,
+        alpha: 0,
+      }]
+      : []),
   ];
 }
 
@@ -174,36 +188,75 @@ export function rangeGradientRgb(marginDb, out = null) {
 }
 
 /**
- * Legend for the gradient. The rows are still the band boundaries - the sweep counts
- * cells per band and those counts must keep adding up - but each colour is the gradient
- * sampled *at* that boundary, so the swatch is the colour a cell at the top of that band
- * actually gets painted, not a colour the ramp never produces. Below sensitivity and
- * out of budget are unchanged: they are not strengths of link, they are the absence of
- * one, and they keep their alpha contract (faint = asked and lost, none = never asked).
+ * Where the gradient legend cuts its own scale, and what it calls the pieces. The rows are
+ * thirds of the ramp, *not* the RSSI bands: a continuous view whose legend lists four flat
+ * bands is describing a picture it does not paint, and if the ramp's top were ever below a
+ * band boundary two rows would come out the same colour. Each row's swatch is the ramp
+ * sampled at `value`, which is inside the row's own range, so the swatch is a colour a cell
+ * in that row really is painted.
+ */
+export function gradientLegendStops() {
+  const top = Math.max(1, RF.gradientMaxMarginDb);
+  return Object.freeze([
+    Object.freeze({ label: 'strong', value: top, min: (2 / 3) * top, max: Infinity }),
+    Object.freeze({ label: 'weaker', value: top / 2, min: top / 3, max: (2 / 3) * top }),
+    Object.freeze({ label: 'at the limit', value: top / 6, min: 0, max: top / 3 }),
+  ]);
+}
+
+/**
+ * Count the painted ground the way the ramp sees it: linked cells in their third of the
+ * margin scale, asked-and-lost cells apart, never-asked cells apart. Walked in the legend
+ * rather than in the sweep because only this view asks for it, and it is 30 000 array
+ * reads - the sweep's own tallies stay where the dBm statistics live.
+ * @returns {{buckets:number[], lost:number, excluded:number}}
+ */
+function gradientCounts(coverage) {
+  const stops = gradientLegendStops();
+  const buckets = stops.map(() => 0);
+  let lost = 0;
+  for (let i = 0; i < coverage.rssi.length; i += 1) {
+    if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) continue;
+    const margin = coverage.rssi[i] - coverage.sensitivityDbm;
+    if (margin < 0) {
+      lost += 1;
+      continue;
+    }
+    const index = stops.findIndex((stop) => margin >= stop.min && margin < stop.max);
+    buckets[index < 0 ? buckets.length - 1 : index] += 1;
+  }
+  return { buckets, lost, excluded: coverage.stats.budgetExcludedCells ?? 0 };
+}
+
+/**
+ * Legend for the gradient: three rows of ramp colour, then the two absences. Below
+ * sensitivity and out of budget are unchanged from the banded legend - they are not
+ * strengths of link, they are the absence of one, and they keep the alpha contract
+ * (faint = asked and lost, none = never asked).
  */
 export function rangeGradientLegendItems(coverage) {
   const rgb = [0, 0, 0];
-  const items = coverage.margins.map((margin, band) => ({
-    band,
-    colour: rgbToHex(rangeGradientRgb(margin, rgb)),
-    label: band === 0
-      ? `strong: ${margin.toFixed(0)} dB or more over the receiver`
-      : `>= ${margin.toFixed(0)} dB over${band === coverage.margins.length - 1 ? ' (pink: at the limit)' : ''}`,
-    count: coverage.stats.levelCounts[band] ?? 0,
+  const stops = gradientLegendStops();
+  const { buckets, lost, excluded } = gradientCounts(coverage);
+  const items = stops.map((stop, index) => ({
+    band: index,
+    colour: rgbToHex(rangeGradientRgb(stop.value, rgb)),
+    label: `${stop.label}: ${stop.min.toFixed(0)}`
+      + (Number.isFinite(stop.max) ? `-${stop.max.toFixed(0)}` : '+')
+      + ' dB over the receiver',
+    count: buckets[index],
     alpha: 1,
   }));
-  const last = coverage.margins.length;
-  const excluded = coverage.stats.budgetExcludedCells ?? 0;
   items.push({
-    band: last,
+    band: coverage.margins.length,
     colour: COLOURS.noLink,
     label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (faint: terrain stops the link)`,
-    count: Math.max(0, (coverage.stats.levelCounts[last] ?? 0) - excluded),
+    count: lost,
     alpha: RF.noLinkAlpha,
   });
   if (excluded > 0) {
     items.push({
-      band: last,
+      band: coverage.margins.length,
       colour: COLOURS.noLink,
       label: 'out of budget - not measured, not painted',
       count: excluded,
@@ -257,7 +310,7 @@ export function coverageLegendItems(coverage) {
   });
   if (excluded > 0) {
     items.push({
-      band: last,
+      band: coverage.margins.length,
       colour: COLOURS.noLink,
       label: 'out of budget - not measured, not painted',
       count: excluded,
