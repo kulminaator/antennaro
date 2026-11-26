@@ -151,6 +151,22 @@ function getAntenna(id) {
   return ANTENNA_CATALOGUE.find((entry) => entry.id === id);
 }
 
+test('antenna physics: every directional design says what its build is worth', async () => {
+  const { ANTENNA } = await import('../../src/config.js');
+  for (const entry of directional) {
+    assert.equal(typeof entry.beamwidths, 'function', `${entry.id} must declare its beam`);
+    assert.ok(Object.hasOwn(ANTENNA.apertureEfficiency, entry.id),
+      `${entry.id} has no aperture efficiency and would silently inherit the default`);
+    const efficiency = ANTENNA.apertureEfficiency[entry.id];
+    assert.ok(efficiency > 0 && efficiency <= 1,
+      `${entry.id}: efficiency ${efficiency} is not a loss a real build could have`);
+    const w = entry.beamwidths(createDefaultParams(entry.id));
+    assert.ok(w.azimuthDeg > 0 && w.azimuthDeg <= 120, `${entry.id}: azimuth beam`);
+    assert.ok(w.elevationDeg > 0 && w.elevationDeg <= 120, `${entry.id}: elevation beam`);
+  }
+  assert.ok(ANTENNA.apertureEfficiencyDefault > 0 && ANTENNA.apertureEfficiencyDefault <= 1);
+});
+
 test('antenna physics: the model uses the Kraus arithmetic this test believes', () => {
   // Hand-worked: 41253 / (60 * 60) = 11.46 -> 10.59 dBi.
   const worked = 10 * Math.log10(41253 / 3600);
