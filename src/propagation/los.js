@@ -5,9 +5,10 @@
  * Layer: L1 (pure domain). Given a transmit point in the air and a ground point,
  * work out how much of the ray is buried in the terrain and how much that costs
  * in dB. Model: ray height sampled along the path, over the standard-earth
- * curvature implied by the k-factor, then ITU-R P.526-style single knife-edge
- * diffraction (Maqsood/Lee closed form). It is intentionally deterministic and cheap:
- * this runs once per terrain cell on every parameter change.
+ * curvature implied by the k-factor, then the diffraction loss of `diffraction.js`
+ * (ITU-R P.526-style knife edge, Maqsood/Lee closed form, plus Deygout's superposition
+ * for more than one screen). It is intentionally deterministic and cheap: this runs once
+ * per terrain cell on every parameter change.
  *
  * Which way the curvature goes, because it is the kind of sign that survives for months
  * if nothing asks: a height field is a **planar** datum, so the equivalent-round-earth
@@ -29,7 +30,11 @@
 
 import { RF } from '../config.js';
 import { clamp } from '../math/scalar.js';
-import { earthBulgeM, fresnelRadiusM, pathSamples, wavelengthM } from './rf.js';
+import { diffractionLossDb } from './diffraction.js';
+import { earthBulgeM, fresnelRadiusM, pathSamples } from './rf.js';
+
+/** The loss model lives in `diffraction.js`; it is re-exported for the callers of `los.js`. */
+export { diffractionLossDb };
 
 /**
  * Sample the terrain against the straight ray from `from` (in the air) to `to`.
@@ -175,48 +180,6 @@ function worstScreen(points, total, guard, nearEndM) {
   return best;
 }
 
-/**
- * Where the Lee/Maqsood fit of the Fresnel integral stops being a fit: v ~ -0.78, about
- * 0.78 first-zone radii clear of the edge. Above it the closed form tracks the integral;
- * below it the true loss has died away into a fraction of a dB and the polynomial runs off
- * into nonsense, so the answer is nothing. Declared next to the maths it bounds - like
- * `PATTERN_FLOOR_DB` in `antenna/pattern.js` - because moving it to config would separate
- * a model from the number that says where it stops being meaningful.
- */
-const KIRCHHOFF_FIT_FLOOR_V = -0.78;
-
-/**
- * Diffraction loss (dB, >= 0) for a knife edge `excessM` above the ray, sitting `d1` from
- * the transmitter and `d2` from the receiver.
- *
- * `excessM` is **signed**: positive means the edge stands above the ray (the geometric
- * shadow), negative means the ray clears it by that much. Passing the sign is what makes
- * the shadow start where the physics says it does - a continuous climb from 0 dB at the
- * fit floor, through 6 dB as the ray grazes the edge, and on into the deep shadow -
- * instead of a step from "no obstruction" to "grazing" the centimetre the ray touches.
- * Monotone increasing in `excessM`, and 0 dB once the edge is far enough below the ray.
- */
-export function diffractionLossDb(excessM, d1, d2, freqHz) {
-  if (!Number.isFinite(excessM)) return 0;
-  if (d1 <= 0 || d2 <= 0) return 0;
-  const lambda = wavelengthM(freqHz);
-  const total = d1 + d2;
-  if (!(lambda > 0) || total <= 0) return 0;
-  const v = excessM * Math.sqrt(2 / (lambda * (d1 * d2) / total));
-  if (v < KIRCHHOFF_FIT_FLOOR_V) return 0;
-  const loss = 6.9 + 20 * Math.log10(Math.sqrt(Math.pow(v - 0.1, 2) + 1) + v - 0.1);
-  return Math.max(0, loss);
-}
-
-/**
- * Total obstruction loss between an airborne point and a ground point.
- * The most obstructed sample dominates (single-edge approximation).
- *
- * Deliberately does not ask for the Fresnel radius: the loss only needs the worst
- * excess, and this is the hottest function in the app. Call `rayProfile` with a
- * `freqHz` (or `fresnelStatus`) when the zone occupancy is wanted as well.
- * @returns {number} dB of extra loss, 0 when the path is clear
- */
 /**
  * What an already-walked profile costs, in dB.
  *

@@ -103,8 +103,8 @@ export const RF = Object.freeze({
   defaultRxSensitivityDbm: -80,
   /**
    * The study range: how far from the mast the coverage is evaluated. The default is the
-   * map's half-diagonal (3677 m) rounded up, so the edge of the colour is the link's own
-   * maximum. Lower it and it becomes a declared limit: a ring is drawn where it could bind.
+   * map's half-diagonal (3677 m) rounded up, so the edge of the colour is the link's own edge.
+   * Lower it and it becomes a declared limit: a ring is drawn wherever it could bind.
    */
   defaultMaxRangeM: 3800,
   /* Past the map on purpose: a mast in a corner has 7354 m of ground, so a 6 km work area is
@@ -116,9 +116,8 @@ export const RF = Object.freeze({
   /**
    * Ceiling on the samples one ray walk takes; `pathSamples()` in rf.js asks for one sample per
    * terrain cell, so this only binds on paths longer than the map is wide. Measured along the
-   * longest line a legal corner mast can look over, on crests one to three cells wide slid
-   * through the phase of the sample grid: one per cell reads within 1.9 dB of that path walked
-   * dense where the old 96 read 6.5 dB short, and finer than the mesh buys nothing.
+   * longest legal corner-to-corner line over crests one to three cells wide: one per cell reads
+   * within 1.9 dB of that path walked dense where the old 96 read 6.5 dB short.
    */
   profileMaxSamples: 2 * WORLD.gridSize,
   /**
@@ -136,18 +135,19 @@ export const RF = Object.freeze({
   fresnelRxHeightM: 4,
   /**
    * How near to an antenna a sample has to be to be excused, per verdict. One cause for two
-   * windows: `sqrt(d1 d2 / (d1 + d2))` collapses at an antenna, so the dive into the
-   * terminal's own ground is judged against a zone a centimetre wide. The fraction excuses
-   * sub-ray crests at both ends, the metres the receiver's footing at its end only.
+   * windows: `sqrt(d1 d2 / (d1 + d2))` collapses at an antenna, so the dive into the terminal's
+   * own ground is judged against a centimetre-wide zone. Metres excuse the receiver's footing.
    */
   fresnelEndpointGuard: 0.1,
   diffractionEndpointGuard: 0.1,
   diffractionNearEndM: 30,
+  /* How many screens one path charges in Deygout's superposition (`diffraction.js`): the
+     conventional three. The sum is dominated by the first edges; broken ground shows dozens. */
+  diffractionEdgeLimit: 3,
   /**
    * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex. The ground
-   * needs ~15 m cells to look like land, and a ray walk over all 121 801 of them measured 734
-   * ms in Node - far too slow to re-run while a slider is dragged. Stride 2 (~30 m cells) keeps
-   * the shape, since a link boundary is kilometres wide, for a fraction of the cost.
+   * needs ~15 m cells to look like land, but a ray walk over all 121 801 of them measured 734 ms
+   * in Node, so stride 2 (~30 m cells) keeps a shape whose boundaries are kilometres wide.
    */
   coverageStride: 2,
   /**
