@@ -15,12 +15,13 @@ it, while the mountain, the valley and every other hill stay exactly where they
 are: the map never reshapes itself to suit the antenna. Put the mast on a ridge and
 it stands on the ridge, with the ground falling away beside it.
 
-![An omni dipole at the centre of a 5.2 km map, painted in the range gradient: a warm
-core right at the mast, pale yellow arms where the link still has room, and pink for the
-points that only just make the receiver - 770 of the 836 linked cells, because this budget
+![An omni dipole at the centre of a 5.2 km map, painted in the four signal steps: yellow
+right at the mast where the link has 8 dB or more to spare over the receiver, then orange,
+then red, and crimson for the points that only just make it - 105, 300, 253 and 178 cells
+respectively of the 836 that link, because this budget
 is 0.94 km and there is nowhere to hide. The wedge missing on the right is the west: this
 antenna is omnidirectional, so a direction with no colour is ground, not gain (0 % of the
-walked points link in each of SW, W and NW). The wide translucent band beyond the pink is
+walked points link in each of SW, W and NW). The wide translucent band beyond the crimson is
 ground the sweep asked about and lost to the terrain, painted faint on purpose; beyond that
 the map is bare, because the antenna's own budget cannot reach it and it was never measured.
 The read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km",
@@ -74,8 +75,8 @@ an edited import map, and `npm run vendor` tells you which.
   the terrain actually is - so the far side of a ridge goes dark. The map is 5.2 km
   across, the ground is sampled every 15 m and the coverage every 30 m, and the sweep
   looks at the **whole map**, not a disc around the mast. One control, *Coverage view*,
-  decides what the colours mean - signal bands, a continuous range gradient, or first
-  Fresnel zone clearance ([What the colours can mean](#what-the-colours-can-mean)).
+  decides what the colours mean - the four signal steps, or first Fresnel zone clearance
+  ([What the colours can mean](#what-the-colours-can-mean)).
   Whatever you pick, three *opacity* meanings stay the same: solid where a link works, a
   faint wash where the sweep asked and the terrain defeated the link, and no paint at all
   where the free-space budget cannot reach the receiver - ground that was never consulted,
@@ -89,8 +90,8 @@ an edited import map, and `npm run vendor` tells you which.
   in the Display group draws a semi-transparent tube along the boresight - the first
   Fresnel zone of a reference link from the mast to where the beam lands. It is only the
   tube. Which language the coverage drape is painted in is the *Coverage view* select
-  above it, and setting that to *Fresnel zone clearance* colours the map green where the
-  ground leaves the zone clear, amber where it eats into it, purple where it stands above
+  above it, and setting that to *Fresnel zone clearance* colours the map mint where the
+  ground leaves the zone clear, lilac where it eats into it, deep violet where it stands above
   the ray. The two are separate switches because the volume and the verdict answer
   different questions, and because a toggle that also repaints the map is a control whose
   label lies after the second click.
@@ -110,18 +111,19 @@ across the eight compass sectors (N, NE, E, SE, S, SW, W, NW) showing how much o
 each sector has a link and how far that link reaches - a range printed as `>= 1400 m`
 was still alive where we stopped looking.
 
-Below the numbers is the legend. In the **signal bands** view it is four colour bands and
-a faint row, keyed to your receiver sensitivity (at the default −80 dBm that is
-`>= -35 dBm`, `>= -50`, `>= -65`, `>= -80`, then `< -80 dBm (faint: terrain stops the
-link)`), plus a row for the bare "out of budget - not measured, not painted" area.
+Below the numbers is the legend. In the **signal steps** view it is four colour rows and a
+faint one, keyed to your receiver sensitivity (at the default −80 dBm that is
+`comfortable: >= -72 dBm`, `good: >= -77`, `marginal: >= -79`, `at the limit: >= -80`, then
+`< -80 dBm (faint: terrain stops the link)`), plus a row for the bare "out of budget - not
+measured, not painted" area.
 Changing sensitivity moves the boundaries - the colours mean "margin over what the client
-can hear", not "signal quality" in the abstract. In the **range gradient** view the same
-ground is counted three ways instead of four, against the ramp's own scale: on the default
-map 8 points have 20 dB or more to spare, 58 have 10-20, 770 have 0-10, 1992 were measured
-and lost, and 27 796 were never measured. In the **zone** view it is three rows - cut,
-partly cut, clear - quoting the receiver height the verdict was computed for, plus the
+can hear", not "signal quality" in the abstract. On the default map those four rows hold
+105, 300, 253 and 178 cells, 1992 were measured and lost, and 27 796 were never measured. In
+the **zone** view it is three rows - cut,
+partly cut, clear - quoting the receiver height the verdict was computed for (1159, 589 and
+1080 of the 2828 paths the ground was asked about, on that same default map), plus the
 same unmeasured row and a line saying that faint means measured-and-failed. Every legend
-row is a count, and the counts of any of the three legends add up to the same 30 624
+row is a count, and the counts of either legend add up to the same 30 624
 points the sweep can account for: a legend that describes different pixels to the ones
 under it is a bug, and there is a test for it.
 
@@ -136,7 +138,7 @@ Left panel, top to bottom:
 | **Placement and aim** | Site position: east offset and south offset, −2500 to +2500 m in 5 m steps (the same numbers a drag writes). Height above ground (0.5–40 m, measured from the ground under the mast), azimuth (0–360°, 0 = north), mechanical tilt (−60° to +60°, negative is downtilt). |
 | **Radio and link budget** | Band (433 / 868 / 915 / 2400 / 5800 MHz), transmitter power (−10…43 dBm), feeder loss, receiver sensitivity, zone receiver height, study range (100 m to 6 km), clutter loss, and *Terrain shadowing (diffraction loss)* - off means the decibels ignore the ground, while the zone verdict and the earth's curvature are still walked over it. |
 | **Terrain** | The terrain seed. Same seed always gives the same ground. |
-| **Display** | Coverage overlay, coverage view (bands / range gradient / Fresnel zone clearance), radiation pattern, Fresnel zone volume, terrain mesh, zone labels. |
+| **Display** | Coverage overlay, coverage view (signal steps / Fresnel zone clearance), radiation pattern, Fresnel zone volume, terrain mesh, zone labels. |
 
 Buttons: **New terrain** (fresh random seed), **Reset view** (camera back to
 start, centred on the site), **Reset placement** (site back to the middle of the
@@ -192,7 +194,7 @@ http://localhost:8080/?design=yagi&seed=1234&height=24&azimuth=180&tilt=-6&siteX
 | `siteX`, `siteZ` | site position east / south, metres | off the map centre; both default to 0 |
 | `frequency` | band in MHz | `433`, `868`, `915`, `2400`, `5800` |
 | `sensitivity`, `range` | receiver sensitivity (dBm), study range (m) | both clamped to what the model allows, and the clamp is reported - see below |
-| `view` | how the coverage is painted | `bands`, `gradient`, `zone` |
+| `view` | how the coverage is painted | `steps`, `zone`. `bands` and `gradient` - the two signal views this app used to have - are still taken as `steps`, so old links land on the picture they meant |
 | `fresnel` | the Fresnel-zone volume, and the view that goes with it | `fresnel=1` turns the tube on **and** sets `view=zone`; `view` alone changes the colours without the tube |
 | `manual`, `nohud` | testing aids: no animation loop, no read-out panel | |
 
@@ -204,10 +206,13 @@ widest work area there is, past the map itself - and 2500 m of east offset, and 
 
 ![The same map in the *Reach down the valley* scenario: a 10-director Yagi 24 m above the
 centre, azimuth 180 and 6 deg of mechanical tilt, so the beam runs down the valley to the
-south - the drape is a tongue, not a disc. 19 cells have 20 dB or more to spare (the warm
-core at the mast), 209 have 10-20 dB along the valley floor, and 1791 are the dying pink rim
-that ends at 2481 m on a bearing of 181 deg against a 2.50 km free-space budget: the picture
-ends in the middle of the map, not at its edge. The rising ground behind the mast stays
+south - the drape is a tongue, not a disc. 355 cells have 8 dB or more to spare (the yellow
+at the mast), 736 have 3-8 dB down the valley floor, 586 have 1-3 dB, and 342 are the
+crimson rim that ends at 2481 m on a bearing of 181 deg against a 2.50 km free-space budget:
+the picture
+ends in the middle of the map, not at its edge. The pale patch inside the tongue is ground
+the sweep asked and lost: 16 cells on a bearing of 150-152 deg at 1.5 km, where the flank
+stands 442 m above the ray and the link is 35 dB short. The rising ground behind the mast stays
 bare, and the read-out says so - 2019 of 30624 points, 84.2 % of the ground a link could
 reach.](docs/screenshot-valley.png)
 
@@ -370,7 +375,7 @@ Beyond the budget radius the app does not walk a ray; it stores the free-space u
 bound and paints nothing. That is a shortcut, not an approximation: diffraction and
 clutter can only subtract, so if free space alone already misses your sensitivity the
 ground cannot rescue the link. `coverage: the budget pre-filter cannot move the link
-boundary` proves it on the real map - same linked set, same bands, bit-identical
+boundary` proves it on the real map - same linked set, same steps, bit-identical
 decibels at every walked point, and every dismissed point demonstrably unreachable.
 
 ### Antenna physics: why a wide antenna cannot have long reach
@@ -414,37 +419,65 @@ is where you see which of them is answering.
 
 ### What the colours can mean
 
-One control, three views, and only the *colour* of a cell changes between them. The
-alpha channel - solid, faint, blank - is the same in all three, because that part of the
+One control, two views, and only the *colour* of a cell changes between them. The
+alpha channel - solid, faint, blank - is the same in both, because that part of the
 message is not a matter of taste.
 
 | View | A cell's colour answers | Scale |
 | --- | --- | --- |
-| **signal bands** | which of four RSSI steps is this point in? | keyed to your receiver sensitivity: `+45`, `+30`, `+15`, `0 dB` above it |
-| **range gradient** | how much room does this link have left? | continuous yellow through pale yellow to pink, `0` to `30 dB` of margin over the receiver |
-| **Fresnel zone clearance** | how much of the first Fresnel zone has the ground left me? | purple (zone cut) through amber (partly cut) to green (`>= 60 %` clear) |
+| **signal steps** | how much room does this link have left? | four steps keyed to your receiver sensitivity: `>= +8`, `>= +3`, `>= +1`, `>= 0 dB` over it |
+| **Fresnel zone clearance** | how much of the first Fresnel zone has the ground left me? | deep violet (zone cut) through lilac (partly cut) to mint (`>= 60 %` clear) |
 
-The gradient is there because the bands hide the thing people actually read off a map. On
-the default configuration the banded view paints 816 of the 836 linked cells in *one*
-colour (the remaining 20 are a band higher); the gradient splits the same 816 into 8 strong,
-58 weaker and 770 at the limit, and that split is the difference between "it links"
-and "it links, this far, with this much to spare".
+The signal scale is four flat steps - yellow, orange, red, crimson - and it replaced two
+views that both shipped with passing tests and neither of which could be read.
 
-| ![The valley scenario in the signal-bands view: 1958 of its 2019 linked points are one colour, because they all land between -80 and -65 dBm; 59 are a band brighter, 2 two bands above that. The read-out is identical to the gradient picture - best -48.1, median -77.4, worst -119.4 dBm - because a view changes a cell's colour and nothing else.](docs/screenshot-bands.png) | ![The same scenario, same sweep, same 2019 linked points, in the range gradient: 19 strong near the mast, 209 with room to spare, 1791 at the dying pink rim, and a warm core you can only see once the bands are taken away.](docs/screenshot-valley.png) |
+The **signal bands** were honest but useless: keyed to `+45 / +30 / +15 / 0 dB`, they put
+816 of the default map's 836 linked cells - 97.6 % - in one colour, because margin over a
+real receiver is *small* on any map a person is looking at. The median linked cell has
+2.9 dB of room on the default map and 2.9-5.1 dB on the five scenarios; 78-92 % of linked
+cells are under 10 dB on all six. A scale whose interesting end nobody visits is not a scale.
+
+The **range gradient** was worse. Its three stops sat at L\* 76 / 89 / 76: the two ends of
+the scale were 0.4 apart in lightness and its middle was the brightest pixel on the map, so
+the ramp had no direction to read, and under a deuteranopic model it separated 23 % of the
+pairs of cells on a default map. It also hid the one thing a stepped scale says plainly:
+whether a point is comfortable or is hanging on by a decibel.
+
+| ![The valley scenario in the signal steps: 355 of its 2019 linked points have 8 dB or more to spare and are yellow at the mast, 736 are orange, 586 red and 342 the crimson rim that dies at 2481 m. The read-out is identical to the zone picture below - best -48.1, median -77.4, worst -119.4 dBm - because a view changes a cell's colour and nothing else.](docs/screenshot-valley.png) | ![The same scenario, same sweep, same 2019 linked points, in the Fresnel zone view: mint where the ground leaves the first zone clear, lilac where it eats into it, deep violet where the ground stands above the ray. Almost the whole tongue is mint, because the question here is not how loud the signal is but whether the ground is in the way - an open valley is good real estate, and 99.8 % of the linked points keep the zone clear.](docs/screenshot-zone.png) |
 | --- | --- |
-| *signal bands* | *range gradient* |
+| *signal steps* | *Fresnel zone clearance* |
 
-The scale is deliberately absolute:
-`RF.gradientMaxMarginDb` is 30 dB of margin, not "the best cell on this map", because a
-ramp that quietly re-normalises itself to whatever is on screen makes two screenshots of
-two different links incomparable. 30 dB is measured, not chosen - over the ground a link
-actually lights up, margin spans 0-30 dB on the default dipole, 0-34 on the flat-field
-scenario and 12-107 on the loudest link the panel allows, and a top of 45 painted nearly
-every map pink.
+The steps are measured in CIEDE2000, the colour difference that means "an eye sees a
+difference", under four models of colour vision:
 
-The three views are presentation, not physics, and one browser test insists:
+- neighbours are 22.8, 24.8 and 24.4 apart going from yellow down to crimson, and no two
+  neighbours fall below **11.5** in any eye tested (normal, deuteranopia, protanopia,
+  tritanopia) - twice the ten or so where two patches become two colours;
+- lightness falls **93 / 74 / 53 / 31 L\*** as the margin runs out, so the order survives even
+  where the hue does not: more signal is always the brighter, warmer end;
+- every step stays at least **24** from the bare terrain it is draped on, and from the faint
+  asked-and-lost wash it must never be mistaken for;
+- the two views share no colour: the closest pair across them is **15.7** apart.
+
+Four is the most this colour path carries, and that is a measurement as well. Ordering a
+scale by lightness is what keeps it readable when red-green colour vision is missing, and
+the best gap obtainable on a red-through-yellow ramp is 19.5 / 12.5 / 9.5 for 3 / 4 / 5
+steps. A fifth step would be a colour you cannot tell from its neighbour - which is exactly
+how the gradient managed to look like one wash.
+
+The thresholds are deliberately absolute: `RF.levelMarginsDb` is 8 / 3 / 1 / 0 dB over
+your own receiver sensitivity, not "the best cell on this map", because a scale that quietly
+re-normalises itself to whatever is on screen makes two screenshots of two different links
+incomparable. They are placed on the measured margin distribution of all six shipped
+configurations, where the busiest step then holds 35-40 % of the linked cells and the median
+linked cell lands in a middle step. One configuration is deliberately outside that: the
+loudest link the panel allows (43 dBm into a -124 dBm receiver) is 100 % comfortable
+everywhere, and paints 30 624 yellow cells, because that link really does have 38 dB of room
+at the far corner of the map.
+
+The two views are presentation, not physics, and one browser test insists:
 `browser: the coverage view repaints the drape, and no view changes a decibel` walks
-`gradient -> bands -> zone -> gradient` and asserts that the whole coverage statistics
+`steps -> zone -> steps` and asserts that the whole coverage statistics
 object is `deepEqual` at every stop, while the pixels do move. Switching a view repaints
 the grid the sweep already computed; it does not run a second model.
 
@@ -552,9 +585,9 @@ largest zone the antenna has to keep clear anywhere it is looking. Its radius is
 widened by a fixed factor so it is visible next to a five-kilometre map; at
 `FRESNEL.radialExaggeration: 1` you would see the truth, which is a hairline.
 
-![The same valley scenario again, this time in the Fresnel-zone view: the drape is green where the ground leaves the first zone clear and amber where it eats into it, with a few purple patches where the ground stands above the ray - 99.8 % of the 2019 linked points are clear and only 5 are cut, because an open valley is good real estate - and the pale translucent band running out along the beam is the first-zone volume itself. Every number in the read-out is identical to the valley pictures above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
+![The same valley scenario again, this time in the Fresnel-zone view: the drape is mint where the ground leaves the first zone clear and lilac where it eats into it, with a few deep violet patches where the ground stands above the ray - 99.8 % of the 2019 linked points are clear and only 5 are cut, because an open valley is good real estate - and the pale translucent band running out along the beam is the first-zone volume itself. Every number in the read-out is identical to the valley pictures above: this is a different question about the same sweep.](docs/screenshot-fresnel.png)
 
-Green keeps at least 60 % of the first zone clear, amber is partly cut, purple is
+Mint keeps at least 60 % of the first zone clear, lilac is partly cut, deep violet is
 cut outright - the ground stands above the ray. The zone legend also carries the
 "out of budget - not measured, not painted" row and a line saying that its three rows
 count every path the ground was asked about, link or no link: the faint rim is a measured
