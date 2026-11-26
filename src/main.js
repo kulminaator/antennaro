@@ -8,7 +8,8 @@
  *
  * URL parameters (all optional, meant for testing and shareable links):
  *   ?design=yagi&seed=1234&azimuth=90&tilt=-4&height=12&siteX=400&preset=valley-reach
- *   &fresnel=1       start with the Fresnel-zone view on
+ *   &view=bands|gradient|zone   how the coverage is painted
+ *   &fresnel=1       the Fresnel-zone volume on, and the coverage view set to `zone`
  *   &manual=1        do not auto-start the animation loop (headless tests)
  *   &nohud=1         do not create the read-out panel
  */
@@ -44,7 +45,19 @@ function readInitialState(params) {
   if (params.get('frequency')) initialState.frequencyKey = String(params.get('frequency'));
   if (params.get('sensitivity')) initialState.rxSensitivityDbm = Number(params.get('sensitivity'));
   if (params.get('range')) initialState.maxRangeM = Number(params.get('range'));
-  if (params.has('fresnel')) initialState.display = { showFresnel: params.get('fresnel') !== '0' };
+  // Display switches merge into the defaults instead of replacing them: an earlier
+  // version wrote `initialState.display = { showFresnel: true }`, which silently switched
+  // the coverage overlay, the pattern and the labels off as well.
+  const display = { ...initialState.display };
+  if (params.get('view')) display.coverageView = String(params.get('view'));
+  if (params.has('fresnel')) {
+    const on = params.get('fresnel') !== '0';
+    display.showFresnel = on;
+    // `?fresnel=1` used to be the only way to reach the zone colours, so it still takes
+    // you there; the volume and the view are separate switches now.
+    if (on) display.coverageView = 'zone';
+  }
+  initialState.display = display;
   return initialState;
 }
 

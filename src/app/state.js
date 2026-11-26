@@ -66,6 +66,8 @@ function baseState(designId) {
     display: {
       showCoverage: true,
       showPattern: true,
+      /** `'bands' | 'gradient' | 'zone'` - see `RF.defaultCoverageView`. */
+      coverageView: RF.defaultCoverageView,
       showFresnel: false,
       showWireframe: false,
       showSectors: true,

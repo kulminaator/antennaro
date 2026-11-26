@@ -114,10 +114,21 @@ export const STATE_FIELDS = Object.freeze([
     group: 'Display', impact: [RECOMPUTE.DISPLAY],
   }),
   Object.freeze({
-    key: 'display.showFresnel', path: ['display', 'showFresnel'], label: 'Fresnel zone', kind: 'toggle',
-    group: 'Display', impact: [RECOMPUTE.DISPLAY],
-    hint: 'Draw the first Fresnel zone of a reference link and colour the coverage by '
-      + 'zone clearance instead of by signal level.',
+    key: 'display.coverageView', path: ['display', 'coverageView'], label: 'Coverage view',
+    kind: 'select', group: 'Display', impact: [RECOMPUTE.DISPLAY],
+    options: Object.freeze([
+      Object.freeze({ value: 'bands', label: 'signal bands' }),
+      Object.freeze({ value: 'gradient', label: 'range gradient (yellow to pink)' }),
+      Object.freeze({ value: 'zone', label: 'Fresnel zone clearance' }),
+    ]),
+    hint: 'Bands and gradient are two readings of the same signal level; zone paints how '
+      + 'much of the first Fresnel zone the ground leaves clear.',
+  }),
+  Object.freeze({
+    key: 'display.showFresnel', path: ['display', 'showFresnel'], label: 'Fresnel zone volume',
+    kind: 'toggle', group: 'Display', impact: [RECOMPUTE.DISPLAY],
+    hint: 'Draw the zone itself - the tube of active space between the mast and the far end '
+      + 'of a reference link. Which colours the drape wears is the coverage view, above.',
   }),
   Object.freeze({
     key: 'display.showWireframe', path: ['display', 'showWireframe'], label: 'Terrain mesh', kind: 'toggle',

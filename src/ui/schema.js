@@ -110,6 +110,7 @@ export function buildPanel(state) {
       title: 'Display',
       fields: [
         fieldByKey(state, 'display.showCoverage'),
+        fieldByKey(state, 'display.coverageView'),
         fieldByKey(state, 'display.showPattern'),
         fieldByKey(state, 'display.showFresnel'),
         fieldByKey(state, 'display.showWireframe'),
