@@ -8,3 +8,4 @@ node_modules/
 # There is nothing to lock: the project has no dependencies, and third-party
 # code is vendored under vendor/ with its own manifest and hashes.
 package-lock.json
+tmp
