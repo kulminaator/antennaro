@@ -101,6 +101,13 @@ banner or `LICENSE.txt` is missing, or if the artifact stops being
 self-contained. `tests/browser/app-boot.test.js` goes further and hashes the file
 *inside the page*, so "the audited artifact" and "what actually ran" cannot drift.
 
+The page also says all of that out loud: `ui/about.js` builds an About dialog whose
+third-party notice names `vendor/three/`, and it fills in the release number and the
+licence text by reading `manifest.json` and `LICENSE.txt` when the dialog is opened -
+not by restating them in a source file, which would be a second truth free to go stale.
+If the fetch fails (opened from elsewhere, offline) the dialog still names the licence
+and links to where it lives.
+
 To bump three: `node tools/vendor.js bundle --version 0.189.0`, then
 `npm run verify` - the browser suite is what tells you a renderer API changed on
 you.

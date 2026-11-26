@@ -140,6 +140,14 @@ start, centred on the site), **Reset placement** (site back to the middle of the
 map), **Save PNG** (download the current view), **Reset all** (everything, the site
 included).
 
+At the foot of the panel, **About** opens a small dialog with the three things that
+are not physics: where the source lives (https://github.com/kulminaator/antennaro),
+the licence this simulator ships under (MIT, `LICENSE`), and the fact that the picture
+is drawn by three.js - MIT-licensed, vendored into `vendor/three/`, whose copyright
+notice and full licence text the dialog quotes from the files that travel with the
+code. An open dialog is not part of the simulation: it is not in the state, not in a
+patch, and not in the URL.
+
 Some designs (Yagi, biquad, patch) also offer **electrical downtilt**: the beam
 tips down while the hardware stays level, which is how a real sector panel is
 often tilted.
