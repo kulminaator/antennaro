@@ -11,8 +11,8 @@
  * group - a hung test can never survive this wrapper.
  */
 
-import { numFlag, parseArgs, usage } from './lib/args.js';
-import { run } from './lib/proc.js';
+import { checkArgs, numFlag, parseArgs, usage } from './lib/args.js';
+import { guardBrokenPipe, run } from './lib/proc.js';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -26,9 +26,19 @@ const USAGE_TEXT = `timebox - run a command with a deadline
       --json        report {code, timedOut, durationMs, stdout, stderr} as JSON`.trim();
 
 async function main() {
+  guardBrokenPipe();
   const argv = process.argv.slice(2);
   const parsed = parseArgs(argv, { aliases: { t: 'timeout' }, booleans: ['quiet'] });
   if (parsed.help || parsed._.length === 0) usage(USAGE_TEXT, parsed.help ? 0 : 2);
+  // Everything after the command word belongs to the child, so positionals are unlimited here;
+  // the flags this tool itself reads are not, and a mistyped budget must not silently become 60 s.
+  checkArgs(parsed, {
+    name: 'timebox.js',
+    flags: ['help', 'timeout', 'kill-after', 'quiet', 'json'],
+    positionals: Infinity,
+    hint: 'the budget is -t/--timeout in seconds, and the command goes after --',
+    usageText: USAGE_TEXT,
+  });
 
   const rawBudget = numFlag(parsed.flags, 'timeout', 60);
   const timeoutMs = rawBudget > 1000 ? rawBudget : rawBudget * 1000;

@@ -7,8 +7,8 @@
  *   node tools/browser.js status [--name dev | --all]
  *   node tools/browser.js stop   [--name dev | --all] [--force]
  *   node tools/browser.js open URL [--name dev]
- *   node tools/browser.js eval "1+1" [--name dev] [--url URL]
- *   node tools/browser.js shot [--url URL] [--out .tmp/artifacts/shot.png]
+ *   node tools/browser.js eval "1+1" [--name dev] [--url URL] [--target ID]
+ *   node tools/browser.js shot [OUT] [--url URL] [--out FILE] [--target ID]
  *   node tools/browser.js pages [--name dev]
  *
  * A started instance is *persistent*: iterate against it with `eval`/`shot`
@@ -20,10 +20,10 @@
 
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { numFlag, parseArgs, usage } from './lib/args.js';
+import { checkArgs, numFlag, parseArgs, usage } from './lib/args.js';
 import { PATHS, ensureDir, display } from './lib/paths.js';
 import { withTimeout } from './lib/timeout.js';
-import { exitAfterFlush } from './lib/proc.js';
+import { exitAfterFlush, guardBrokenPipe } from './lib/proc.js';
 import { TIMEOUTS } from '../src/config.js';
 import { vendorProblems } from './vendor.js';
 import {
@@ -36,7 +36,7 @@ import {
   stopBrowser,
   versionInfo,
 } from './lib/browser.js';
-import { CdpConnection, evaluate, openPage, screenshot, waitForExpression } from './lib/cdp.js';
+import { CdpConnection, attachToOpenPage, attachToPageTarget, evaluate, openPage, screenshot, waitForExpression } from './lib/cdp.js';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -48,8 +48,10 @@ browser.js - start / stop / drive a headless Chromium through CDP
   status  [--name dev | --all] [--json]
   stop    [--name dev | --all] [--force]
   open    URL [--name dev]
-  eval    EXPR [--name dev] [--url URL] [--wait] [--timeout ms]
-  shot    [--url URL] [--out FILE] [--name dev] [--width N] [--height N]
+  eval    EXPR [--name dev] [--url URL] [--target ID] [--wait] [--timeout ms]
+          (with no --url, drives the page already open, or says there is none)
+  shot    [OUT] [--url URL] [--out FILE] [--target ID] [--name dev] [--width N] [--height N]
+          (OUT and --out both name the file; neither writes under .tmp/artifacts)
   pages   [--name dev] [--json]
 
   Env: SIM_CHROME=/abs/path/to/chrome overrides binary autodetection.
@@ -157,13 +159,43 @@ async function commandOpen(flags, url) {
   return 0;
 }
 
+/**
+ * The page a driving command should work on.
+ *
+ * `--url` opens it, `--target` attaches to one by id, and with neither the page that is already
+ * open is reused - which is what makes `open <url>` followed by `eval "..."` do the obvious thing.
+ * Both commands used to open a fresh `about:blank` in that last case and report an answer about a
+ * page nobody asked about, which is the worst kind of tool failure: it looks like a result. No
+ * open page and no `--url` is now an error the operator can act on.
+ *
+ * The page is reported on stderr, so `eval`'s stdout stays parseable JSON.
+ */
+async function resolvePage(cdp, flags, { timeoutMs }) {
+  let page;
+  if (flags.url) {
+    page = await openPage(cdp, String(flags.url), { timeoutMs });
+    process.stderr.write(`browser.js: opened ${page.url}\n`);
+    return page;
+  }
+  if (flags.target) {
+    page = await attachToPageTarget(cdp, String(flags.target), { timeoutMs });
+  } else {
+    page = await attachToOpenPage(cdp, { timeoutMs });
+    if (!page) {
+      usage('no page is open in this browser: pass --url <url> or --target <id>,'
+        + ` or run "open <url>" first\n\n${USAGE_TEXT}`, 4);
+    }
+  }
+  process.stderr.write(`browser.js: reusing the open page ${page.url || page.targetId}\n`);
+  return page;
+}
+
 async function commandEval(flags, expression) {
   const expr = expression ?? (typeof flags.expr === 'string' ? flags.expr : null);
   if (!expr) usage('eval needs an expression\n\n' + USAGE_TEXT, 2);
   const name = String(flags.name ?? 'dev');
   const { cdp } = await connect({ name });
-  const url = flags.url ? String(flags.url) : 'about:blank';
-  const page = await openPage(cdp, url, { timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.pageNavigation) });
+  const page = await resolvePage(cdp, flags, { timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.pageNavigation) });
   if (flags.wait) {
     await waitForExpression(cdp, page.sessionId, expr, {
       timeoutMs: numFlag(flags, 'timeout', TIMEOUTS.cdpCall),
@@ -177,19 +209,33 @@ async function commandEval(flags, expression) {
   return 0;
 }
 
-async function commandShot(flags) {
+async function commandShot(flags, outArg) {
   const name = String(flags.name ?? 'dev');
-  const url = flags.url ? String(flags.url) : 'about:blank';
-  const out = flags.out ? String(flags.out) : join(PATHS.artifacts, `shot-${Date.now()}.png`);
+  if (outArg && flags.out && String(outArg) !== String(flags.out)) {
+    usage(`shot: name the output file once, not both "${outArg}" and --out ${flags.out}\n\n${USAGE_TEXT}`, 2);
+  }
+  const out = String(outArg ?? flags.out ?? join(PATHS.artifacts, `shot-${Date.now()}.png`));
   ensureDir(PATHS.artifacts);
   const { cdp } = await connect({ name });
-  const page = await openPage(cdp, url, { timeoutMs: TIMEOUTS.pageNavigation });
+  const page = await resolvePage(cdp, flags, { timeoutMs: TIMEOUTS.pageNavigation });
   if (flags.width || flags.height) {
     await cdp.send(
       'Emulation.setDeviceMetricsOverride',
       { width: numFlag(flags, 'width', 1280), height: numFlag(flags, 'height', 800), deviceScaleFactor: 1, mobile: false },
       { sessionId: page.sessionId },
     );
+    // Chromium delivers no `resize` for a device-metrics override, and the app sizes its drawing
+    // buffer from the canvas element's box. Without this nudge the picture is a stale buffer
+    // stretched into the new box: a plausible-looking screenshot of the wrong geometry.
+    await evaluate(cdp, page.sessionId, '(() => { dispatchEvent(new Event("resize")); return true; })()',
+      { timeoutMs: TIMEOUTS.cdpCall });
+    await waitForExpression(cdp, page.sessionId, `(() => {
+      const c = document.getElementById('scene');
+      if (!c) return true;
+      const r = c.getBoundingClientRect();
+      return Math.abs(c.width - r.width * devicePixelRatio) < 2
+        && Math.abs(c.height - r.height * devicePixelRatio) < 2;
+    })()`, { timeoutMs: TIMEOUTS.pageSettle, intervalMs: 80, label: 'canvas drawing buffer matches its css box' });
   }
   // Wait for a real boot, then force a few frames. `__sim.ready` is only set
   // when boot() finishes, so this can fail - and it must, because capturing a
@@ -198,7 +244,7 @@ async function commandShot(flags) {
   try {
     await waitForExpression(cdp, page.sessionId, 'Boolean(window.__sim && window.__sim.ready)', {
       timeoutMs: TIMEOUTS.pageSettle,
-      label: `app boot before screenshot (${url})`,
+      label: `app boot before screenshot (${page.url})`,
     });
   } catch (error) {
     await page.close().catch(() => {});
@@ -288,11 +334,42 @@ const COMMANDS = {
   screenshot: commandShot,
 };
 
+/**
+ * What each subcommand actually reads.
+ *
+ * A flag belonging to another subcommand is as unread as a misspelling, and `shot --name dev
+ * --force` or `status --url X` is a real way to end up running a command you did not mean. So the
+ * table is per command, and `positionals` counts the command word itself: `eval EXPR` takes two, a
+ * bare `status` takes one.
+ */
+const COMMAND_ARGS = {
+  doctor: { flags: ['help', 'json'], positionals: 1 },
+  start: { flags: ['help', 'name', 'url', 'headful', 'flag', 'timeout', 'budget'], positionals: 1 },
+  stop: { flags: ['help', 'name', 'all', 'force', 'timeout', 'budget'], positionals: 1 },
+  status: { flags: ['help', 'name', 'all', 'json', 'timeout', 'budget'], positionals: 1 },
+  pages: { flags: ['help', 'name', 'json', 'timeout', 'budget'], positionals: 1 },
+  open: { flags: ['help', 'name', 'url', 'timeout', 'budget'], positionals: 2 },
+  eval: { flags: ['help', 'name', 'url', 'target', 'wait', 'expr', 'timeout', 'budget'], positionals: 2 },
+  shot: {
+    flags: ['help', 'name', 'url', 'out', 'target', 'width', 'height', 'timeout', 'budget'],
+    positionals: 2,
+  },
+  screenshot: null,
+};
+COMMAND_ARGS.screenshot = COMMAND_ARGS.shot;
+
 async function main() {
+  guardBrokenPipe();
   const parsed = parseArgs(process.argv.slice(2), { aliases: { n: 'name', u: 'url', o: 'out', t: 'timeout' } });
   if (parsed.help || parsed._.length === 0) usage(USAGE_TEXT, parsed.help ? 0 : 2);
   const command = COMMANDS[parsed._[0]];
   if (!command) usage(`unknown command "${parsed._[0]}"\n\n${USAGE_TEXT}`, 2);
+  checkArgs(parsed, {
+    name: `browser.js ${parsed._[0]}`,
+    ...COMMAND_ARGS[parsed._[0]],
+    hint: 'each subcommand reads its own flags - run "node tools/browser.js --help" for the list',
+    usageText: USAGE_TEXT,
+  });
 
   const timeoutMs = numFlag(parsed.flags, 'budget', 120_000);
   try {

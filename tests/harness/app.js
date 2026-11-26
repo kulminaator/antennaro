@@ -31,6 +31,34 @@ export const DEFAULT_TIMEOUT_MS = TIMEOUTS.browserTestPerFile;
 
 let counter = 0;
 
+/** The options `createAppSession` reads - the same five the JSDoc below declares. */
+const SESSION_OPTIONS = Object.freeze(['name', 'url', 'timeoutMs', 'viewport', 'query']);
+
+/**
+ * Reject a session option before it can be ignored.
+ *
+ * An unknown key used to be accepted and silently dropped. `withApp(fn, { timeout: 5000 })` then
+ * waited on the default budget, and the run failed half a minute later as a settle timeout blaming
+ * the app for a typo in the test. Saying the key name here, in milliseconds, is the difference
+ * between a test that fails honestly and one that sends you to debug the wrong layer.
+ */
+function checkSessionOptions(options) {
+  const unknown = Object.keys(options).filter((key) => !SESSION_OPTIONS.includes(key));
+  if (unknown.length > 0) {
+    const plural = unknown.length > 1;
+    throw new TypeError(`createAppSession: "${unknown.join('", "')}" ${plural ? 'are' : 'is'} not`
+      + ` ${plural ? 'options' : 'an option'} the session reads (it takes`
+      + ` ${SESSION_OPTIONS.join(', ')}); an unread option is not an error later, it is a silent default now`);
+  }
+  if (options.viewport !== undefined) {
+    const { width, height } = options.viewport;
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      throw new TypeError(`createAppSession: viewport needs numeric width and height, got `
+        + `{ width: ${width}, height: ${height} }`);
+    }
+  }
+}
+
 /**
  * Boot the app in a private browser instance and wait until `window.__sim`
  * reports a ready boot.
@@ -38,6 +66,7 @@ let counter = 0;
  *   query?:string}} [options]
  */
 export async function createAppSession(options = {}) {
+  checkSessionOptions(options);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   counter += 1;
   const name = options.name ?? `sim-test-${process.pid}-${counter}`;
@@ -84,6 +113,24 @@ export async function createAppSession(options = {}) {
         await started.cdp.send('Emulation.setDeviceMetricsOverride', {
           width: options.viewport.width, height: options.viewport.height, deviceScaleFactor: 1, mobile: false,
         }, { sessionId: started.page.sessionId, timeoutMs: TIMEOUTS.cdpCall });
+        // Chromium does not deliver a `resize` for a device-metrics override, and the app sizes its
+        // drawing buffer from the canvas element's box. Without this nudge the buffer keeps the
+        // geometry of the window the page booted in, so the image is stretched to the box and any
+        // test that pairs a canvas pixel with a world position pairs two different places. Measured
+        // before the fix: a 1110x900 buffer shown in a 570x620 box.
+        await evaluate(started.cdp, started.page.sessionId,
+          '(() => { dispatchEvent(new Event("resize")); return true; })()',
+          { timeoutMs: TIMEOUTS.cdpCall });
+        await waitForExpression(started.cdp, started.page.sessionId, `(() => {
+          const c = document.getElementById('scene');
+          const r = c.getBoundingClientRect();
+          return Math.abs(c.width - r.width * devicePixelRatio) < 2
+            && Math.abs(c.height - r.height * devicePixelRatio) < 2;
+        })()`, {
+          timeoutMs: TIMEOUTS.pageSettle,
+          intervalMs: 80,
+          label: 'canvas drawing buffer matches its css box after the viewport override',
+        });
       }
       await waitForExpression(started.cdp, started.page.sessionId,
         'Boolean(window.__sim && window.__sim.boot && window.__sim.boot.status === "ready")', {

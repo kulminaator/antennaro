@@ -24,8 +24,8 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PATHS, SERVE_DENY, display } from './lib/paths.js';
-import { numFlag, parseArgs, usage } from './lib/args.js';
-import { isAlive, terminate } from './lib/proc.js';
+import { checkArgs, numFlag, parseArgs, usage } from './lib/args.js';
+import { guardBrokenPipe, isAlive, terminate } from './lib/proc.js';
 import { readJson } from './lib/timeout.js';
 
 const MIME_TYPES = {
@@ -181,6 +181,7 @@ async function commandStop() {
 }
 
 async function main() {
+  guardBrokenPipe();
   const parsed = parseArgs(process.argv.slice(2), {
     aliases: { p: 'port', q: 'quiet' },
     booleans: ['print-url'],
@@ -193,6 +194,16 @@ async function main() {
   stop
   status`);
   }
+
+  // A misspelled flag used to fall through to the default: `staticserver --prob 8123` started a
+  // server on 8080 instead of saying the flag was unread. Listening on a port nobody asked for is
+  // the loudest possible version of accepting an argument you do not read.
+  checkArgs(parsed, {
+    name: 'staticserver.js',
+    flags: ['help', 'port', 'host', 'quiet', 'print-url'],
+    positionals: 1,
+    hint: 'commands are start, stop, status; options are --port, --host, --quiet, --print-url',
+  });
 
   const sub = parsed._[0];
 

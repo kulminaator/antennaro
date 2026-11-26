@@ -25,8 +25,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { PATHS, display } from './lib/paths.js';
-import { parseArgs, usage } from './lib/args.js';
-import { exitAfterFlush, run } from './lib/proc.js';
+import { checkArgs, parseArgs, usage } from './lib/args.js';
+import { exitAfterFlush, guardBrokenPipe, run } from './lib/proc.js';
 import { withTimeout } from './lib/timeout.js';
 import { walk } from './lib/scan.js';
 import { startServer } from './staticserver.js';
@@ -90,8 +90,18 @@ async function runFiles(files, { suite, options, env, server }) {
 }
 
 async function main() {
+  guardBrokenPipe();
   const parsed = parseArgs(process.argv.slice(2));
   if (parsed.flags.help) usage(HELP);
+  // Suites are flags, not subcommands. Before this, `test.js browser interaction` read nothing out
+  // of those words, ran the unit suite and exited 0 - an answer to a question that was not asked.
+  checkArgs(parsed, {
+    name: 'test.js',
+    flags: ['help', 'all', 'unit', 'browser', 'only', 'grep', 'per-file', 'test-timeout', 'json', 'list'],
+    positionals: 0,
+    hint: 'suites are flags: --browser runs the browser tests, and --only <text> narrows them to one file',
+    usageText: HELP,
+  });
 
   // No flags = unit only (the fast loop). --all = unit + browser.
   const wantUnit = Boolean(parsed.flags.all || parsed.flags.unit) || !parsed.flags.browser;

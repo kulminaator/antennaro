@@ -174,6 +174,13 @@ and the summary objects went to `app/reports.js`, the `action()` switch to
 job. Split on a seam, not at a line count: `reports.js` is the code that answers
 "what does the scene contain", which was never the controller's.
 
+The budget is measured, not hoped at: `node tools/lint.js` weighs every file in all three
+trees against `LINE_BUDGET` (`tools/lib/arch.js`), and `architecturetools.test.js` asserts
+the same for `tools/` and `tests/`. Both used to be narrower than this paragraph - lint only
+weighed `src/`, the test only weighed `tools/` - which is how five test files reached 358,
+344, 337, 335 and 331 lines while the sentence above said they could not. A rule that is
+written down and not measured is a wish, so now it is measured twice.
+
 ## 4. Configuration centrality
 
 Every tunable that describes the **world or the radio** lives in `src/config.js`:
@@ -185,8 +192,10 @@ mast may stand (`ANTENNA.defaultSiteXm` / `defaultSiteZm` / `siteLimitsM` /
 `siteStepM`, shared by the sliders and the drag), the shape of the sweep
 (`RF.coverageStride` - the coverage grid is a decimation of the terrain grid - and
 `RF.defaultMaxRangeM` / `RF.maxRangeLimitsM`, which are a *work area*, not a prediction),
-how a failed link is painted (`RF.noLinkAlpha`, with `COLOURS.rangeLimit` for the ring
-that names the work area), the Fresnel criterion
+how a failed link is painted (`RF.noLinkAlpha`, `RF.faintLightnessShift` and `RF.faintChromaKeep`
+- together the ash wash that stands for *asked and lost*, each value fixed by the CIEDE2000 floors
+recorded in section 7; `COLOURS.rangeLimit` is the ring that names the work area),
+the Fresnel criterion
 (`RF.fresnelClearFraction`, `RF.fresnelRxHeightM` - the receiver height the verdict
 is stated for - and `RF.fresnelEndpointGuard`), how far a ray walk samples
 (`RF.profileMaxSamples`, which is a ceiling on absurd path lengths and not a limit this
@@ -451,6 +460,43 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
   and any two zone states below 12 (floor 26.5). Colour names are declared once, in
   `COLOURS`, and the DOM legend, the drape and the tests all read that one table, so a hue
   cannot be retyped into one of the three and quietly diverge.
+- **The asked-and-lost rim is keyed to the ground, not to a colour.** An out-of-coverage cell is
+  painted `palette.faintWashRgb(ground)` at `RF.noLinkAlpha` x `RF.overlayOpacity` (0.57 x 0.88),
+  where `ground` is the same `terrainRgb` call the terrain mesh used for that cell. A fixed wash
+  colour cannot survive a ramp of backdrops - somewhere on the ramp is a ground it matches - and the
+  one this shipped with (`COLOURS.noLink` at 22 % alpha) measured **1.4** CIEDE2000 from the dark
+  ground it replaced, which is not a difference an eye sees, for a marking whose whole job is to be
+  seen. The rule moves that ground's own L* by `RF.faintLightnessShift` (38) away from
+  `palette.FAINT_PIVOT_L` (55) and keeps `RF.faintChromaKeep` (0) of its chroma; it is held to 13.1
+  from its own ground and 10.9 from any painted cell, worst of four simulated eyes over the terrain
+  ramp including its shadowed end (`tests/unit/faintwash.test.js`). Three consequences belong with
+  it, all measured:
+  - **The flip at the pivot is unavoidable, so it is documented instead of argued away.** A rule
+    that keeps its distance from *every* ground on a ramp has no fixed point, and a continuous map
+    of lightness onto itself always has one, so two neighbouring grounds must land on opposite sides
+    of the rule and jump apart. Over the six shipped configurations 0-1.7 % of faint-cell
+    adjacencies straddle it - none on default, flat-field or mountain-shadow; 348 of ~42 700 in
+    total - with a worst seen jump of 35 dE000, and both cells mean the same thing, so the crack can
+    misinform about nothing. Moving the pivot does not remove it (only 75+ reaches zero, where the
+    floor collapses to 8.9 because the rule starts clamping at the top of the gamut), and the
+    one-directional variant - always lift, no flip at all - fails the other way: its floor on bright
+    ground is **0.5** against the two-way rule's 9.1.
+  - **Palette space is not the screen.** Read off the canvas, the rim's 5th percentile is 11.4 and
+    its median 15.5 CIEDE2000 from the pixel under it. Two things account for the gap to the palette
+    numbers: the drape is composited over *lit* terrain, and the palette's sRGB triples go into
+    geometry colour attributes unconverted, where three.js treats them as linear working-space
+    values (`viewport.js` sets sRGB output and leaves tone mapping off, so nothing downstream
+    undoes this). That is why the shift is 38: at 30 the canvas p05 is 10.0, at 38 it is 11.4, and
+    at 45 the wash comes within 8.3 of the zone mint, so the "not a painted cell" floor is what
+    caps it. The wider consequence - that every colour claim in this repository is stated in a space
+    the renderer does not deliver - is open work, recorded in
+    `.taskman/faint-rim-and-tool-traps/step-005/step.md`.
+  - **`VIEW.coverageOffsetM` cannot fix the weak pixels.** The drape touches the terrain only at its
+    own decimated vertices, so on convex ground between them it can sink and be depth-culled.
+    Raising the offset from 0.8 to 2.5 m lifts the all-pixels p10 from 10.1 to 12.5 and moves the
+    *interior* floor by less than a point, so the offset stays where it is; the seam where a washed
+    cell meets ground the drape leaves alone is documented in the README instead (451 of 1330 rim
+    pixels sit in it, median 15.3, worst 2.1).
 - **A shadow starts at 0 dB, and the ray has to walk the mesh to see one.** Terrain
   shadowing is `propagation/diffraction.js`: a signed screen parameter (`v` positive where
   ground stands above the ray, negative where the ray has room) run through the fitted
@@ -542,7 +588,7 @@ UI widget ──patch──▶ applyPatch()  ──▶ state (immutable)
 | `npm run serve -- --port N --print-url` | Same server on another port. `stop` / `status` subcommands. |
 | `npm run browser -- doctor` | Check the Chromium binary, the vendored three.js, CDP and WebGL2 end to end. |
 | `npm run browser -- start|status|stop --name NAME` | Drive a persistent headless Chromium. |
-| `npm run browser -- eval "EXPR" --url URL` / `shot --out f.png` | One-shot page eval / screenshot. |
+| `npm run browser -- eval "EXPR" [--url URL] [--target ID]` / `shot [OUT]` | Eval or screenshot the page that is already open; `--url` opens one instead. |
 | `npm run lint` | Architecture + hygiene rules (`--verbose`, `--json`). |
 | `npm run test:unit` / `test:browser` / `test` | Timeboxed suites (see §9). |
 | `npm run timebox -- -t 20 -- <cmd>` | Run any command with a deadline. |
@@ -562,6 +608,20 @@ finished - and then **refuses to write the file** if that wait times out, naming
 the URL. A readiness check that cannot fail is worse than none: an earlier version
 swallowed the timeout and produced plausible, empty screenshots that were blamed
 on the app. Every budget in this tool comes from `TIMEOUTS` as well.
+
+Two more things the driving commands promise, because both were once broken:
+
+- **They drive the page you opened.** `open <url>` then `eval "document.title"` answers about
+  that page, names it on stderr, and leaves it open for the next command. With no page open and
+  no `--url` the tool **refuses** (exit 4) rather than inventing an `about:blank` and reporting an
+  answer about it - which is what it used to do, in exit 0, sounding like the app.
+- **No tool reads an argument it was not given.** Every CLI exits 2 naming the token and saying
+  what to type when handed a flag it does not read or an extra positional: `staticserver --prob
+  8123` used to *start a server on 8080*, `lint src/config.js` linted the whole tree, `timebox
+  --timout 90` ran on the default budget, and `test browser interaction` printed the unit suite.
+  The shared check is `checkArgs` in `tools/lib/args.js`; the browser harness guards its session
+  options the same way, in milliseconds rather than in a timeout later that blamed the app.
+  Writing into a closed pipe (`| head`) ends any of them quietly instead of in an EPIPE stack trace.
 
 The static server serves the repository root, is loopback-only, sends `no-store`,
 refuses path traversal, blocks `SERVE_DENY` directories, and answers
@@ -673,6 +733,18 @@ node tools/test.js --browser --only tests/browser/interaction.test.js
   alphas. Those may be read from the document, and nothing else may: a test that reads a
   number out of the panel instead of `coverage()` is asserting the formatting of a value the
   API already reports, and it will pass while the value rots.
+- **The one claim that is not in the DOM either: pixels.** What the drawing buffer holds is in
+  neither `window.__sim` nor the document, and it is the only other thing a test may measure
+  directly - `tests/browser/rim.test.js` does it, to check that the faint rim is visible rather than
+  merely correct in the palette. Two rules make that honest. **Settle first**: the buffer is
+  re-measured from the element's box by `viewport.resize()`, which `settle()` calls and the
+  `ResizeObserver` in `controller.js` calls too, so a sample taken before any of those can be
+  reading a stretched image - measured broken, a 1110x900 buffer shown in a 570x620 box, which is
+  what the harness now refuses to run on. **Prove the null**: read the canvas twice with nothing
+  patched between and require the difference to be zero (measured: max 0.000 CIEDE2000 over 22 010
+  samples) before claiming anything about a difference you do see. And do not decide what a pixel
+  shows by pairing it with `pick()`: that pick slides along the plane the mast stands on, which is
+  the visible surface only where the land happens to be flat.
 - Use `withApp(async (session) => { ... })` so the Chromium instance and the
   server are always torn down, even on a failed assertion. The session uses
   `SIM_URL` (exported by `tools/test.js`, one shared server per suite) and falls

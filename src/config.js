@@ -145,19 +145,22 @@ export const RF = Object.freeze({
      conventional three. The sum is dominated by the first edges; broken ground shows dozens. */
   diffractionEdgeLimit: 3,
   /**
-   * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex. The ground
-   * needs ~15 m cells to look like land, but a ray walk over all 121 801 of them measured 734 ms
-   * in Node, so stride 2 (~30 m cells) keeps a shape whose boundaries are kilometres wide.
+   * Coverage is evaluated and draped on every `coverageStride`-th terrain vertex. The ground needs
+   * ~15 m cells to look like land, but a ray walk over all 121 801 measured 734 ms in Node, so
+   * stride 2 (~30 m cells) keeps a shape whose boundaries are kilometres wide.
    */
   coverageStride: 2,
-  /**
-   * Alpha of the drape where the ground was consulted and the link failed. Faint, never
-   * blank: that rim is the reach this terrain actually allows, and blank stays reserved for
-   * places nothing was asked about. No depth threshold is needed to make it appear - the
-   * pre-filter dismisses on the free-space bound, so what is walked and still fails is
-   * precisely what the terrain defeated.
-   */
-  noLinkAlpha: 0.22,
+  /* The asked-and-lost rim, keyed to the ground under it: the drape paints `noLinkAlpha` x
+     `overlayOpacity` of `palette.faintWashRgb`, which moves that ground `faintLightnessShift` L*
+     away from the middle of the lightness ramp and keeps `faintChromaKeep` of its chroma. A fixed
+     colour at the old 0.22 measured 1.4 CIEDE2000 from the dark ground it replaced. At 38 the rim
+     stays >= 13.1 from its own ground and >= 10.9 from any painted cell (worst of four vision
+     models, whole ramp including shade) and, read off the canvas, >= 11.4 at its 5th percentile -
+     the renderer's tone mapping compresses the step. 45 buys more ground distance but drops the
+     painted-cell floor to 8.3 against the zone mint, which is what caps it here. */
+  noLinkAlpha: 0.57,
+  faintLightnessShift: 38,
+  faintChromaKeep: 0,
   /** How opaque the coverage drape sits over the terrain. A step has to survive it, which is
      what the palette test measures: every step stays >= 24 CIEDE2000 from bare ground. */
   overlayOpacity: 0.88,
@@ -316,9 +319,8 @@ export const PATHS = Object.freeze({
 });
 
 /**
- * Coverage colour ramp: one colour per link-margin band (strongest first),
- * plus the colour used when the link budget is not met.
- * Kept in L0 so the WebGL overlay and the HUD legend read the same truth.
+ * Coverage colours: one per signal step (strongest first). In L0 so the WebGL overlay and the HUD
+ * legend read the same truth.
  */
 export const COLOURS = Object.freeze({
   /* The signal scale, strongest first: yellow where the link has room, red where it survives by a
@@ -328,7 +330,6 @@ export const COLOURS = Object.freeze({
      from bare terrain and from the faint wash, 15.7 from the nearest zone colour. Four is this hue
      path's ceiling - 3/4/5 steps top out at 19.5/12.5/9.5, so a fifth is a colour like its neighbour. */
   levels: Object.freeze(['#fff046', '#f6a600', '#d35900', '#980011']),
-  noLink: Object.freeze('#2a2f38'),
   /** A cell with the link budget but a cut first Fresnel zone (a marker, not a level). */
   fresnelObstructed: Object.freeze('#663f81'),
   /** The semi-transparent first-Fresnel-zone volume of the antenna. */

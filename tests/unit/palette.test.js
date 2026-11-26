@@ -19,7 +19,8 @@ import assert from 'node:assert/strict';
 
 import { COLOURS, RF } from '../../src/config.js';
 import {
-  coverageLegendItems, coverageRgb, fresnelZoneLegendItems, hexToRgb, rgbToHex, terrainRgb,
+  coverageLegendItems, coverageRgb, FAINT_CHIP_COLOUR, faintWashRgb, fresnelZoneLegendItems,
+  hexToRgb, rgbToHex, terrainRgb,
 } from '../../src/palette.js';
 import { generateTerrain } from '../../src/terrain/generators.js';
 import { resolveSite } from '../../src/terrain/site.js';
@@ -28,7 +29,7 @@ import { createDefaultParams } from '../../src/antenna/catalogue.js';
 import { computeCoverage } from '../../src/propagation/coverage.js';
 import { wavelengthM } from '../../src/propagation/rf.js';
 import {
-  VISION, chroma, deltaE000, distance, draped, hueAngle, lightness, see, worstDistance,
+  VISION, chroma, deltaE000Lab, distance, draped, hueAngle, lightness, see, worstDistance,
 } from '../harness/colour.js';
 
 /** How far apart two hex colours must be to read as two colours, worst eye first. */
@@ -63,8 +64,8 @@ test('palette: the ruler measures what the published CIEDE2000 table says', () =
     [[22.7233, 20.0904, -43.6940], [23.0331, 14.9730, 42.2885], 45.5335],
   ];
   for (const [lab1, lab2, expected] of published) {
-    assert.ok(Math.abs(deltaE000(lab1, lab2) - expected) < 1e-3,
-      `CIEDE2000 says ${deltaE000(lab1, lab2).toFixed(4)}, the table says ${expected}`);
+    assert.ok(Math.abs(deltaE000Lab(lab1, lab2) - expected) < 1e-3,
+      `CIEDE2000 says ${deltaE000Lab(lab1, lab2).toFixed(4)}, the table says ${expected}`);
   }
 });
 
@@ -145,9 +146,9 @@ test('palette: a step survives the drape, the ground and the faint rim', () => {
         worstGround = againstBare;
         worstGroundPair = `${hex} over ${rgbToHex(ground)}`;
       }
-      // The faint rim is the no-link wash under the same drape, so the only thing between a
-      // painted cell and an asked-and-lost one is the alpha. Measured floor: 24.1 dE000.
-      const faint = draped(hexToRgb(COLOURS.noLink), ground, RF.overlayOpacity * RF.noLinkAlpha);
+      // The faint rim is now the cell's own ground, muted and shifted, under the same drape: a
+      // painted cell and an asked-and-lost one differ in colour *and* alpha. Measured floor 24.9.
+      const faint = draped(faintWashRgb(ground), ground, RF.overlayOpacity * RF.noLinkAlpha);
       const againstFaint = distance(painted, faint);
       if (againstFaint < worstFaint) {
         worstFaint = againstFaint;
@@ -203,7 +204,7 @@ test('palette: the legend paints the colours the map paints, and counts every po
 
   const faint = items[COLOURS.levels.length];
   assert.equal(faint.alpha, RF.noLinkAlpha, 'asked and lost stays faint');
-  assert.equal(faint.colour, COLOURS.noLink);
+  assert.equal(faint.colour, FAINT_CHIP_COLOUR, 'the rim chip is the wash rule on a representative ground');
   const never = items[items.length - 1];
   assert.equal(never.alpha, 0, 'never asked stays unpainted');
   assert.equal(never.count, coverage.stats.budgetExcludedCells);

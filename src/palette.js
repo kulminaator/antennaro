@@ -26,6 +26,34 @@ export function mixRgb(a, b, t) {
   return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
 }
 
+// sRGB <-> CIE Lab (D65). The white point, the matrices and the two transfer functions are
+// identities of the colour spaces, not knobs, so they live here next to the maths that uses them
+// rather than in `config.js`.
+const D65 = Object.freeze([0.95047, 1, 1.08883]);
+const LINEARISE = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const GAMMA = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+
+function rgbToLab(rgb) {
+  const [r, g, b] = rgb.map(LINEARISE);
+  const [fx, fy, fz] = [
+    r * 0.4124564 + g * 0.3575761 + b * 0.1804375,
+    r * 0.2126729 + g * 0.7151522 + b * 0.0721750,
+    r * 0.0193339 + g * 0.1191920 + b * 0.9503041,
+  ].map((v, i) => v / D65[i]).map((v) => (v > 0.008856451679 ? Math.cbrt(v) : (903.2962962 * v + 16) / 116));
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+
+function labToRgb([l, a, b]) {
+  const fy = (l + 16) / 116;
+  const f = (t) => (t ** 3 > 0.008856 ? t ** 3 : (t - 16 / 116) / 7.787);
+  const xyz = [f(fy + a / 500) * D65[0], f(fy), f(fy - b / 200) * D65[2]];
+  return [
+    xyz[0] * 3.2406 + xyz[1] * -1.5372 + xyz[2] * -0.4986,
+    xyz[0] * -0.9689 + xyz[1] * 1.8758 + xyz[2] * 0.0415,
+    xyz[0] * 0.0557 + xyz[1] * -0.204 + xyz[2] * 1.057,
+  ].map((v) => clamp01(GAMMA(v)));
+}
+
 /** Colour ramp stops for terrain elevation, from low ground to rock. */
 const TERRAIN_RAMP = Object.freeze([
   Object.freeze([0.13, 0.24, 0.20]), // shadowed low ground
@@ -49,18 +77,57 @@ export function terrainRgb(height, min, max, slopeDeg = 0) {
  * Signal-step colour. A step is a range of margin over the receiver sensitivity
  * (`RF.levelMarginsDb`, strongest first), not a continuous ramp: four unmistakable
  * colours beat a smooth gradient that a red-green colour-blind eye reads as one wash.
- * `band === levels.length` means "measured, and the ground said no".
+ * There is no colour here for "below sensitivity": an out-of-coverage cell is painted
+ * `faintWashRgb` over its own ground, which is not a colour a table can hold - so a
+ * caller that asks for a band outside the steps has mixed the two up, and says so.
  */
 export function coverageRgb(band) {
-  if (band >= COLOURS.levels.length) return hexToRgb(COLOURS.noLink);
-  return hexToRgb(COLOURS.levels[Math.max(0, band)]);
+  if (band < 0 || band >= COLOURS.levels.length) {
+    throw new RangeError(`no signal step ${band}: an out-of-coverage cell is faintWashRgb(ground), not a level`);
+  }
+  return hexToRgb(COLOURS.levels[band]);
 }
+
+/** L* the faint wash pushes away from: below it the ground is lifted, above it pressed down.
+ * Exported because the rule's discontinuity is documented by tests, which need the number. */
+export const FAINT_PIVOT_L = 55;
+
+/**
+ * Colour of a cell the sweep asked and the terrain defeated, keyed to the ground under it.
+ *
+ * A faint rim painted with one fixed colour is invisible wherever the terrain happens to match
+ * that colour: the shipped `COLOURS.noLink` at the old `RF.noLinkAlpha` measured 1.4 CIEDE2000
+ * from the dark low ground it replaced, which is exactly where the rim has work to do. No fixed
+ * colour fixes this, because over a ramp of backdrops every colour has a backdrop it blends
+ * into. So the wash moves the *ground itself* - `RF.faintLightnessShift` L* away from
+ * `FAINT_PIVOT_L`, dark ground up and bright ground down, chroma scaled to
+ * `RF.faintChromaKeep` - and there is no ground on the ramp it can disappear into. Measured
+ * floors (`tests/unit/palette.test.js`), worst of four vision models over the whole terrain ramp
+ * including shade: 10.0 from the bare ground, 11.2 from any painted cell. And because the rule
+ * shifts rather than replaces lightness, two neighbouring faint cells keep their difference -
+ * the hill that blocked the link is still visible under the rim.
+ */
+export function faintWashRgb(ground, out = null) {
+  const [l, a, b] = rgbToLab(ground);
+  const shifted = l < FAINT_PIVOT_L ? l + RF.faintLightnessShift : l - RF.faintLightnessShift;
+  const rgb = labToRgb([shifted, a * RF.faintChromaKeep, b * RF.faintChromaKeep]);
+  if (!out) return rgb;
+  out[0] = rgb[0]; out[1] = rgb[1]; out[2] = rgb[2];
+  return out;
+}
+
+/**
+ * The legend chip for an out-of-coverage cell: `faintWashRgb` applied to the middle of the
+ * elevation ramp. The rule has no single colour to name - it moves each cell's own ground - so
+ * the chip is the same rule on a representative ground, and the legend's own opacity carries
+ * `RF.noLinkAlpha`, exactly as the drape's does.
+ */
+export const FAINT_CHIP_COLOUR = rgbToHex(faintWashRgb(terrainRgb(0.5, 0, 1)));
 
 /**
  * A cell that meets the link budget but has the first Fresnel zone cut reads as
  * this, so "the budget says yes, the zone says no" is visible on the map.
- */
-export function fresnelObstructedRgb() {
+ */export function fresnelObstructedRgb() {
   return hexToRgb(COLOURS.fresnelObstructed);
 }
 
@@ -144,7 +211,7 @@ export function fresnelZoneLegendItems(stats = {}) {
     ...(Number.isFinite(stats.budgetExcludedCells) && stats.budgetExcludedCells > 0
       ? [{
         band: 3,
-        colour: rgbToHex(ZONE_CUT),
+        colour: FAINT_CHIP_COLOUR,
         label: 'out of budget - not measured, not painted',
         count: stats.budgetExcludedCells,
         alpha: 0,
@@ -190,7 +257,7 @@ export function coverageLegendItems(coverage) {
   const excluded = coverage.stats.budgetExcludedCells ?? 0;
   items.push({
     band: last,
-    colour: COLOURS.noLink,
+    colour: FAINT_CHIP_COLOUR,
     label: `< ${coverage.sensitivityDbm.toFixed(0)} dBm (faint: terrain stops the link)`,
     // Only the painted ones: the points the pre-filter dismissed are the next row.
     count: Math.max(0, (coverage.stats.levelCounts[last] ?? 0) - excluded),
@@ -199,7 +266,7 @@ export function coverageLegendItems(coverage) {
   if (excluded > 0) {
     items.push({
       band: coverage.margins.length,
-      colour: COLOURS.noLink,
+      colour: FAINT_CHIP_COLOUR,
       label: 'out of budget - not measured, not painted',
       count: excluded,
       alpha: 0,

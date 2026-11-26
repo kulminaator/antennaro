@@ -65,6 +65,29 @@ export function usage(text, code = 0) {
   process.exit(code);
 }
 
+/**
+ * Refuse any argument a command does not read.
+ *
+ * Silence is the failure mode this exists for. `test.js browser interaction` used to print the unit
+ * suite and exit 0: the words landed in `parsed._`, nothing consumed them, and the tool answered a
+ * different question with full confidence. Same for a flag nobody reads. So a command declares the
+ * flags it reads and how many positionals it takes, and anything else is an error that names the
+ * token - and says what to type instead, because a refusal that cannot be acted on just gets
+ * retyped.
+ */
+export function checkArgs(parsed, { name, flags = [], positionals = 0, hint = '', usageText = '' }) {
+  const allowed = new Set(flags);
+  const problems = [];
+  const badFlag = Object.keys(parsed.flags).find((key) => !allowed.has(key));
+  if (badFlag) problems.push(`--${badFlag} is not a flag ${name} reads`);
+  if (parsed._.length > positionals) {
+    problems.push(`"${parsed._.slice(positionals).join(' ')}" is not something ${name} takes`);
+  }
+  if (problems.length === 0) return;
+  const advice = hint ? `\n  ${hint}` : '';
+  usage(`${name}: ${problems.join('; ')}${advice}${usageText ? `\n\n${usageText}` : ''}`, 2);
+}
+
 /** Read a numeric flag with a fallback, rejecting nonsense early. */
 export function numFlag(flags, key, fallback) {
   if (flags[key] === undefined || flags[key] === true) return fallback;

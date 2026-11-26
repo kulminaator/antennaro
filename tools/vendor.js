@@ -26,8 +26,8 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PATHS, display, ensureDir } from './lib/paths.js';
-import { parseArgs, usage } from './lib/args.js';
-import { run, exitAfterFlush } from './lib/proc.js';
+import { checkArgs, parseArgs, usage } from './lib/args.js';
+import { exitAfterFlush, guardBrokenPipe, run } from './lib/proc.js';
 import { fetchPackageFiles, sha256 } from './lib/npm.js';
 import { TIMEOUTS } from '../src/config.js';
 
@@ -272,7 +272,14 @@ dependency of this project, and its version is recorded above.
 }
 
 async function main() {
+  guardBrokenPipe();
   const parsed = parseArgs(process.argv.slice(2), { booleans: ['check'] });
+  checkArgs(parsed, {
+    name: 'vendor.js',
+    flags: ['help', 'check', 'version', 'from'],
+    positionals: 1,
+    hint: 'commands are check (default), show and bundle; bundle takes --version and --from',
+  });
   const command = parsed._[0] ?? (parsed.flags.check ? 'check' : 'check');
   if (parsed.help) {
     usage(`vendor.js - own the third-party bytes the browser loads

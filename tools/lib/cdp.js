@@ -149,14 +149,13 @@ export class CdpConnection {
 }
 
 /**
- * Open a page and attach a flattened session.
- * @param {CdpConnection} cdp
- * @param {string} url
- * @param {{timeoutMs?:number, waitForLoad?:boolean}} [options]
+ * Attach a flattened session to an existing target and start collecting its errors.
+ *
+ * Shared by `openPage` (which created the target) and `attachToPageTarget` (which did not): the
+ * difference between the two is only whether driving it ends by closing the page or by detaching,
+ * so this takes that as a flag rather than repeating the collector.
  */
-export async function openPage(cdp, url, options = {}) {
-  const { timeoutMs = 25_000, waitForLoad = true } = options;
-  const { targetId } = await cdp.send('Target.createTarget', { url }, { timeoutMs });
+async function attachPageSession(cdp, targetId, { timeoutMs, closeTarget }) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true }, { timeoutMs });
 
   const pageErrors = [];
@@ -187,6 +186,43 @@ export async function openPage(cdp, url, options = {}) {
   await cdp.send('Runtime.enable', {}, { sessionId, timeoutMs });
   await cdp.send('Log.enable', {}, { sessionId, timeoutMs }).catch(() => {});
 
+  let url = '';
+  if (!closeTarget) {
+    // A page this tool did not open still has to be identified: a command that reuses a page has
+    // to say which one, or "the app is fine" means nothing.
+    const { targetInfos = [] } = await cdp.send('Target.getTargets', {}, { timeoutMs });
+    url = targetInfos.find((t) => t.targetId === targetId)?.url ?? '';
+  }
+
+  return {
+    targetId,
+    sessionId,
+    url,
+    pageErrors,
+    consoleMessages,
+    async close() {
+      off();
+      if (closeTarget) {
+        await cdp.send('Target.closeTarget', { targetId }, { timeoutMs: 5000 }).catch(() => {});
+      } else {
+        await cdp.send('Target.detachFromTarget', { sessionId }, { timeoutMs: 5000 }).catch(() => {});
+      }
+    },
+  };
+}
+
+/**
+ * Open a page and attach a flattened session.
+ * @param {CdpConnection} cdp
+ * @param {string} url
+ * @param {{timeoutMs?:number, waitForLoad?:boolean}} [options]
+ */
+export async function openPage(cdp, url, options = {}) {
+  const { timeoutMs = 25_000, waitForLoad = true } = options;
+  const { targetId } = await cdp.send('Target.createTarget', { url }, { timeoutMs });
+  const page = await attachPageSession(cdp, targetId, { timeoutMs, closeTarget: true });
+  page.url = url;
+
   if (waitForLoad) {
     // A fresh target starts as about:blank, whose readyState is already
     // "complete", so waiting for that alone can run before the real navigation
@@ -194,7 +230,7 @@ export async function openPage(cdp, url, options = {}) {
     // against). Wait for the requested URL to be committed first.
     const wanted = url.split('#')[0];
     if (wanted !== 'about:blank') {
-      await waitForExpression(cdp, sessionId, `document.location.href.startsWith(${JSON.stringify(wanted)})`, {
+      await waitForExpression(cdp, page.sessionId, `document.location.href.startsWith(${JSON.stringify(wanted)})`, {
         timeoutMs,
         intervalMs: 40,
         label: `navigation committed to ${wanted}`,
@@ -202,23 +238,43 @@ export async function openPage(cdp, url, options = {}) {
     }
     // Polling document.readyState is race-free: the load event may have fired
     // between createTarget and attach (about:blank does exactly that).
-    await waitForExpression(cdp, sessionId, 'document.readyState === "complete"', {
+    await waitForExpression(cdp, page.sessionId, 'document.readyState === "complete"', {
       timeoutMs,
       intervalMs: 60,
       label: 'page readyState complete',
     });
   }
 
-  return {
-    targetId,
-    sessionId,
-    pageErrors,
-    consoleMessages,
-    async close() {
-      off();
-      await cdp.send('Target.closeTarget', { targetId }, { timeoutMs: 5000 }).catch(() => {});
-    },
-  };
+  return page;
+}
+
+/**
+ * Attach to one page target by id, without creating or owning it: `close()` detaches and leaves
+ * the page open, because a tool that reuses someone else's page must not tidy it away.
+ */
+export async function attachToPageTarget(cdp, targetId, options = {}) {
+  const { timeoutMs = 25_000 } = options;
+  return attachPageSession(cdp, targetId, { timeoutMs, closeTarget: false });
+}
+
+/**
+ * Attach to a page the browser already has open, or return null when it has none.
+ *
+ * `openPage` always creates a target, so a command that means to drive *the page you are looking
+ * at* has to attach instead. Falling back to a fresh `about:blank` - which is what `eval` and
+ * `shot` used to do when no `--url` was passed - answers a question nobody asked, and returns an
+ * answer that looks like a result. Null here means the caller says "no page is open" instead.
+ * With several pages open a local app page wins, then the first page; the caller prints which one
+ * it took, so the choice is never invisible.
+ */
+export async function attachToOpenPage(cdp, options = {}) {
+  const { timeoutMs = 25_000 } = options;
+  const { targetInfos = [] } = await cdp.send('Target.getTargets', {}, { timeoutMs });
+  const pages = targetInfos.filter((t) => t.type === 'page' && t.url && t.url !== 'about:blank');
+  if (!pages.length) return null;
+  const local = pages.filter((t) => /^https?:\/\/(127\.0\.0\.1|localhost)\b/.test(t.url));
+  const chosen = (local.length ? local : pages)[0];
+  return attachToPageTarget(cdp, chosen.targetId, { timeoutMs });
 }
 
 /**

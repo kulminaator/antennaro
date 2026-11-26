@@ -23,8 +23,8 @@ import { join } from 'node:path';
 import { PATHS, display } from './lib/paths.js';
 import { countLines, extractImports, relativeTo, resolveSpecifier, reachable, walk } from './lib/scan.js';
 import { checkModule, lineBudgetFor } from './lib/arch.js';
-import { parseArgs, usage } from './lib/args.js';
-import { runSync } from './lib/proc.js';
+import { checkArgs, parseArgs, usage } from './lib/args.js';
+import { guardBrokenPipe, runSync } from './lib/proc.js';
 import { vendorProblems } from './vendor.js';
 
 const violations = [];
@@ -49,6 +49,23 @@ function readModule(file) {
   return { file, relative, source, imports };
 }
 
+function checkFileSizes(files) {
+  // The budget lives in one table (LINE_BUDGET) and used to be applied to src modules only: a
+  // 500-line file dropped into tools/ passed lint without a word, and no test file was ever measured
+  // there at all. GUIDELINES declares a budget for all three trees, so lint measures all three.
+  let over = 0;
+  for (const file of files) {
+    const relative = relativeTo(PATHS.root, file);
+    const lines = countLines(readFileSync(file, 'utf8'));
+    const budget = lineBudgetFor(relative);
+    if (lines > budget) {
+      over += 1;
+      add(file, 'file-size', `${relative}: ${lines} lines exceeds the ${budget}-line budget: split the file`);
+    }
+  }
+  notes.push(`line budget: ${files.length} file(s) measured, ${over} over`);
+}
+
 function checkSyntax(files) {
   for (const file of files) {
     const result = runSync(process.execPath, ['--check', file], { timeoutMs: 20_000 });
@@ -64,11 +81,6 @@ function checkModules(modules) {
   for (const module of modules) {
     for (const problem of checkModule(module)) {
       add(module.file, problem.rule, problem.message, problem.line);
-    }
-    const lines = countLines(module.source);
-    const budget = lineBudgetFor(module.relative);
-    if (lines > budget) {
-      add(module.file, 'file-size', `${lines} lines exceeds the ${budget}-line budget: split the module`);
     }
   }
   const threeUsers = modules.filter((module) => /from ['"]three['"]/.test(module.source));
@@ -174,8 +186,18 @@ function checkTestLayout() {
 }
 
 async function main() {
+  guardBrokenPipe();
   const parsed = parseArgs(process.argv.slice(2));
   if (parsed.help) usage('lint.js - architecture and hygiene checks\n\n  node tools/lint.js [--verbose] [--json]');
+  // It checks the whole tree or nothing: a file argument used to be accepted and ignored, which
+  // made `lint.js src/config.js` look like a targeted check when it had just linted the repo.
+  checkArgs(parsed, {
+    name: 'lint.js',
+    flags: ['help', 'verbose', 'json'],
+    positionals: 0,
+    hint: 'lint checks the whole tree; to measure one file use: wc -l <file>',
+    usageText: 'usage: node tools/lint.js [--verbose] [--json]',
+  });
 
   const srcFiles = walk(PATHS.src);
   const toolFiles = walk(PATHS.tools);
@@ -183,6 +205,7 @@ async function main() {
   const modules = srcFiles.map(readModule);
 
   checkSyntax([...srcFiles, ...toolFiles, ...testFiles]);
+  checkFileSizes([...srcFiles, ...toolFiles, ...testFiles]);
   checkModules(modules);
   checkReachability(modules);
   checkVendorAndImportMap();

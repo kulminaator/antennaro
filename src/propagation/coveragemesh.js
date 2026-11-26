@@ -13,8 +13,10 @@
  * another would make a pixel mean two things. The **alpha** is the same in both and
  * carries the part of the message that is not a matter of taste:
  * - `1` where the link works;
- * - `NO_LINK_ALPHA` (`RF.noLinkAlpha`) where the ground was asked and the link failed
- *   - the faint rim is the reach the terrain actually allows, so it is shown, softly;
+ * - `RF.noLinkAlpha` where the ground was asked and the link failed
+ *   - the faint rim is the reach the terrain actually allows, so it is shown: muted, and pushed
+ *     off the lightness of the ground under it (`palette.faintWashRgb`) so that it can be seen
+ *     on dark soil and bright rock alike;
  * - `0` where nothing was asked: outside the study area, or beaten by free-space loss
  *   alone before the terrain entered into it. Blank means "no measurement", never
  *   "no signal".
@@ -22,7 +24,7 @@
 
 import * as THREE from 'three';
 import { RF, VIEW } from '../config.js';
-import { coverageRgb, fresnelZoneRgb } from '../palette.js';
+import { coverageRgb, faintWashRgb, fresnelZoneRgb, terrainRgb } from '../palette.js';
 
 /** Terrain vertex index a coverage vertex sits on, clamped to the last row/column. */
 function terrainIndex(field, stride, gx, gz) {
@@ -134,10 +136,11 @@ export function createCoverageOverlay(field) {
     const target = grid.colour.array;
     const lastBand = coverage.margins.length;
     const view = options.view === 'zone' ? 'zone' : 'steps';
-    // The band colours are a handful of values reused 30 000 times a repaint, indexed by
-    // band - including the last band, which is "below sensitivity" and gets `noLink`.
+    // The band colours are a handful of values reused 30 000 times a repaint, indexed by band.
     const bandColours = coverage.margins.map((_, band) => coverageRgb(band));
-    bandColours.push(coverageRgb(coverage.margins.length));
+    // The wash is keyed to the ground under each cell, so the drape needs to know what the
+    // terrain mesh painted there - the same call, with the same field statistics.
+    const fieldStats = sourceField.stats();
     const rgb = [0, 0, 0];
     for (let i = 0; i < grid.size * grid.size; i += 1) {
       if (coverage.evaluated[i] !== 1 || coverage.budgetExcluded?.[i] === 1) {
@@ -157,16 +160,31 @@ export function createCoverageOverlay(field) {
       // The band index comes from the sweep and is keyed to margin over *this* receiver,
       // not to absolute dBm: moving the sensitivity slider must not recolour a map that
       // describes the same antenna over the same ground.
-      const source = view === 'zone'
-        ? fresnelZoneRgb(coverage.fresnelClearance[i], rgb)
-        : bandColours[Math.min(band, lastBand)];
+      const faint = band >= lastBand;
+      let source;
+      if (faint) {
+        // Both views paint an out-of-coverage cell the same way: it is outside the answer,
+        // whatever question the view is asking, and the wash is that cell's own ground moved
+        // off itself (`palette.faintWashRgb`) rather than a colour the ground could match.
+        const gx = i % grid.size;
+        const gz = (i / grid.size) | 0;
+        const tx = Math.min(gx * stride, sourceField.size - 1);
+        const tz = Math.min(gz * stride, sourceField.size - 1);
+        const terrain = terrainRgb(sourceField.heights[terrainIndex(sourceField, stride, gx, gz)],
+          fieldStats.min, fieldStats.max, sourceField.slopeDegAt(sourceField.worldX(tx), sourceField.worldZ(tz)));
+        source = faintWashRgb(terrain, rgb);
+      } else {
+        source = view === 'zone'
+          ? fresnelZoneRgb(coverage.fresnelClearance[i], rgb)
+          : bandColours[band];
+      }
       target[i * 4] = source[0];
       target[i * 4 + 1] = source[1];
       target[i * 4 + 2] = source[2];
       // Faint where the link failed, solid where it works. Alpha is interpolated
       // across the triangle, so the edge of the reachable area fades instead of being
       // cut - and what it fades at is the link's own boundary.
-      target[i * 4 + 3] = band >= lastBand ? RF.noLinkAlpha : 1;
+      target[i * 4 + 3] = faint ? RF.noLinkAlpha : 1;
     }
     grid.colour.needsUpdate = true;
   }

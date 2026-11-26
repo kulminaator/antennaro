@@ -257,6 +257,25 @@ export async function terminate(pid, options = {}) {
 }
 
 /**
+ * Treat a closed reading end as the end of the conversation, not a crash.
+ *
+ * `tools/test.js --list | head -3` is ordinary use, and it used to end in a stack trace: once
+ * `head` exits, the next write gets EPIPE, Node raises an unhandled `error` event on stdout, and the
+ * tool dies loudly after it had already given the answer. Output queued behind a live socket runs
+ * into the same thing on the way out - which is also why `exitAfterFlush` exists. So each CLI
+ * installs this once at startup: a broken pipe ends the run quietly, with the code the tool had
+ * already earned.
+ */
+export function guardBrokenPipe() {
+  const quiet = () => (error) => {
+    if (error && error.code === 'EPIPE') process.exit(process.exitCode ?? 0);
+    throw error;
+  };
+  process.stdout.on('error', quiet());
+  process.stderr.on('error', quiet());
+}
+
+/**
  * Exit a CLI reliably.
  *
  * A CLI that touched `fetch` or a WebSocket can sit on a draining keep-alive

@@ -21,8 +21,10 @@ then red, and crimson for the points that only just make it - 105, 300, 253 and 
 respectively of the 836 that link, because this budget
 is 0.94 km and there is nowhere to hide. The wedge missing on the right is the west: this
 antenna is omnidirectional, so a direction with no colour is ground, not gain (0 % of the
-walked points link in each of SW, W and NW). The wide translucent band beyond the crimson is
-ground the sweep asked about and lost to the terrain, painted faint on purpose; beyond that
+walked points link in each of SW, W and NW). The wide ash band beyond the crimson is
+ground the sweep asked about and lost to the terrain - painted with that ground's own
+colour lifted and drained of colour, so it reads as absence on dark soil and on bright rock
+alike; beyond that
 the map is bare, because the antenna's own budget cannot reach it and it was never measured.
 The read-out says the same thing in words: "the link: budget 0.94 km, last link 0.94 km",
 "836 of 30624 points (2.7 % of the map)", "29.6 % of ground a link could reach", "73.7 %
@@ -77,8 +79,10 @@ an edited import map, and `npm run vendor` tells you which.
   looks at the **whole map**, not a disc around the mast. One control, *Coverage view*,
   decides what the colours mean - the four signal steps, or first Fresnel zone clearance
   ([What the colours can mean](#what-the-colours-can-mean)).
-  Whatever you pick, three *opacity* meanings stay the same: solid where a link works, a
-  faint wash where the sweep asked and the terrain defeated the link, and no paint at all
+  Whatever you pick, three *opacity* meanings stay the same: solid where a link works, an
+  ash wash where the sweep asked and the terrain defeated the link - that ground's own colour
+  lifted 38 L\* and drained of chroma, never a fixed grey, because a fixed grey always finds a
+  ground it matches - and no paint at all
   where the free-space budget cannot reach the receiver - ground that was never consulted,
   and that therefore makes no claim.
   **The outer edge of the colour is where the link dies.** If something of ours would cut
@@ -115,7 +119,8 @@ Below the numbers is the legend. In the **signal steps** view it is four colour 
 faint one, keyed to your receiver sensitivity (at the default −80 dBm that is
 `comfortable: >= -72 dBm`, `good: >= -77`, `marginal: >= -79`, `at the limit: >= -80`, then
 `< -80 dBm (faint: terrain stops the link)`), plus a row for the bare "out of budget - not
-measured, not painted" area.
+measured, not painted" area. The faint row's swatch is that rule applied to one mid-ramp
+ground rather than a hex someone typed, so the legend cannot drift away from the map.
 Changing sensitivity moves the boundaries - the colours mean "margin over what the client
 can hear", not "signal quality" in the abstract. On the default map those four rows hold
 105, 300, 253 and 178 cells, 1992 were measured and lost, and 27 796 were never measured. In
@@ -210,8 +215,9 @@ south - the drape is a tongue, not a disc. 355 cells have 8 dB or more to spare 
 at the mast), 736 have 3-8 dB down the valley floor, 586 have 1-3 dB, and 342 are the
 crimson rim that ends at 2481 m on a bearing of 181 deg against a 2.50 km free-space budget:
 the picture
-ends in the middle of the map, not at its edge. The pale patch inside the tongue is ground
-the sweep asked and lost: 16 cells on a bearing of 150-152 deg at 1.5 km, where the flank
+ends in the middle of the map, not at its edge. The grey patches inside the tongue are ground
+the sweep asked and lost - the block of them nearest the mast is 16 cells on a bearing of
+150-152 deg at 1.5 km, where the flank
 stands 442 m above the ray and the link is 35 dB short. The rising ground behind the mast stays
 bare, and the read-out says so - 2019 of 30624 points, 84.2 % of the ground a link could
 reach.](docs/screenshot-valley.png)
@@ -378,6 +384,13 @@ ground cannot rescue the link. `coverage: the budget pre-filter cannot move the 
 boundary` proves it on the real map - same linked set, same steps, bit-identical
 decibels at every walked point, and every dismissed point demonstrably unreachable.
 
+One last seam, because it is the rim's weakest pixel and better said than discovered: the drape
+colours the vertices of the coverage grid, so where a washed cell meets ground the drape leaves
+alone its colour and its alpha fade into each other across one cell (about 30 m at the default
+stride). On the default map 451 of the 1330 rim pixels a 4-pixel sample grid lands on sit in that
+fade; their median is 15.3 CIEDE2000 from the ground under them, and their worst is 2.1. Deliberate:
+the edge of a link is not a wall, and a hard-cut rim would claim a precision the sweep does not have.
+
 ### Antenna physics: why a wide antenna cannot have long reach
 
 Gain and beamwidth are the same fact stated twice. An antenna that puts 12.4 dBi into a
@@ -457,6 +470,16 @@ difference", under four models of colour vision:
   where the hue does not: more signal is always the brighter, warmer end;
 - every step stays at least **24** from the bare terrain it is draped on, and from the faint
   asked-and-lost wash it must never be mistaken for;
+- the rim itself is measured the same way, against the ground it happens to sit on: at least
+  **13.1** from that ground and **10.9** from any painted cell, worst of the four eyes over the
+  whole terrain ramp including its shadowed end. It used to be a fixed grey at 22 % alpha, which
+  came to **1.4** from the dark ground it replaced - a colour difference no eye sees, which is why
+  the rule is now keyed to the ground instead of to a hex;
+- and because the drape is composited over *lit* terrain and three.js works in linear light, the
+  palette's number is not what reaches the eye: read off the canvas, the rim's 5th percentile is
+  **11.4** CIEDE2000 from the pixel underneath it and its median **15.5** (`tests/browser/rim.test.js`
+  measures that, after proving the two reads are pixel-identical when nothing changed). The palette
+  guarantees above are stated in the palette's space; this is the gap between that and the screen.
 - the two views share no colour: the closest pair across them is **15.7** apart.
 
 Four is the most this colour path carries, and that is a measurement as well. Ordering a

@@ -32,8 +32,15 @@ export function labOf(rgb) {
   return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
 }
 
-/** CIEDE2000 between two Lab triples. */
-export function deltaE000(lab1, lab2) {
+/**
+ * CIEDE2000 between two **Lab** triples.
+ *
+ * Lab in, not sRGB - `distance`/`worstDistance`/`seenDistance` are the sRGB API. Feeding it
+ * `see()` output (which is sRGB, and for `normal` is the input unchanged) returns a plausible
+ * small number instead of a distance: this file's author did it twice before noticing, which is
+ * why the name now says what the arguments are.
+ */
+export function deltaE000Lab(lab1, lab2) {
   const [L1, a1, b1] = lab1;
   const [L2, a2, b2] = lab2;
   const rad = Math.PI / 180;
@@ -70,7 +77,7 @@ export function deltaE000(lab1, lab2) {
 }
 
 /** Perceptual distance between two sRGB (0..1) colours. */
-export const distance = (rgb1, rgb2) => deltaE000(labOf(rgb1), labOf(rgb2));
+export const distance = (rgb1, rgb2) => deltaE000Lab(labOf(rgb1), labOf(rgb2));
 
 /** L* - the axis an eye reads as "more", and the only ordering colour blindness keeps. */
 export const lightness = (rgb) => labOf(rgb)[0];
@@ -107,9 +114,12 @@ export function see(rgb, kind) {
     row[0] * r + row[1] * g + row[2] * b))).map(gammas);
 }
 
+/** Distance between two sRGB colours as one kind of eye sees them. */
+export const seenDistance = (rgb1, rgb2, kind) => distance(see(rgb1, kind), see(rgb2, kind));
+
 /** Worst distance between two colours over every vision model in `VISION`. */
 export function worstDistance(rgb1, rgb2) {
-  return Math.min(...Object.keys(VISION).map((kind) => distance(see(rgb1, kind), see(rgb2, kind))));
+  return Math.min(...Object.keys(VISION).map((kind) => seenDistance(rgb1, rgb2, kind)));
 }
 
 /**
