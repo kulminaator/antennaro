@@ -8,9 +8,9 @@
  * Each coverage vertex is draped onto the terrain height *underneath it*, so the
  * coarser overlay still hugs the real surface.
  *
- * One mode decides the *colour* of a cell - `bands`, `gradient` or `zone` - and it is a
- * mode, not a marking: the three views answer different questions, and laying one over
- * another would make a pixel mean two things. The **alpha** is the same in all three and
+ * One mode decides the *colour* of a cell - `steps` or `zone` - and it is a
+ * mode, not a marking: the two views answer different questions, and laying one over
+ * another would make a pixel mean two things. The **alpha** is the same in both and
  * carries the part of the message that is not a matter of taste:
  * - `1` where the link works;
  * - `NO_LINK_ALPHA` (`RF.noLinkAlpha`) where the ground was asked and the link failed
@@ -22,7 +22,7 @@
 
 import * as THREE from 'three';
 import { RF, VIEW } from '../config.js';
-import { coverageRgb, fresnelZoneRgb, rangeGradientRgb } from '../palette.js';
+import { coverageRgb, fresnelZoneRgb } from '../palette.js';
 
 /** Terrain vertex index a coverage vertex sits on, clamped to the last row/column. */
 function terrainIndex(field, stride, gx, gz) {
@@ -119,13 +119,12 @@ export function createCoverageOverlay(field) {
    * Repaint from a coverage result, building the geometry if the grid changed.
    * @param {object} sourceField
    * @param {object} coverage
-   * @param {{view?:'bands'|'gradient'|'zone'}} [options] which question the colours
-   *   answer: `bands` the four RSSI steps, `gradient` how much margin the link has left
-   *   (yellow through pink), `zone` how much of the first Fresnel zone the ground leaves
-   *   clear. A mode rather than a marking laid over the bands: only a small share of the
-   *   map meets the clearance criterion, so painting it on top of the RSSI colours would
-   *   wash the drape in one hue - and the same argument says the gradient may not be a
-   *   tint over the bands, because then no pixel has one meaning.
+   * @param {{view?:'steps'|'zone'}} [options] which question the colours answer: `steps` the
+   *   four signal steps (red where the link is at its limit, yellow where it has room),
+   *   `zone` how much of the first Fresnel zone the ground leaves clear. A mode rather than
+   *   a marking laid over the steps: only a small share of the map meets the clearance
+   *   criterion, so painting it on top of the signal colours would wash the drape in one
+   *   hue - and a pixel must mean exactly one thing.
    */
   function update(sourceField, coverage, options = {}) {
     const stride = coverage.stride ?? 1;
@@ -134,7 +133,7 @@ export function createCoverageOverlay(field) {
     }
     const target = grid.colour.array;
     const lastBand = coverage.margins.length;
-    const view = options.view === 'gradient' || options.view === 'zone' ? options.view : 'bands';
+    const view = options.view === 'zone' ? 'zone' : 'steps';
     // The band colours are a handful of values reused 30 000 times a repaint, indexed by
     // band - including the last band, which is "below sensitivity" and gets `noLink`.
     const bandColours = coverage.margins.map((_, band) => coverageRgb(band));
@@ -155,17 +154,12 @@ export function createCoverageOverlay(field) {
         continue;
       }
       const band = coverage.level[i];
-      let source;
-      if (view === 'zone') {
-        source = fresnelZoneRgb(coverage.fresnelClearance[i], rgb);
-      } else if (view === 'gradient') {
-        // Margin, not dBm: the legend and the ramp are keyed to how much room the link
-        // has over *this* receiver, so moving the sensitivity slider cannot recolour a
-        // map that describes the same antenna over the same ground.
-        source = rangeGradientRgb(coverage.rssi[i] - coverage.sensitivityDbm, rgb);
-      } else {
-        source = bandColours[Math.min(band, lastBand)];
-      }
+      // The band index comes from the sweep and is keyed to margin over *this* receiver,
+      // not to absolute dBm: moving the sensitivity slider must not recolour a map that
+      // describes the same antenna over the same ground.
+      const source = view === 'zone'
+        ? fresnelZoneRgb(coverage.fresnelClearance[i], rgb)
+        : bandColours[Math.min(band, lastBand)];
       target[i * 4] = source[0];
       target[i * 4 + 1] = source[1];
       target[i * 4 + 2] = source[2];
