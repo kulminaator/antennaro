@@ -2,6 +2,8 @@
 
 A browser-based 3D sandbox for one question: **where does the link actually hold?**
 
+Try it out right away: <https://kulminaator.github.io/antennaro/>
+
 An antenna stands on the ground wherever you put it - a 5.2 km square map, sampled
 every 15 m. Around it, four kinds of
 ground: a mountain to the north with a taller range behind it, an open flat
