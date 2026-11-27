@@ -1,18 +1,34 @@
 /* Antenna & Terrain Simulator - presentation only.
    No layout logic belongs in JS; no colours are hard-coded in JS except the
-   shared ramps in src/ui/colours.js. */
+   shared data ramps in src/palette.js and src/config.js (COLOURS). Everything
+   else - this whole console skin - is chrome, and it hangs off the tokens in
+   :root below. Data colours (signal steps, zone ramp, faint wash, terrain)
+   are measured invariants and never live here. */
 
 :root {
-  --bg: #0d1117;
-  --bg-panel: #151b24;
-  --bg-card: rgba(21, 27, 36, 0.9);
-  --line: #253040;
-  --text: #e6edf3;
-  --text-dim: #9aa8b8;
-  --accent: #63b3ed;
+  /* Deep-space console palette. --bg matches VIEW.background/fogColour in
+     src/config.js so the scene and the chrome are one colour of space. */
+  --bg: #04070e;
+  --bg-lift: #0a1424; /* the top of the page's radial void */
+  --bg-panel: rgba(10, 17, 28, 0.86);
+  --bg-card: #0a111d; /* HUD console card base - opaque on purpose */
+  --bg-dialog: #0b1322;
+  --bg-input: rgba(6, 11, 20, 0.9);
+  --line: rgba(86, 204, 242, 0.16);
+  --line-strong: rgba(86, 204, 242, 0.38);
+  --text: #d9e8f4;
+  --text-dim: #7e93a8;
+  --accent: #4fd6ff; /* ion cyan - never warm (signal steps) nor mint (zone ramp) */
+  --accent-dim: rgba(79, 214, 255, 0.14);
+  --glow: 0 0 14px rgba(79, 214, 255, 0.22);
+  --cut: 14px; /* corner cut shared by every clipped card */
+  --font-ui: "Bahnschrift", "DIN Alternate", "Roboto Condensed", ui-sans-serif,
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas,
+    monospace;
   --radius: 10px;
   --panel-width: 330px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-ui);
 }
 
 * {
@@ -23,7 +39,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
+  background: radial-gradient(120% 100% at 30% 0%, var(--bg-lift) 0%, var(--bg) 55%);
   color: var(--text);
 }
 
@@ -43,26 +59,50 @@ body.ui-hidden .stage-head {
 /* ---------- control panel ---------- */
 
 .panel {
-  border-right: 1px solid var(--line);
-  background: var(--bg-panel);
+  border-right: 1px solid var(--line-strong);
+  background: linear-gradient(165deg, rgba(14, 24, 40, 0.92), var(--bg-panel) 45%);
+  box-shadow: inset -1px 0 24px rgba(79, 214, 255, 0.05);
   padding: 14px 14px 40px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 
+/* Group cards are clipped to angular corners - the cut eats the border's two
+   diagonal edges, which is the intended console look, not a broken border. */
 .group {
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 0;
+  background: rgba(11, 19, 32, 0.62);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(79, 214, 255, 0.028) 0 1px,
+    transparent 1px 3px
+  );
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
   padding: 12px 12px 14px;
   margin-bottom: 14px;
 }
 
 .group-title {
   margin: 0 0 10px;
-  font-size: 0.82rem;
-  letter-spacing: 0.09em;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--accent);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(79, 214, 255, 0.35);
+}
+
+.group-title::before {
+  content: "▸ ";
+  opacity: 0.7;
 }
 
 .group-note {
@@ -93,26 +133,74 @@ body.ui-hidden .stage-head {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   font-size: 0.78rem;
+  font-family: var(--font-mono);
 }
 
+/* Sci-fi slider: a thin cyan rail with a glowing emitter for a thumb. Both
+   prefix families get their own track/thumb; accent-color is kept for the
+   native checkbox toggles below. */
 input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: var(--accent);
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--line));
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(79, 214, 255, 0.6);
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--line));
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(79, 214, 255, 0.6);
 }
 
 input[type='range']:disabled {
   opacity: 0.4;
+  cursor: default;
 }
 
 select {
   width: 100%;
-  background: #101620;
+  background: var(--bg-input);
+  color-scheme: dark;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 8px;
   font: inherit;
   font-size: 0.82rem;
+}
+
+select:focus {
+  border-color: var(--line-strong);
+  box-shadow: var(--glow);
 }
 
 .field-toggle {
@@ -134,19 +222,25 @@ select {
 }
 
 .btn {
-  background: #1b2531;
+  background: linear-gradient(170deg, rgba(28, 44, 66, 0.9), rgba(12, 20, 33, 0.9));
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 2px 10px 2px 10px;
   color: var(--text);
   padding: 8px 6px;
   font: inherit;
   font-size: 0.78rem;
+  letter-spacing: 0.06em;
   cursor: pointer;
 }
 
 .btn:hover {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
+  box-shadow: var(--glow);
   color: #fff;
+}
+
+.btn:active {
+  transform: translateY(1px);
 }
 
 /* The panel's footer holds the one control that is not a control: it opens a dialog
@@ -176,8 +270,9 @@ select {
 /* ---------- about dialog ---------- */
 
 dialog.about {
-  background: var(--bg-panel);
-  border: 1px solid var(--line);
+  background-color: var(--bg-dialog);
+  background-image: linear-gradient(180deg, rgba(79, 214, 255, 0.06), rgba(79, 214, 255, 0) 28%);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   color: var(--text);
   color-scheme: dark;
@@ -186,10 +281,11 @@ dialog.about {
   padding: 16px 18px;
   font-size: 0.82rem;
   line-height: 1.45;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.6), var(--glow);
 }
 
 dialog.about::backdrop {
-  background: rgba(4, 8, 12, 0.66);
+  background: rgba(2, 6, 12, 0.72);
 }
 
 dialog.about h2 {
@@ -292,14 +388,17 @@ dialog.about a:hover {
 
 .stage-head h1 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.02rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(79, 214, 255, 0.45);
 }
 
 .stage-head p {
   margin: 2px 0 0;
   font-size: 0.76rem;
+  letter-spacing: 0.06em;
   color: var(--text-dim);
 }
 
@@ -315,17 +414,66 @@ dialog.about a:hover {
   scrollbar-width: thin;
 }
 
+/* The read-out as a mission console card: glass, corner brackets on the two
+   corners the clip leaves, scanlines, mono digits. The brackets are empty
+   pseudo-elements - the curvature browser test reads this card's innerText
+   line by line, and only real text nodes may appear there. */
 .hud-card {
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  position: relative;
+  /* Opaque base on purpose: the old card sat at 0.9 and a first pass at
+     0.78-0.82 proved why - rows over the sunlit valley went ghostly. */
+  background-color: var(--bg-card);
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(79, 214, 255, 0.03) 0 1px,
+      transparent 1px 3px
+    ),
+    linear-gradient(180deg, rgba(79, 214, 255, 0.06), rgba(79, 214, 255, 0) 30%);
+  border: 1px solid var(--line-strong);
+  clip-path: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
   padding: 12px 14px;
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.55);
+}
+
+.hud-card::before,
+.hud-card::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+.hud-card::before {
+  top: 5px;
+  right: 5px;
+  border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+
+.hud-card::after {
+  bottom: 5px;
+  left: 5px;
+  border-bottom: 2px solid var(--accent);
+  border-left: 2px solid var(--accent);
 }
 
 .hud-headline {
   font-size: 0.92rem;
   font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(79, 214, 255, 0.35);
 }
 
 .hud-subtitle {
@@ -350,6 +498,7 @@ dialog.about a:hover {
   margin: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 .hud-sectors {
@@ -365,6 +514,7 @@ dialog.about a:hover {
   text-align: right;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 .hud-sectors th:first-child {
@@ -391,11 +541,15 @@ dialog.about a:hover {
   width: 14px;
   height: 10px;
   border-radius: 2px;
+  /* only a ring here - background and opacity are inline styles set by
+     src/ui/hud.js and read back by tests/browser/legend.test.js */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .legend-count {
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 .legend-note {
@@ -415,15 +569,19 @@ dialog.about a:hover {
   color: var(--text-dim);
 }
 
+/* Still red, per README: a startup failure reads as an alert, now a red
+   holo-banner instead of a flat box. */
 .boot-error {
   position: fixed;
   inset: auto 16px 16px 16px;
-  background: #5a1e1e;
+  background: rgba(64, 12, 18, 0.92);
   color: #ffe4e4;
-  border: 1px solid #a04040;
+  border: 1px solid #ff4d5e;
+  box-shadow: 0 0 18px rgba(255, 77, 94, 0.25);
   border-radius: var(--radius);
   padding: 12px 14px;
   font-size: 0.85rem;
+  font-family: var(--font-mono);
   z-index: 20;
 }
 
@@ -436,11 +594,39 @@ dialog.about a:hover {
   .panel {
     order: 2;
     border-right: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--line-strong);
     max-height: 45vh;
   }
 
   .hud {
     width: min(320px, 60vw);
   }
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Console scrollbars: a cyan hairline thumb, dark trough. */
+* {
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
 }

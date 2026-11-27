@@ -255,8 +255,8 @@ export const FRESNEL = Object.freeze({
 
 /** Rendering defaults (three.js side only). */
 export const VIEW = Object.freeze({
-  background: 0x0d1117,
-  fogColour: 0x0d1117,
+  background: 0x04070e, // matches --bg in assets/app.css: scene and chrome, one void
+  fogColour: 0x04070e,
   fogNear: 3300,
   fogFar: 10100,
   /** Vertical field of view of the perspective camera. */
